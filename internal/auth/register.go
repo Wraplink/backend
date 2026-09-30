@@ -110,9 +110,10 @@ func (s *RegistrationService) Register(
 		INSERT INTO users (
 			email,
 			full_name,
+			last_login_ip,
 			account_status
 		)
-		VALUES ($1, $2, 'pending')
+		VALUES ($1, $2, $3, 'pending')
 		RETURNING id
 	`
 
@@ -121,6 +122,7 @@ func (s *RegistrationService) Register(
 		createUser,
 		email,
 		fullName,
+		req.IPAddress,
 	).Scan(&userID)
 
 	if err != nil {

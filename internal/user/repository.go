@@ -52,6 +52,54 @@ func NormalizeEmail(email string) string {
 	)
 }
 
+func (r *Repository) FindByID(
+	ctx context.Context,
+	id uuid.UUID,
+) (*User, error) {
+	const query = `
+		SELECT
+			id,
+			email,
+			full_name,
+			email_verified,
+			account_status,
+			failed_login_attempts,
+			locked_until,
+			last_login_at,
+			host(last_login_ip),
+			created_at,
+			updated_at
+		FROM users
+		WHERE id = $1
+	`
+
+	var u User
+
+	err := r.db.QueryRow(ctx, query, id).Scan(
+		&u.ID,
+		&u.Email,
+		&u.FullName,
+		&u.EmailVerified,
+		&u.AccountStatus,
+		&u.FailedLoginAttempts,
+		&u.LockedUntil,
+		&u.LastLoginAt,
+		&u.LastLoginIP,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+	)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrUserNotFound
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("find user by id: %w", err)
+	}
+
+	return &u, nil
+}
+
 func (r *Repository) FindByEmail(
 	ctx context.Context,
 	email string,

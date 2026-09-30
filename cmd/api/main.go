@@ -3,6 +3,7 @@ package main
 import (
 	"backend/internal/auth"
 	"backend/internal/security"
+	"backend/internal/user"
 	"context"
 	"errors"
 	"log/slog"
@@ -94,14 +95,27 @@ func main() {
 			},
 		)
 
-	//tokenService := auth.NewTokenService(cfg)
+	userRepository := user.NewRepository(db)
+
+	tokenService := auth.NewTokenService(cfg)
+	sessionService := auth.NewSessionService(db)
+	loginService := auth.NewLoginService(
+		userRepository,
+		tokenService,
+		sessionService,
+		cfg.Security,
+	)
+	loginHandler := auth.NewLoginHandler(
+		loginService,
+	)
+
 	registrationService := auth.NewRegistrationService(db)
 
 	registerHandler := auth.NewRegisterHandler(
 		registrationService,
 	)
 
-	router := httpserver.NewRouter(registerHandler, registrationRateLimitMiddleware, cors, logger)
+	router := httpserver.NewRouter(registerHandler, loginHandler, registrationRateLimitMiddleware, cors, logger)
 
 	server := &http.Server{
 		Addr: cfg.HTTP.Host + ":" + cfg.HTTP.Port,

@@ -141,3 +141,24 @@ func Verify(password string, encoded string) bool {
 		expectedHash,
 	) == 1
 }
+
+var dummyHash string
+
+func init() {
+	hash, err := Hash(
+		"WrapLink-Dummy-Password-Do-Not-Use",
+	)
+
+	if err != nil {
+		panic(err)
+	}
+
+	dummyHash = hash
+}
+
+func VerifyDummy(passwordValue string) {
+	_ = Verify(
+		passwordValue,
+		"$argon2id$v=19$m=65536,t=3,p=4$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+	)
+}

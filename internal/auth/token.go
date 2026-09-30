@@ -1,12 +1,13 @@
 package auth
 
 import (
+	"errors"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 
 	"backend/internal/config"
-	randomtoken "backend/internal/token"
+	tokenutil "backend/internal/token"
 )
 
 type AccessTokenClaims struct {
@@ -19,9 +20,7 @@ type TokenService struct {
 	ttl    time.Duration
 }
 
-func NewTokenService(
-	cfg config.Config,
-) *TokenService {
+func NewTokenService(cfg config.Config) *TokenService {
 	return &TokenService{
 		secret: []byte(cfg.Security.JWTSecret),
 		ttl:    cfg.Security.AccessTokenTTL,
@@ -31,21 +30,23 @@ func NewTokenService(
 func (s *TokenService) CreateAccessToken(
 	userID string,
 ) (string, error) {
-
 	now := time.Now()
+
+	tokenID, err := tokenutil.Generate(16)
+	if err != nil {
+		return "", err
+	}
 
 	claims := AccessTokenClaims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			IssuedAt: jwt.NewNumericDate(now),
-
-			ExpiresAt: jwt.NewNumericDate(
-				now.Add(s.ttl),
-			),
-
+			Issuer:    "wraplink-api",
+			Audience:  jwt.ClaimStrings{"wraplink-web"},
+			Subject:   userID,
+			ID:        tokenID,
+			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
-
-			ID: mustTokenID(),
+			ExpiresAt: jwt.NewNumericDate(now.Add(s.ttl)),
 		},
 	}
 
@@ -60,18 +61,18 @@ func (s *TokenService) CreateAccessToken(
 func (s *TokenService) ParseAccessToken(
 	value string,
 ) (*AccessTokenClaims, error) {
-
 	token, err := jwt.ParseWithClaims(
 		value,
 		&AccessTokenClaims{},
 		func(token *jwt.Token) (any, error) {
-
 			if token.Method != jwt.SigningMethodHS256 {
-				return nil, jwt.ErrTokenSignatureInvalid
+				return nil, errors.New("unexpected signing method")
 			}
 
 			return s.secret, nil
 		},
+		jwt.WithIssuer("wraplink-api"),
+		jwt.WithAudience("wraplink-web"),
 	)
 
 	if err != nil {
@@ -79,20 +80,9 @@ func (s *TokenService) ParseAccessToken(
 	}
 
 	claims, ok := token.Claims.(*AccessTokenClaims)
-
 	if !ok || !token.Valid {
 		return nil, jwt.ErrTokenInvalidClaims
 	}
 
 	return claims, nil
-}
-
-func mustTokenID() string {
-	id, err := randomtoken.Generate(16)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return id
 }
