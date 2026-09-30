@@ -3,6 +3,7 @@ package httpserver
 import (
 	"backend/internal/auth"
 	"backend/internal/security"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -12,9 +13,13 @@ func NewRouter(
 	registerHandler *auth.RegisterHandler,
 	registrationRateLimitMiddleware func(http.Handler) http.Handler,
 	cors *security.CORS,
+	logger *slog.Logger,
 ) http.Handler {
 	r := chi.NewRouter()
 
+	r.Use(security.RequestID)
+	r.Use(security.Recovery(logger))
+	r.Use(security.RequestLogger(logger))
 	r.Use(cors.Middleware)
 	r.Use(security.SecurityHeaders)
 

@@ -101,7 +101,7 @@ func main() {
 		registrationService,
 	)
 
-	router := httpserver.NewRouter(registerHandler, registrationRateLimitMiddleware, cors)
+	router := httpserver.NewRouter(registerHandler, registrationRateLimitMiddleware, cors, logger)
 
 	server := &http.Server{
 		Addr: cfg.HTTP.Host + ":" + cfg.HTTP.Port,
