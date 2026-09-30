@@ -1,0 +1,31 @@
+app:
+  name: wraplink-api
+  environment: development
+
+http:
+  host: 0.0.0.0
+  port: 8080
+  read-timeout: 15s
+  write-timeout: 15s
+  idle-timeout: 60s
+  shutdown-timeout: 10s
+
+database:
+  url: ${DATABASE_URL}
+  max-conns: 20
+  min-conns: 2
+  max-conn-lifetime: 1h
+  max-conn-idle-time: 30m
+
+security:
+  jwt-secret: ${JWT_SECRET}
+  access-token-ttl: 15m
+  refresh-token-ttl: 720h
+
+cors:
+  allowed-origins:
+    - http://localhost:3000
+    - https://wraplink.ir
+    - https://www.wraplink.ir
+server:
+  trusted-proxies: []
