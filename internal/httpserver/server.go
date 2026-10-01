@@ -12,6 +12,7 @@ import (
 func NewRouter(
 	registerHandler *auth.RegisterHandler,
 	loginHandler *auth.LoginHandler,
+	refreshHandler *auth.RefreshHandler,
 	registrationRateLimitMiddleware func(http.Handler) http.Handler,
 	cors *security.CORS,
 	logger *slog.Logger,
@@ -46,6 +47,7 @@ func NewRouter(
 		).Post("/register", registerHandler.Register)
 
 		r.Post("/login", loginHandler.Login)
+		r.Post("/refresh", refreshHandler.Refresh)
 	})
 
 	return r

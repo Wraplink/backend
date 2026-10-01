@@ -7,5 +7,7 @@
     <file url="file://$PROJECT_DIR$/internal/user/login_security.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
     <file url="file://$PROJECT_DIR$/internal/user/repository.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
     <file url="file://$PROJECT_DIR$/migrations/000001_initial.up.sql" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
+    <file url="file://$PROJECT_DIR$/migrations/000003_refresh_token_rotation.down.sql" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
+    <file url="file://$PROJECT_DIR$/migrations/000003_refresh_token_rotation.up.sql" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
   </component>
 </project>

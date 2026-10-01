@@ -109,13 +109,23 @@ func main() {
 		loginService,
 	)
 
+	refreshService := auth.NewRefreshService(
+		sessionService,
+		tokenService,
+		cfg.Security,
+	)
+
+	refreshHandler := auth.NewRefreshHandler(
+		refreshService,
+	)
+
 	registrationService := auth.NewRegistrationService(db)
 
 	registerHandler := auth.NewRegisterHandler(
 		registrationService,
 	)
 
-	router := httpserver.NewRouter(registerHandler, loginHandler, registrationRateLimitMiddleware, cors, logger)
+	router := httpserver.NewRouter(registerHandler, loginHandler, refreshHandler, registrationRateLimitMiddleware, cors, logger)
 
 	server := &http.Server{
 		Addr: cfg.HTTP.Host + ":" + cfg.HTTP.Port,
