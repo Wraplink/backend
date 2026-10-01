@@ -384,3 +384,36 @@ func (s *SessionService) recordReplayEvent(
 
 	return nil
 }
+
+func (s *SessionService) Revoke(
+	ctx context.Context,
+	refreshToken string,
+) error {
+	if refreshToken == "" {
+		return nil
+	}
+
+	tokenHash := tokenutil.Hash(refreshToken)
+
+	const query = `
+		UPDATE user_sessions
+		SET
+			revoked_at = COALESCE(revoked_at, now()),
+			revoked_reason = CASE
+				WHEN revoked_at IS NULL
+				THEN 'logout'
+				ELSE revoked_reason
+			END
+		WHERE refresh_token_hash = $1
+	`
+
+	if _, err := s.db.Exec(
+		ctx,
+		query,
+		tokenHash,
+	); err != nil {
+		return fmt.Errorf("revoke session: %w", err)
+	}
+
+	return nil
+}

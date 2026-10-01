@@ -109,12 +109,53 @@ func main() {
 		loginService,
 	)
 
+	logoutHandler := auth.NewLogoutHandler(
+		sessionService,
+	)
+
+	emailVerificationService := auth.NewEmailVerificationService(
+		db,
+	)
+	emailVerificationHandler := auth.NewEmailVerificationHandler(
+		emailVerificationService,
+	)
 	refreshService := auth.NewRefreshService(
 		sessionService,
 		tokenService,
 		cfg.Security,
 	)
 
+	resendVerificationEmailLimiter := security.NewRateLimiter(
+		3,
+		time.Hour,
+	)
+
+	resendVerificationRateLimiter := security.NewRateLimiter(
+		3,
+		15*time.Minute,
+	)
+
+	resendVerificationService := auth.NewResendVerificationService(
+		db,
+	)
+
+	resendVerificationHandler := auth.NewResendVerificationHandler(
+		resendVerificationService,
+		resendVerificationEmailLimiter,
+	)
+
+	resendVerificationRateLimitMiddleware :=
+		resendVerificationRateLimiter.Middleware(
+			func(r *http.Request) string {
+				ip := trustedProxy.ClientIP(r)
+
+				if ip == nil {
+					return "unknown"
+				}
+
+				return ip.String()
+			},
+		)
 	refreshHandler := auth.NewRefreshHandler(
 		refreshService,
 	)
@@ -125,7 +166,17 @@ func main() {
 		registrationService,
 	)
 
-	router := httpserver.NewRouter(registerHandler, loginHandler, refreshHandler, registrationRateLimitMiddleware, cors, logger)
+	router := httpserver.NewRouter(
+		registerHandler,
+		loginHandler,
+		refreshHandler,
+		logoutHandler,
+		emailVerificationHandler,
+		resendVerificationHandler,
+		registrationRateLimitMiddleware,
+		resendVerificationRateLimitMiddleware,
+		cors,
+		logger)
 
 	server := &http.Server{
 		Addr: cfg.HTTP.Host + ":" + cfg.HTTP.Port,

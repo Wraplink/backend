@@ -13,7 +13,11 @@ func NewRouter(
 	registerHandler *auth.RegisterHandler,
 	loginHandler *auth.LoginHandler,
 	refreshHandler *auth.RefreshHandler,
+	logoutHandler *auth.LogoutHandler,
+	emailVerificationHandler *auth.EmailVerificationHandler,
+	resendVerificationHandler *auth.ResendVerificationHandler,
 	registrationRateLimitMiddleware func(http.Handler) http.Handler,
+	resendVerificationRateLimitMiddleware func(http.Handler) http.Handler,
 	cors *security.CORS,
 	logger *slog.Logger,
 ) http.Handler {
@@ -42,12 +46,12 @@ func NewRouter(
 	})
 
 	r.Route("/api/v1/auth", func(r chi.Router) {
-		r.With(
-			registrationRateLimitMiddleware,
-		).Post("/register", registerHandler.Register)
-
+		r.With(registrationRateLimitMiddleware).Post("/register", registerHandler.Register)
 		r.Post("/login", loginHandler.Login)
 		r.Post("/refresh", refreshHandler.Refresh)
+		r.Post("/logout", logoutHandler.Logout)
+		r.Post("/verify-email", emailVerificationHandler.Verify)
+		r.With(resendVerificationRateLimitMiddleware).Post("/resend-verification", resendVerificationHandler.Resend)
 	})
 
 	return r
