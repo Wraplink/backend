@@ -3,11 +3,15 @@ package auth
 import (
 	"encoding/json"
 	"errors"
+	"io"
+	"net"
 	"net/http"
 	"strings"
+
+	"backend/internal/security"
 )
 
-type verifyEmailRequest struct {
+type verifyEmailHTTPRequest struct {
 	Token string `json:"token"`
 }
 
@@ -30,15 +34,24 @@ func (h *EmailVerificationHandler) Verify(
 	r.Body = http.MaxBytesReader(
 		w,
 		r.Body,
-		4*1024,
+		8*1024,
 	)
 
-	var request verifyEmailRequest
+	var request verifyEmailHTTPRequest
 
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&request); err != nil {
+		writeJSONError(
+			w,
+			http.StatusBadRequest,
+			"invalid request",
+		)
+		return
+	}
+
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		writeJSONError(
 			w,
 			http.StatusBadRequest,
@@ -58,47 +71,39 @@ func (h *EmailVerificationHandler) Verify(
 		return
 	}
 
-	if err := h.service.Verify(
+	ip := security.RemoteIP(r)
+
+	var clientIP net.IP
+
+	if ip != "" {
+		clientIP = net.ParseIP(ip)
+	}
+
+	err := h.service.Verify(
 		r.Context(),
-		request.Token,
-	); err != nil {
-		switch {
-		case errors.Is(err, ErrInvalidVerificationToken):
+		VerifyEmailRequest{
+			Token:     request.Token,
+			IPAddress: clientIP,
+			UserAgent: r.UserAgent(),
+		},
+	)
+
+	if err != nil {
+		if errors.Is(err, ErrInvalidVerificationToken) {
 			writeJSONError(
 				w,
 				http.StatusBadRequest,
 				"invalid or expired verification token",
 			)
-
-		case errors.Is(err, ErrVerificationExpired):
-			writeJSONError(
-				w,
-				http.StatusBadRequest,
-				"invalid or expired verification token",
-			)
-
-		case errors.Is(err, ErrVerificationUsed):
-			writeJSONError(
-				w,
-				http.StatusBadRequest,
-				"verification token already used",
-			)
-
-		case errors.Is(err, ErrEmailAlreadyVerified):
-			writeJSONError(
-				w,
-				http.StatusConflict,
-				"email already verified",
-			)
-
-		default:
-			writeJSONError(
-				w,
-				http.StatusInternalServerError,
-				"internal server error",
-			)
+			return
 		}
 
+		// Do not expose database/internal errors.
+		writeJSONError(
+			w,
+			http.StatusInternalServerError,
+			"internal server error",
+		)
 		return
 	}
 

@@ -4,20 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	tokenutil "backend/internal/token"
+	"backend/internal/token"
 )
 
 var (
 	ErrInvalidVerificationToken = errors.New("invalid verification token")
-	ErrVerificationExpired      = errors.New("verification token expired")
-	ErrVerificationUsed         = errors.New("verification token already used")
-	ErrEmailAlreadyVerified     = errors.New("email already verified")
 )
 
 type EmailVerificationService struct {
@@ -31,20 +29,31 @@ func NewEmailVerificationService(
 		db: db,
 	}
 }
+
+type VerifyEmailRequest struct {
+	Token     string
+	IPAddress net.IP
+	UserAgent string
+}
+
 func (s *EmailVerificationService) Verify(
 	ctx context.Context,
-	rawToken string,
+	req VerifyEmailRequest,
 ) error {
+	rawToken := strings.TrimSpace(req.Token)
+
 	if rawToken == "" {
 		return ErrInvalidVerificationToken
 	}
 
-	tokenHash := tokenutil.Hash(rawToken)
+	tokenHash := token.Hash(rawToken)
 
 	tx, err := s.db.Begin(ctx)
-
 	if err != nil {
-		return fmt.Errorf("begin email verification: %w", err)
+		return fmt.Errorf(
+			"begin email verification transaction: %w",
+			err,
+		)
 	}
 
 	defer func() {
@@ -80,76 +89,19 @@ func (s *EmailVerificationService) Verify(
 		&usedAt,
 	)
 
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrInvalidVerificationToken
-	}
-
 	if err != nil {
-		return fmt.Errorf(
-			"find email verification: %w",
-			err,
-		)
+		return ErrInvalidVerificationToken
 	}
 
 	if usedAt != nil {
-		return ErrVerificationUsed
-	}
-
-	if !expiresAt.After(time.Now().UTC()) {
-		return ErrVerificationExpired
-	}
-
-	var alreadyVerified bool
-
-	const checkUser = `
-		SELECT email_verified
-		FROM users
-		WHERE id = $1
-		FOR UPDATE
-	`
-
-	err = tx.QueryRow(
-		ctx,
-		checkUser,
-		userID,
-	).Scan(&alreadyVerified)
-
-	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrInvalidVerificationToken
 	}
 
-	if err != nil {
-		return fmt.Errorf(
-			"check email verification status: %w",
-			err,
-		)
+	if !time.Now().Before(expiresAt) {
+		return ErrInvalidVerificationToken
 	}
 
-	if alreadyVerified {
-		return ErrEmailAlreadyVerified
-	}
-
-	const markUserVerified = `
-		UPDATE users
-		SET
-			email_verified = true,
-			account_status = 'active',
-			updated_at = now()
-		WHERE id = $1
-	`
-
-	if _, err := tx.Exec(
-		ctx,
-		markUserVerified,
-		userID,
-	); err != nil {
-		return fmt.Errorf(
-			"activate verified user: %w",
-			err,
-		)
-	}
-
-	const markTokenUsed = `
+	const markUsed = `
 		UPDATE email_verifications
 		SET used_at = now()
 		WHERE id = $1
@@ -157,25 +109,53 @@ func (s *EmailVerificationService) Verify(
 
 	if _, err := tx.Exec(
 		ctx,
-		markTokenUsed,
+		markUsed,
 		verificationID,
 	); err != nil {
 		return fmt.Errorf(
-			"mark verification token used: %w",
+			"mark email verification used: %w",
 			err,
 		)
+	}
+
+	const activateUser = `
+		UPDATE users
+		SET
+			email_verified = TRUE,
+			account_status = 'active',
+			updated_at = now()
+		WHERE id = $1
+	`
+
+	result, err := tx.Exec(
+		ctx,
+		activateUser,
+		userID,
+	)
+
+	if err != nil {
+		return fmt.Errorf(
+			"activate verified user: %w",
+			err,
+		)
+	}
+
+	if result.RowsAffected() != 1 {
+		return ErrInvalidVerificationToken
 	}
 
 	const securityEvent = `
 		INSERT INTO security_events (
 			user_id,
 			event_type,
-			metadata
+			ip_address,
+			user_agent
 		)
 		VALUES (
 			$1,
 			'EMAIL_VERIFIED',
-			'{}'
+			$2,
+			$3
 		)
 	`
 
@@ -183,9 +163,11 @@ func (s *EmailVerificationService) Verify(
 		ctx,
 		securityEvent,
 		userID,
+		req.IPAddress,
+		req.UserAgent,
 	); err != nil {
 		return fmt.Errorf(
-			"record email verification event: %w",
+			"create email verification security event: %w",
 			err,
 		)
 	}

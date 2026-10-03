@@ -3,7 +3,6 @@ package main
 import (
 	"backend/internal/auth"
 	"backend/internal/security"
-	"backend/internal/user"
 	"context"
 	"errors"
 	"log/slog"
@@ -95,12 +94,13 @@ func main() {
 			},
 		)
 
-	userRepository := user.NewRepository(db)
+	//userRepository := user.NewRepository(db)
+	loginRepository := auth.NewLoginRepository(db)
 
 	tokenService := auth.NewTokenService(cfg)
 	sessionService := auth.NewSessionService(db)
 	loginService := auth.NewLoginService(
-		userRepository,
+		loginRepository,
 		tokenService,
 		sessionService,
 		cfg.Security,
@@ -113,9 +113,7 @@ func main() {
 		sessionService,
 	)
 
-	emailVerificationService := auth.NewEmailVerificationService(
-		db,
-	)
+	emailVerificationService := auth.NewEmailVerificationService(db)
 	emailVerificationHandler := auth.NewEmailVerificationHandler(
 		emailVerificationService,
 	)

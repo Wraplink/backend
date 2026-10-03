@@ -165,9 +165,9 @@ func (h *LoginHandler) Login(
 		map[string]any{
 			"accessToken": result.AccessToken,
 			"user": map[string]any{
-				"id":    result.User.ID,
-				"name":  result.User.FullName,
-				"email": result.User.Email,
+				"id":    result.UserID,
+				"name":  result.FullName,
+				"email": result.Email,
 			},
 		},
 	)
