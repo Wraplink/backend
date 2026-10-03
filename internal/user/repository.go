@@ -156,3 +156,33 @@ func (r *Repository) FindByEmail(
 
 	return &user, nil
 }
+
+func (r *Repository) UpdateFullName(
+	ctx context.Context,
+	id uuid.UUID,
+	fullName string,
+) error {
+	const query = `
+		UPDATE users
+		SET
+			full_name = $2,
+			updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := r.db.Exec(
+		ctx,
+		query,
+		id,
+		fullName,
+	)
+	if err != nil {
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+
+	return nil
+}

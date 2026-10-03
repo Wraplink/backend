@@ -42,9 +42,11 @@ type DatabaseConfig struct {
 }
 
 type SecurityConfig struct {
-	JWTSecret       string        `yaml:"jwt-secret"`
-	AccessTokenTTL  time.Duration `yaml:"access-token-ttl"`
-	RefreshTokenTTL time.Duration `yaml:"refresh-token-ttl"`
+	JWTSecret           string        `yaml:"jwt-secret"`
+	AccessTokenTTL      time.Duration `yaml:"access-token-ttl"`
+	RefreshTokenTTL     time.Duration `yaml:"refresh-token-ttl"`
+	SecureCookies       bool          `yaml:"secure-cookies"`
+	RefreshCookieDomain string        `yaml:"refresh-cookie-domain"`
 }
 
 type CORSConfig struct {
@@ -150,6 +152,21 @@ func validate(cfg Config) error {
 	if cfg.Security.RefreshTokenTTL <= 0 {
 		return errors.New(
 			"security.refresh-token-ttl must be greater than zero",
+		)
+	}
+
+	if cfg.Security.AccessTokenTTL >= cfg.Security.RefreshTokenTTL {
+		return errors.New(
+			"security.access-token-ttl must be shorter than refresh-token-ttl",
+		)
+	}
+
+	if strings.EqualFold(
+		cfg.App.Environment,
+		"production",
+	) && !cfg.Security.SecureCookies {
+		return errors.New(
+			"security.secure-cookies must be enabled in production",
 		)
 	}
 

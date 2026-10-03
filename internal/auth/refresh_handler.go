@@ -103,10 +103,11 @@ func (h *RefreshHandler) Refresh(
 			Name:     refreshTokenCookieName,
 			Value:    result.RefreshToken,
 			Path:     "/api/v1/auth",
+			Domain:   h.service.config.RefreshCookieDomain,
 			Expires:  result.RefreshTokenExpiry,
 			MaxAge:   int(time.Until(result.RefreshTokenExpiry).Seconds()),
 			HttpOnly: true,
-			Secure:   false,
+			Secure:   h.service.config.SecureCookies,
 			SameSite: http.SameSiteLaxMode,
 		},
 	)

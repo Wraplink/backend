@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"backend/internal/config"
 	"encoding/json"
 	"errors"
 	"io"
@@ -20,14 +21,18 @@ type loginHTTPRequest struct {
 }
 
 type LoginHandler struct {
-	service *LoginService
+	service  *LoginService
+	security config.SecurityConfig
 }
 
 func NewLoginHandler(
 	service *LoginService,
+	security config.SecurityConfig,
+
 ) *LoginHandler {
 	return &LoginHandler{
-		service: service,
+		service:  service,
+		security: security,
 	}
 }
 
@@ -145,16 +150,11 @@ func (h *LoginHandler) Login(
 			Name:     refreshTokenCookieName,
 			Value:    result.RefreshToken,
 			Path:     "/api/v1/auth",
+			Domain:   h.service.config.RefreshCookieDomain,
 			Expires:  result.RefreshTokenExpiry,
 			MaxAge:   int(time.Until(result.RefreshTokenExpiry).Seconds()),
 			HttpOnly: true,
-
-			// Development is currently HTTP.
-			// Must become true in production HTTPS.
-			Secure: false,
-
-			// Protects against most cross-site requests while
-			// allowing normal same-site navigation.
+			Secure:   h.service.config.SecureCookies,
 			SameSite: http.SameSiteLaxMode,
 		},
 	)

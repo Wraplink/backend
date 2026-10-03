@@ -3,6 +3,7 @@ package main
 import (
 	"backend/internal/auth"
 	"backend/internal/security"
+	"backend/internal/user"
 	"context"
 	"errors"
 	"log/slog"
@@ -94,7 +95,7 @@ func main() {
 			},
 		)
 
-	//userRepository := user.NewRepository(db)
+	userRepository := user.NewRepository(db)
 	loginRepository := auth.NewLoginRepository(db)
 
 	tokenService := auth.NewTokenService(cfg)
@@ -107,6 +108,7 @@ func main() {
 	)
 	loginHandler := auth.NewLoginHandler(
 		loginService,
+		cfg.Security,
 	)
 
 	logoutHandler := auth.NewLogoutHandler(
@@ -154,6 +156,12 @@ func main() {
 				return ip.String()
 			},
 		)
+
+	authMiddleware := auth.NewAuthMiddleware(
+		tokenService,
+	)
+	requireAuthMiddleware := authMiddleware.Middleware
+
 	refreshHandler := auth.NewRefreshHandler(
 		refreshService,
 	)
@@ -164,6 +172,14 @@ func main() {
 		registrationService,
 	)
 
+	meService := user.NewMeService(
+		userRepository,
+	)
+
+	meHandler := user.NewMeHandler(
+		meService,
+	)
+
 	router := httpserver.NewRouter(
 		registerHandler,
 		loginHandler,
@@ -171,8 +187,10 @@ func main() {
 		logoutHandler,
 		emailVerificationHandler,
 		resendVerificationHandler,
+		meHandler,
 		registrationRateLimitMiddleware,
 		resendVerificationRateLimitMiddleware,
+		requireAuthMiddleware,
 		cors,
 		logger)
 
