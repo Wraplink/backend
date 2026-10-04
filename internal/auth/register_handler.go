@@ -77,6 +77,7 @@ func (h *RegisterHandler) Register(w http.ResponseWriter, r *http.Request) {
 		request.FullName,
 		request.Email,
 		request.Password,
+		request.Locale,
 	); err != nil {
 		writeJSONError(
 			w,
@@ -107,6 +108,7 @@ func (h *RegisterHandler) Register(w http.ResponseWriter, r *http.Request) {
 			TermsVersion:     request.Legal.TermsVersion,
 			PrivacyVersion:   request.Legal.PrivacyVersion,
 			MarketingConsent: request.Legal.MarketingConsent,
+			Locale:           request.Locale,
 			IPAddress:        ipAddress,
 			UserAgent:        r.UserAgent(),
 		},

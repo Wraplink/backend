@@ -1,6 +1,7 @@
 app:
   name: wraplink-api
   environment: development
+  frontend-url: http://localhost:3000
 
 http:
   host: 0.0.0.0

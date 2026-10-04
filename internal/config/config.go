@@ -22,6 +22,7 @@ type Config struct {
 type AppConfig struct {
 	Name        string `yaml:"name"`
 	Environment string `yaml:"environment"`
+	FrontendURL string `yaml:"frontend-url"`
 }
 
 type HTTPConfig struct {
@@ -89,6 +90,11 @@ func Load(path string) (Config, error) {
 }
 
 func validate(cfg Config) error {
+
+	if strings.TrimSpace(cfg.App.FrontendURL) == "" {
+		return errors.New("app.frontend-url is required")
+	}
+
 	if strings.TrimSpace(cfg.App.Name) == "" {
 		return errors.New(
 			"app.name is required",

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"backend/internal/email"
 	"backend/internal/legal"
 	"context"
 	"errors"
@@ -34,6 +35,7 @@ type RegisterRequest struct {
 	TermsVersion     string
 	PrivacyVersion   string
 	MarketingConsent bool
+	Locale           string
 	IPAddress        net.IP
 	UserAgent        string
 }
@@ -44,14 +46,17 @@ type RegisterResult struct {
 }
 
 type RegistrationService struct {
-	db *pgxpool.Pool
+	db          *pgxpool.Pool
+	emailSender email.Sender
 }
 
 func NewRegistrationService(
 	db *pgxpool.Pool,
+	emailSender email.Sender,
 ) *RegistrationService {
 	return &RegistrationService{
-		db: db,
+		db:          db,
+		emailSender: emailSender,
 	}
 }
 
@@ -61,12 +66,13 @@ func (s *RegistrationService) Register(
 ) (*RegisterResult, error) {
 
 	fullName := strings.TrimSpace(req.FullName)
-	email := user.NormalizeEmail(req.Email)
+	emailAddress := user.NormalizeEmail(req.Email)
 
 	if err := validateRegistrationInput(
 		fullName,
-		email,
+		emailAddress,
 		req.Password,
+		req.Locale,
 	); err != nil {
 		return nil, err
 	}
@@ -129,7 +135,7 @@ func (s *RegistrationService) Register(
 	err = tx.QueryRow(
 		ctx,
 		createUser,
-		email,
+		emailAddress,
 		fullName,
 		req.IPAddress,
 	).Scan(&userID)
@@ -248,19 +254,23 @@ func (s *RegistrationService) Register(
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf(
-			"commit registration: %w",
-			err,
-		)
+		return nil, fmt.Errorf("commit registration: %w", err)
+	}
+
+	if err := s.emailSender.SendVerificationEmail(
+		ctx,
+		email.VerificationEmail{
+			To:       emailAddress,
+			FullName: fullName,
+			Token:    verificationToken,
+			Locale:   "en",
+		},
+	); err != nil {
+		return nil, fmt.Errorf("send verification email: %w", err)
 	}
 
 	return &RegisterResult{
-		UserID: userID,
-
-		// This value is returned to the application
-		// so the email service can send it.
-		//
-		// It is NEVER stored in plaintext in PostgreSQL.
+		UserID:            userID,
 		EmailVerification: verificationToken,
 	}, nil
 }

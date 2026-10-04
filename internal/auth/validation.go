@@ -18,6 +18,7 @@ func validateRegistrationInput(
 	fullName string,
 	email string,
 	password string,
+	locale string,
 ) error {
 	fullName = strings.TrimSpace(fullName)
 	email = strings.TrimSpace(email)
@@ -31,6 +32,10 @@ func validateRegistrationInput(
 	}
 
 	if err := validatePassword(password); err != nil {
+		return err
+	}
+
+	if err := validateLocale(locale); err != nil {
 		return err
 	}
 
@@ -118,4 +123,15 @@ func validatePassword(password string) error {
 	}
 
 	return nil
+}
+
+var ErrInvalidLocale = errors.New("invalid locale")
+
+func validateLocale(locale string) error {
+	switch locale {
+	case "en", "fa":
+		return nil
+	default:
+		return ErrInvalidLocale
+	}
 }

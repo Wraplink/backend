@@ -2,6 +2,7 @@ package main
 
 import (
 	"backend/internal/auth"
+	"backend/internal/email"
 	"backend/internal/security"
 	"backend/internal/user"
 	"context"
@@ -166,7 +167,12 @@ func main() {
 		refreshService,
 	)
 
-	registrationService := auth.NewRegistrationService(db)
+	emailSender := email.NewLogSender(
+		logger,
+		cfg.App.FrontendURL,
+	)
+
+	registrationService := auth.NewRegistrationService(db, emailSender)
 
 	registerHandler := auth.NewRegisterHandler(
 		registrationService,
