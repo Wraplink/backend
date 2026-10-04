@@ -2,18 +2,34 @@ package user
 
 import (
 	"backend/internal/requestcontext"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
+type MeServiceInterface interface {
+	Get(
+		ctx context.Context,
+		id uuid.UUID,
+	) (*User, error)
+
+	Update(
+		ctx context.Context,
+		id uuid.UUID,
+		fullName string,
+	) (*User, error)
+}
+
 type MeHandler struct {
-	service *MeService
+	service MeServiceInterface
 }
 
 func NewMeHandler(
-	service *MeService,
+	service MeServiceInterface,
 ) *MeHandler {
 	return &MeHandler{
 		service: service,

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"backend/internal/legal"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,13 +12,18 @@ import (
 
 const maxRegisterBodySize = 16 * 1024
 
-type registerHTTPRequest struct {
-	FullName         string `json:"name"`
-	Email            string `json:"email"`
-	Password         string `json:"password"`
+type registerLegalRequest struct {
 	TermsVersion     string `json:"termsVersion"`
 	PrivacyVersion   string `json:"privacyVersion"`
 	MarketingConsent bool   `json:"marketingConsent"`
+}
+
+type registerHTTPRequest struct {
+	FullName string               `json:"name"`
+	Email    string               `json:"email"`
+	Password string               `json:"password"`
+	Legal    registerLegalRequest `json:"legal"`
+	Locale   string               `json:"locale"`
 }
 
 type registerHTTPResponse struct {
@@ -80,25 +86,17 @@ func (h *RegisterHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if request.TermsVersion == "" ||
-		request.PrivacyVersion == "" {
+	if request.Legal.TermsVersion != legal.CurrentTermsVersion ||
+		request.Legal.PrivacyVersion != legal.CurrentPrivacyVersion {
 		writeJSONError(
 			w,
 			http.StatusBadRequest,
-			"legal documents must be accepted",
+			"you must accept the current terms and privacy policy",
 		)
 		return
 	}
 
 	ipAddress := remoteIP(r.RemoteAddr)
-
-	// BACKEND TODO:
-	// Replace these temporary accepted versions with the versions
-	// configured on the backend when legal documents become versioned
-	// independently from the frontend.
-	//
-	// The backend must ultimately validate that the submitted versions
-	// are currently acceptable before creating the account.
 
 	result, err := h.service.Register(
 		r.Context(),
@@ -106,9 +104,9 @@ func (h *RegisterHandler) Register(w http.ResponseWriter, r *http.Request) {
 			FullName:         request.FullName,
 			Email:            request.Email,
 			Password:         request.Password,
-			TermsVersion:     request.TermsVersion,
-			PrivacyVersion:   request.PrivacyVersion,
-			MarketingConsent: request.MarketingConsent,
+			TermsVersion:     request.Legal.TermsVersion,
+			PrivacyVersion:   request.Legal.PrivacyVersion,
+			MarketingConsent: request.Legal.MarketingConsent,
 			IPAddress:        ipAddress,
 			UserAgent:        r.UserAgent(),
 		},

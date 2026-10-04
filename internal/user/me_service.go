@@ -12,7 +12,7 @@ type MeService struct {
 
 func NewMeService(
 	repository *Repository,
-) *MeService {
+) MeServiceInterface {
 	return &MeService{
 		repository: repository,
 	}

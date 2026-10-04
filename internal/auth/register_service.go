@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"backend/internal/legal"
 	"context"
 	"errors"
 	"fmt"
@@ -62,11 +63,19 @@ func (s *RegistrationService) Register(
 	fullName := strings.TrimSpace(req.FullName)
 	email := user.NormalizeEmail(req.Email)
 
-	if fullName == "" ||
-		email == "" ||
-		req.Password == "" ||
-		req.TermsVersion == "" ||
-		req.PrivacyVersion == "" {
+	if err := validateRegistrationInput(
+		fullName,
+		email,
+		req.Password,
+	); err != nil {
+		return nil, err
+	}
+
+	if req.TermsVersion != legal.CurrentTermsVersion {
+		return nil, ErrInvalidRegistration
+	}
+
+	if req.PrivacyVersion != legal.CurrentPrivacyVersion {
 		return nil, ErrInvalidRegistration
 	}
 

@@ -22,16 +22,12 @@ func validateRegistrationInput(
 	fullName = strings.TrimSpace(fullName)
 	email = strings.TrimSpace(email)
 
-	if fullName == "" || utf8.RuneCountInString(fullName) > 200 {
-		return ErrInvalidFullName
+	if err := validateFullName(fullName); err != nil {
+		return err
 	}
 
-	if _, err := mail.ParseAddress(email); err != nil {
-		return ErrInvalidEmail
-	}
-
-	if len(email) > 254 {
-		return ErrInvalidEmail
+	if err := validateEmail(email); err != nil {
+		return err
 	}
 
 	if err := validatePassword(password); err != nil {
@@ -41,7 +37,52 @@ func validateRegistrationInput(
 	return nil
 }
 
+func validateFullName(value string) error {
+	if value == "" {
+		return ErrInvalidFullName
+	}
+
+	length := utf8.RuneCountInString(value)
+
+	if length < 2 || length > 200 {
+		return ErrInvalidFullName
+	}
+
+	for _, r := range value {
+		if unicode.IsControl(r) {
+			return ErrInvalidFullName
+		}
+	}
+
+	return nil
+}
+
+func validateEmail(value string) error {
+	if value == "" || len(value) > 254 {
+		return ErrInvalidEmail
+	}
+
+	// Reject display-name format:
+	// "John Doe <john@example.com>"
+	//
+	// We only accept a plain email address.
+	parsed, err := mail.ParseAddress(value)
+	if err != nil {
+		return ErrInvalidEmail
+	}
+
+	if !strings.EqualFold(parsed.Address, value) {
+		return ErrInvalidEmail
+	}
+
+	return nil
+}
+
 func validatePassword(password string) error {
+	if password == "" {
+		return ErrWeakPassword
+	}
+
 	if len(password) < 12 || len(password) > 128 {
 		return ErrWeakPassword
 	}
@@ -57,16 +98,22 @@ func validatePassword(password string) error {
 		switch {
 		case unicode.IsUpper(r):
 			hasUpper = true
+
 		case unicode.IsLower(r):
 			hasLower = true
+
 		case unicode.IsDigit(r):
 			hasNumber = true
+
 		case unicode.IsPunct(r) || unicode.IsSymbol(r):
 			hasSpecial = true
 		}
 	}
 
-	if !hasUpper || !hasLower || !hasNumber || !hasSpecial {
+	if !hasUpper ||
+		!hasLower ||
+		!hasNumber ||
+		!hasSpecial {
 		return ErrWeakPassword
 	}
 
