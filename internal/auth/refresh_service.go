@@ -10,9 +10,9 @@ import (
 )
 
 type RefreshService struct {
-	sessions *SessionService
-	tokens   *TokenService
-	config   config.SecurityConfig
+	sessions     *SessionService
+	tokenService *TokenService
+	config       config.SecurityConfig
 }
 
 func NewRefreshService(
@@ -21,9 +21,9 @@ func NewRefreshService(
 	securityConfig config.SecurityConfig,
 ) *RefreshService {
 	return &RefreshService{
-		sessions: sessions,
-		tokens:   tokens,
-		config:   securityConfig,
+		sessions:     sessions,
+		tokenService: tokens,
+		config:       securityConfig,
 	}
 }
 
@@ -40,18 +40,29 @@ func (s *RefreshService) Refresh(
 	ip net.IP,
 	userAgent string,
 ) (*RefreshResult, error) {
+	newRefreshToken, refreshUntil, err :=
+		s.tokenService.CreateRefreshToken()
+
+	if err != nil {
+		return nil, fmt.Errorf(
+			"create refresh token: %w",
+			err,
+		)
+	}
+
 	session, err := s.sessions.Rotate(
 		ctx,
 		refreshToken,
 		ip,
 		userAgent,
 		s.config.RefreshTokenTTL,
+		newRefreshToken,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	accessToken, err := s.tokens.CreateAccessToken(
+	accessToken, err := s.tokenService.CreateAccessToken(
 		session.UserID.String(),
 	)
 	if err != nil {
@@ -63,8 +74,8 @@ func (s *RefreshService) Refresh(
 
 	return &RefreshResult{
 		AccessToken:        accessToken,
-		RefreshToken:       session.RefreshToken,
-		RefreshTokenExpiry: session.ExpiresAt,
+		RefreshToken:       newRefreshToken,
+		RefreshTokenExpiry: refreshUntil,
 		UserID:             session.UserID.String(),
 	}, nil
 }

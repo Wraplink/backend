@@ -23,12 +23,12 @@ type LoginRequest struct {
 }
 
 type LoginResult struct {
-	UserID             uuid.UUID
-	Email              string
-	FullName           string
-	AccessToken        string
-	RefreshToken       string
-	RefreshTokenExpiry time.Time
+	UserID       uuid.UUID
+	Email        string
+	FullName     string
+	AccessToken  string
+	RefreshToken string
+	RefreshUntil time.Time
 }
 
 type LoginService struct {
@@ -129,12 +129,23 @@ func (s *LoginService) Login(
 		)
 	}
 
-	session, err := s.sessions.Create(
+	refreshToken, refreshUntil, err :=
+		s.tokenService.CreateRefreshToken()
+
+	if err != nil {
+		return nil, fmt.Errorf(
+			"create refresh token: %w",
+			err,
+		)
+	}
+
+	_, err = s.sessions.Create(
 		ctx,
 		account.ID,
 		req.IPAddress,
 		req.UserAgent,
 		s.config.RefreshTokenTTL,
+		refreshToken,
 	)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -144,11 +155,11 @@ func (s *LoginService) Login(
 	}
 
 	return &LoginResult{
-		UserID:             account.ID,
-		Email:              account.Email,
-		FullName:           account.FullName,
-		AccessToken:        accessToken,
-		RefreshToken:       session.RefreshToken,
-		RefreshTokenExpiry: session.ExpiresAt,
+		UserID:       account.ID,
+		Email:        account.Email,
+		FullName:     account.FullName,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		RefreshUntil: refreshUntil,
 	}, nil
 }

@@ -4,6 +4,7 @@
     <file url="file://$PROJECT_DIR$/internal/auth/email_verification_service.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
     <file url="file://$PROJECT_DIR$/internal/auth/login_repository.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
     <file url="file://$PROJECT_DIR$/internal/auth/register_service.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
+    <file url="file://$PROJECT_DIR$/internal/auth/session_repository.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
     <file url="file://$PROJECT_DIR$/internal/auth/session_service.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
     <file url="file://$PROJECT_DIR$/internal/user/credentials.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
     <file url="file://$PROJECT_DIR$/internal/user/login_security.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />

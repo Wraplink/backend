@@ -10,20 +10,24 @@ import (
 	tokenutil "backend/internal/token"
 )
 
+const refreshTokenBytes = 32
+
 type AccessTokenClaims struct {
 	UserID string `json:"uid"`
 	jwt.RegisteredClaims
 }
 
 type TokenService struct {
-	secret []byte
-	ttl    time.Duration
+	secret          []byte
+	ttl             time.Duration
+	refreshTokenTTL time.Duration
 }
 
 func NewTokenService(cfg config.Config) *TokenService {
 	return &TokenService{
-		secret: []byte(cfg.Security.JWTSecret),
-		ttl:    cfg.Security.AccessTokenTTL,
+		secret:          []byte(cfg.Security.JWTSecret),
+		ttl:             cfg.Security.AccessTokenTTL,
+		refreshTokenTTL: cfg.Security.RefreshTokenTTL,
 	}
 }
 
@@ -85,4 +89,19 @@ func (s *TokenService) ParseAccessToken(
 	}
 
 	return claims, nil
+}
+
+func (s *TokenService) CreateRefreshToken() (
+	string,
+	time.Time,
+	error,
+) {
+	value, err := tokenutil.Generate(refreshTokenBytes)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+
+	expiresAt := time.Now().Add(s.refreshTokenTTL)
+
+	return value, expiresAt, nil
 }

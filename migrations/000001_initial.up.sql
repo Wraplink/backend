@@ -4,7 +4,7 @@ CREATE TABLE users (
                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
                        failed_login_attempts int NOT NULL UNIQUE default 0,
-                       locked_until TIMESTAMPTZ NOT NULL DEFAULT now(),
+                       locked_until TIMESTAMPTZ NULL,
                        last_login_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                        last_login_ip INET NOT NULL UNIQUE,
                        email VARCHAR(254) NOT NULL UNIQUE,

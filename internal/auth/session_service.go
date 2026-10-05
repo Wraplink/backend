@@ -14,8 +14,6 @@ import (
 	tokenutil "backend/internal/token"
 )
 
-const refreshTokenBytes = 32
-
 var (
 	ErrInvalidRefreshToken = errors.New("invalid refresh token")
 	ErrRefreshTokenReplay  = errors.New("refresh token replay detected")
@@ -32,11 +30,10 @@ func NewSessionService(db *pgxpool.Pool) *SessionService {
 }
 
 type Session struct {
-	ID           uuid.UUID
-	UserID       uuid.UUID
-	FamilyID     uuid.UUID
-	RefreshToken string
-	ExpiresAt    time.Time
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	FamilyID  uuid.UUID
+	ExpiresAt time.Time
 }
 
 func (s *SessionService) Create(
@@ -45,11 +42,8 @@ func (s *SessionService) Create(
 	ip net.IP,
 	userAgent string,
 	ttl time.Duration,
+	refreshToken string,
 ) (*Session, error) {
-	refreshToken, err := tokenutil.Generate(refreshTokenBytes)
-	if err != nil {
-		return nil, fmt.Errorf("generate refresh token: %w", err)
-	}
 
 	tokenHash := tokenutil.Hash(refreshToken)
 
@@ -72,7 +66,7 @@ func (s *SessionService) Create(
 		RETURNING id
 	`
 
-	err = s.db.QueryRow(
+	err := s.db.QueryRow(
 		ctx,
 		query,
 		userID,
@@ -88,11 +82,10 @@ func (s *SessionService) Create(
 	}
 
 	return &Session{
-		ID:           sessionID,
-		UserID:       userID,
-		FamilyID:     familyID,
-		RefreshToken: refreshToken,
-		ExpiresAt:    expiresAt,
+		ID:        sessionID,
+		UserID:    userID,
+		FamilyID:  familyID,
+		ExpiresAt: expiresAt,
 	}, nil
 }
 
@@ -102,6 +95,7 @@ func (s *SessionService) Rotate(
 	ip net.IP,
 	userAgent string,
 	ttl time.Duration,
+	newRefreshToken string,
 ) (*Session, error) {
 	if refreshToken == "" {
 		return nil, ErrInvalidRefreshToken
@@ -231,14 +225,6 @@ func (s *SessionService) Rotate(
 		return nil, ErrInvalidRefreshToken
 	}
 
-	newRefreshToken, err := tokenutil.Generate(refreshTokenBytes)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"generate rotated refresh token: %w",
-			err,
-		)
-	}
-
 	newTokenHash := tokenutil.Hash(newRefreshToken)
 
 	newExpiresAt := time.Now().UTC().Add(ttl)
@@ -305,11 +291,10 @@ func (s *SessionService) Rotate(
 	}
 
 	return &Session{
-		ID:           newSessionID,
-		UserID:       userID,
-		FamilyID:     familyID,
-		RefreshToken: newRefreshToken,
-		ExpiresAt:    newExpiresAt,
+		ID:        newSessionID,
+		UserID:    userID,
+		FamilyID:  familyID,
+		ExpiresAt: newExpiresAt,
 	}, nil
 }
 
