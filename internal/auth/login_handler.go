@@ -1,16 +1,13 @@
 package auth
 
 import (
-	"backend/internal/config"
+	"backend/internal/security"
 	"encoding/json"
 	"errors"
 	"io"
 	"net"
 	"net/http"
 	"strings"
-	"time"
-
-	"backend/internal/security"
 )
 
 const refreshTokenCookieName = "wraplink_refresh_token"
@@ -21,18 +18,18 @@ type loginHTTPRequest struct {
 }
 
 type LoginHandler struct {
-	service  *LoginService
-	security config.SecurityConfig
+	service      *LoginService
+	secureCookie bool
 }
 
 func NewLoginHandler(
 	service *LoginService,
-	security config.SecurityConfig,
+	secureCookie bool,
 
 ) *LoginHandler {
 	return &LoginHandler{
-		service:  service,
-		security: security,
+		service:      service,
+		secureCookie: secureCookie,
 	}
 }
 
@@ -144,20 +141,7 @@ func (h *LoginHandler) Login(
 		- Browser receives it only through HttpOnly cookie.
 		- Database stores only SHA-256 hash.
 	*/
-	http.SetCookie(
-		w,
-		&http.Cookie{
-			Name:     refreshTokenCookieName,
-			Value:    result.RefreshToken,
-			Path:     "/api/v1/auth",
-			Domain:   h.service.config.RefreshCookieDomain,
-			Expires:  result.RefreshUntil,
-			MaxAge:   int(time.Until(result.RefreshUntil).Seconds()),
-			HttpOnly: true,
-			Secure:   h.service.config.SecureCookies,
-			SameSite: http.SameSiteLaxMode,
-		},
-	)
+	setRefreshCookie(w, result.RefreshToken, result.RefreshUntil, h.secureCookie)
 
 	writeJSON(
 		w,

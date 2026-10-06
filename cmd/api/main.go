@@ -78,11 +78,39 @@ func main() {
 		return
 	}
 
-	registrationRateLimiter := security.NewRateLimiter(
-		5,
-		time.Minute,
-	)
+	emailSender := email.NewLogSender(logger, cfg.App.FrontendURL)
 
+	//Repository
+	userRepository := user.NewRepository(db)
+	loginRepository := auth.NewLoginRepository(db)
+	sessionRepository := auth.NewSessionRepository(db)
+
+	//Service
+	tokenService := auth.NewTokenService(cfg)
+	sessionService := auth.NewSessionService(db)
+	loginService := auth.NewLoginService(loginRepository, tokenService, sessionService, cfg.Security)
+	logoutService := auth.NewLogoutService(sessionRepository)
+	resendVerificationService := auth.NewResendVerificationService(db)
+	emailVerificationService := auth.NewEmailVerificationService(db)
+	refreshService := auth.NewRefreshService(sessionService, tokenService, cfg.Security)
+	registrationService := auth.NewRegistrationService(db, emailSender)
+	meService := user.NewMeService(userRepository)
+
+	//Rate Limiter
+	registrationRateLimiter := security.NewRateLimiter(5, time.Minute)
+	resendVerificationEmailLimiter := security.NewRateLimiter(3, time.Hour)
+	resendVerificationRateLimiter := security.NewRateLimiter(3, 15*time.Minute)
+
+	//Handler
+	loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
+	logoutHandler := auth.NewLogoutHandler(logoutService, cfg.App.Environment == "production")
+	resendVerificationHandler := auth.NewResendVerificationHandler(resendVerificationService, resendVerificationEmailLimiter)
+	emailVerificationHandler := auth.NewEmailVerificationHandler(emailVerificationService)
+	registerHandler := auth.NewRegisterHandler(registrationService)
+	refreshHandler := auth.NewRefreshHandler(refreshService, cfg.App.Environment == "production")
+	meHandler := user.NewMeHandler(meService)
+
+	//Middleware
 	registrationRateLimitMiddleware :=
 		registrationRateLimiter.Middleware(
 			func(r *http.Request) string {
@@ -95,55 +123,6 @@ func main() {
 				return ip.String()
 			},
 		)
-
-	userRepository := user.NewRepository(db)
-	loginRepository := auth.NewLoginRepository(db)
-
-	tokenService := auth.NewTokenService(cfg)
-	sessionService := auth.NewSessionService(db)
-	loginService := auth.NewLoginService(
-		loginRepository,
-		tokenService,
-		sessionService,
-		cfg.Security,
-	)
-	loginHandler := auth.NewLoginHandler(
-		loginService,
-		cfg.Security,
-	)
-
-	logoutHandler := auth.NewLogoutHandler(
-		sessionService,
-	)
-
-	emailVerificationService := auth.NewEmailVerificationService(db)
-	emailVerificationHandler := auth.NewEmailVerificationHandler(
-		emailVerificationService,
-	)
-	refreshService := auth.NewRefreshService(
-		sessionService,
-		tokenService,
-		cfg.Security,
-	)
-
-	resendVerificationEmailLimiter := security.NewRateLimiter(
-		3,
-		time.Hour,
-	)
-
-	resendVerificationRateLimiter := security.NewRateLimiter(
-		3,
-		15*time.Minute,
-	)
-
-	resendVerificationService := auth.NewResendVerificationService(
-		db,
-	)
-
-	resendVerificationHandler := auth.NewResendVerificationHandler(
-		resendVerificationService,
-		resendVerificationEmailLimiter,
-	)
 
 	resendVerificationRateLimitMiddleware :=
 		resendVerificationRateLimiter.Middleware(
@@ -158,33 +137,9 @@ func main() {
 			},
 		)
 
-	authMiddleware := auth.NewAuthMiddleware(
-		tokenService,
-	)
+	//Authentication
+	authMiddleware := auth.NewAuthMiddleware(tokenService)
 	requireAuthMiddleware := authMiddleware.Middleware
-
-	refreshHandler := auth.NewRefreshHandler(
-		refreshService,
-	)
-
-	emailSender := email.NewLogSender(
-		logger,
-		cfg.App.FrontendURL,
-	)
-
-	registrationService := auth.NewRegistrationService(db, emailSender)
-
-	registerHandler := auth.NewRegisterHandler(
-		registrationService,
-	)
-
-	meService := user.NewMeService(
-		userRepository,
-	)
-
-	meHandler := user.NewMeHandler(
-		meService,
-	)
 
 	router := httpserver.NewRouter(
 		registerHandler,
@@ -201,15 +156,11 @@ func main() {
 		logger)
 
 	server := &http.Server{
-		Addr: cfg.HTTP.Host + ":" + cfg.HTTP.Port,
-
-		Handler: router,
-
-		ReadTimeout: cfg.HTTP.ReadTimeout,
-
+		Addr:         cfg.HTTP.Host + ":" + cfg.HTTP.Port,
+		Handler:      router,
+		ReadTimeout:  cfg.HTTP.ReadTimeout,
 		WriteTimeout: cfg.HTTP.WriteTimeout,
-
-		IdleTimeout: cfg.HTTP.IdleTimeout,
+		IdleTimeout:  cfg.HTTP.IdleTimeout,
 	}
 
 	serverErr := make(chan error, 1)

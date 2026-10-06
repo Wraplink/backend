@@ -1,19 +1,21 @@
 package auth
 
 import (
-	"errors"
 	"net/http"
 )
 
 type LogoutHandler struct {
-	sessions *SessionService
+	service      *LogoutService
+	secureCookie bool
 }
 
 func NewLogoutHandler(
-	sessions *SessionService,
+	service *LogoutService,
+	secureCookie bool,
 ) *LogoutHandler {
 	return &LogoutHandler{
-		sessions: sessions,
+		service:      service,
+		secureCookie: secureCookie,
 	}
 }
 
@@ -21,41 +23,40 @@ func (h *LogoutHandler) Logout(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	cookie, err := r.Cookie(refreshTokenCookieName)
+	refreshCookie, err := r.Cookie(refreshCookieName)
+
+	var refreshToken string
+
+	if err == nil {
+		refreshToken = refreshCookie.Value
+	}
+
+	_, err = h.service.Logout(
+		r.Context(),
+		refreshToken,
+	)
 
 	if err != nil {
-		if errors.Is(err, http.ErrNoCookie) {
-			clearRefreshCookie(w)
-
-			writeJSON(
-				w,
-				http.StatusNoContent,
-				nil,
-			)
-			return
-		}
-
-		writeJSONError(
+		http.Error(
 			w,
-			http.StatusBadRequest,
-			"invalid request",
-		)
-		return
-	}
-
-	if err := h.sessions.Revoke(
-		r.Context(),
-		cookie.Value,
-	); err != nil {
-		writeJSONError(
-			w,
-			http.StatusInternalServerError,
 			"internal server error",
+			http.StatusInternalServerError,
 		)
 		return
 	}
 
-	clearRefreshCookie(w)
+	/*
+	 * Always clear the cookie.
+	 *
+	 * This also makes logout idempotent when:
+	 * - cookie does not exist
+	 * - session was already revoked
+	 * - session has expired
+	 */
+	clearRefreshCookie(
+		w,
+		h.secureCookie,
+	)
 
 	w.WriteHeader(http.StatusNoContent)
 }

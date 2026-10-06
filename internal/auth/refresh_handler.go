@@ -1,22 +1,23 @@
 package auth
 
 import (
+	"backend/internal/security"
 	"errors"
 	"net/http"
-	"time"
-
-	"backend/internal/security"
 )
 
 type RefreshHandler struct {
-	service *RefreshService
+	service      *RefreshService
+	secureCookie bool
 }
 
 func NewRefreshHandler(
 	service *RefreshService,
+	secureCookie bool,
 ) *RefreshHandler {
 	return &RefreshHandler{
-		service: service,
+		service:      service,
+		secureCookie: secureCookie,
 	}
 }
 
@@ -69,7 +70,7 @@ func (h *RefreshHandler) Refresh(
 
 				The session family has already been revoked.
 			*/
-			clearRefreshCookie(w)
+			clearRefreshCookie(w, h.secureCookie)
 
 			writeJSONError(
 				w,
@@ -78,7 +79,7 @@ func (h *RefreshHandler) Refresh(
 			)
 
 		case errors.Is(err, ErrInvalidRefreshToken):
-			clearRefreshCookie(w)
+			clearRefreshCookie(w, h.secureCookie)
 
 			writeJSONError(
 				w,
@@ -97,41 +98,13 @@ func (h *RefreshHandler) Refresh(
 		return
 	}
 
-	http.SetCookie(
-		w,
-		&http.Cookie{
-			Name:     refreshTokenCookieName,
-			Value:    result.RefreshToken,
-			Path:     "/api/v1/auth",
-			Domain:   h.service.config.RefreshCookieDomain,
-			Expires:  result.RefreshTokenExpiry,
-			MaxAge:   int(time.Until(result.RefreshTokenExpiry).Seconds()),
-			HttpOnly: true,
-			Secure:   h.service.config.SecureCookies,
-			SameSite: http.SameSiteLaxMode,
-		},
-	)
+	setRefreshCookie(w, result.RefreshToken, result.RefreshTokenExpiry, h.service.config.SecureCookies)
 
 	writeJSON(
 		w,
 		http.StatusOK,
 		map[string]any{
 			"accessToken": result.AccessToken,
-		},
-	)
-}
-
-func clearRefreshCookie(w http.ResponseWriter) {
-	http.SetCookie(
-		w,
-		&http.Cookie{
-			Name:     refreshTokenCookieName,
-			Value:    "",
-			Path:     "/api/v1/auth",
-			MaxAge:   -1,
-			HttpOnly: true,
-			Secure:   false,
-			SameSite: http.SameSiteLaxMode,
 		},
 	)
 }

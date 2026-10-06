@@ -2,11 +2,13 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	tokenutil "backend/internal/token"
@@ -62,4 +64,39 @@ func (r *SessionRepository) Create(
 	}
 
 	return sessionID, nil
+}
+
+func (r *SessionRepository) RevokeByRefreshToken(
+	ctx context.Context,
+	refreshToken string,
+) (uuid.UUID, uuid.UUID, error) {
+	const query = `
+        UPDATE user_sessions
+        SET revoked_at = now()
+        WHERE refresh_token_hash = $1
+          AND revoked_at IS NULL
+        RETURNING id, user_id
+    `
+
+	var sessionID uuid.UUID
+	var userID uuid.UUID
+
+	err := r.db.QueryRow(
+		ctx,
+		query,
+		tokenutil.Hash(refreshToken),
+	).Scan(
+		&sessionID,
+		&userID,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, uuid.Nil, nil
+		}
+
+		return uuid.Nil, uuid.Nil,
+			fmt.Errorf("revoke user session: %w", err)
+	}
+
+	return sessionID, userID, nil
 }

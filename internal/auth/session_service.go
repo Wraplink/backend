@@ -15,8 +15,7 @@ import (
 )
 
 var (
-	ErrInvalidRefreshToken = errors.New("invalid refresh token")
-	ErrRefreshTokenReplay  = errors.New("refresh token replay detected")
+	ErrRefreshTokenReplay = errors.New("refresh token replay detected")
 )
 
 type SessionService struct {
