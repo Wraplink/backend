@@ -47,3 +47,26 @@ func (s *LogSender) SendVerificationEmail(
 
 	return nil
 }
+
+func (s *LogSender) SendPasswordResetEmail(
+	ctx context.Context,
+	message PasswordResetEmail,
+) error {
+	resetURL := fmt.Sprintf(
+		"%s/auth/reset-password?token=%s",
+		s.frontendURL,
+		url.QueryEscape(message.Token),
+	)
+
+	// DEVELOPMENT ONLY.
+	// Never log password-reset tokens or URLs in production.
+	s.logger.InfoContext(
+		ctx,
+		"password reset email generated",
+		"email", message.To,
+		"locale", message.Locale,
+		"reset_url", resetURL,
+	)
+
+	return nil
+}

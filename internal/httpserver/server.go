@@ -17,10 +17,12 @@ func NewRouter(
 	logoutHandler *auth.LogoutHandler,
 	emailVerificationHandler *auth.EmailVerificationHandler,
 	resendVerificationHandler *auth.ResendVerificationHandler,
+	passwordResetHandler *auth.PasswordResetHandler,
 	meHandler *user.MeHandler,
 	registrationRateLimitMiddleware func(http.Handler) http.Handler,
 	resendVerificationRateLimitMiddleware func(http.Handler) http.Handler,
 	requireAuthMiddleware func(http.Handler) http.Handler,
+	passwordResetRateLimitMiddleware func(http.Handler) http.Handler,
 	cors *security.CORS,
 	logger *slog.Logger,
 ) http.Handler {
@@ -57,6 +59,10 @@ func NewRouter(
 		r.Post("/refresh", refreshHandler.Refresh)
 
 		r.With(requireAuthMiddleware).Post("/logout", logoutHandler.Logout)
+
+		r.With(passwordResetRateLimitMiddleware).Post("/password-reset/request", passwordResetHandler.Request)
+
+		r.Post("/password-reset/confirm", passwordResetHandler.Confirm)
 	})
 
 	r.Route("/api/v1/me", func(r chi.Router) {

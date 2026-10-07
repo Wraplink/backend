@@ -84,6 +84,7 @@ func main() {
 	userRepository := user.NewRepository(db)
 	loginRepository := auth.NewLoginRepository(db)
 	sessionRepository := auth.NewSessionRepository(db)
+	passwordResetRepository := auth.NewPasswordResetRepository(db)
 
 	//Service
 	tokenService := auth.NewTokenService(cfg)
@@ -95,11 +96,13 @@ func main() {
 	refreshService := auth.NewRefreshService(sessionService, tokenService, cfg.Security)
 	registrationService := auth.NewRegistrationService(db, emailSender)
 	meService := user.NewMeService(userRepository)
+	passwordResetService := auth.NewPasswordResetService(userRepository, passwordResetRepository, emailSender)
 
 	//Rate Limiter
 	registrationRateLimiter := security.NewRateLimiter(5, time.Minute)
 	resendVerificationEmailLimiter := security.NewRateLimiter(3, time.Hour)
 	resendVerificationRateLimiter := security.NewRateLimiter(3, 15*time.Minute)
+	passwordResetRateLimiter := security.NewRateLimiter(5, time.Minute)
 
 	//Handler
 	loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
@@ -108,6 +111,7 @@ func main() {
 	emailVerificationHandler := auth.NewEmailVerificationHandler(emailVerificationService)
 	registerHandler := auth.NewRegisterHandler(registrationService)
 	refreshHandler := auth.NewRefreshHandler(refreshService, cfg.App.Environment == "production")
+	passwordResetHandler := auth.NewPasswordResetHandler(passwordResetService)
 	meHandler := user.NewMeHandler(meService)
 
 	//Middleware
@@ -137,6 +141,19 @@ func main() {
 			},
 		)
 
+	passwordResetRateLimitMiddleware :=
+		passwordResetRateLimiter.Middleware(
+			func(r *http.Request) string {
+				ip := trustedProxy.ClientIP(r)
+
+				if ip == nil {
+					return "unknown"
+				}
+
+				return ip.String()
+			},
+		)
+
 	//Authentication
 	authMiddleware := auth.NewAuthMiddleware(tokenService)
 	requireAuthMiddleware := authMiddleware.Middleware
@@ -148,10 +165,12 @@ func main() {
 		logoutHandler,
 		emailVerificationHandler,
 		resendVerificationHandler,
+		passwordResetHandler,
 		meHandler,
 		registrationRateLimitMiddleware,
 		resendVerificationRateLimitMiddleware,
 		requireAuthMiddleware,
+		passwordResetRateLimitMiddleware,
 		cors,
 		logger)
 
