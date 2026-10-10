@@ -401,3 +401,32 @@ func (s *SessionService) Revoke(
 
 	return nil
 }
+
+func (s *SessionService) IsActive(
+	ctx context.Context,
+	userID uuid.UUID,
+	sessionID uuid.UUID,
+) (bool, error) {
+	const query = `
+		SELECT EXISTS (
+			SELECT 1
+			FROM user_sessions
+			WHERE id = $1
+			  AND user_id = $2
+			  AND revoked_at IS NULL
+			  AND expires_at > now()
+		)
+	`
+
+	var active bool
+	if err := s.db.QueryRow(
+		ctx,
+		query,
+		sessionID,
+		userID,
+	).Scan(&active); err != nil {
+		return false, fmt.Errorf("check active session: %w", err)
+	}
+
+	return active, nil
+}

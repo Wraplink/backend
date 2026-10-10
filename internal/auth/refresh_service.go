@@ -64,6 +64,7 @@ func (s *RefreshService) Refresh(
 
 	accessToken, err := s.tokenService.CreateAccessToken(
 		session.UserID.String(),
+		session.ID.String(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf(

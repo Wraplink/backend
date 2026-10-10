@@ -98,9 +98,9 @@ func main() {
 	registrationService := auth.NewRegistrationService(db, emailSender)
 	meService := user.NewMeService(userRepository)
 	passwordResetService := auth.NewPasswordResetService(userRepository, passwordResetRepository, emailSender)
-	passwordChangeService := auth.NewPasswordChangeService(
-		passwordChangeRepository,
-	)
+	passwordChangeService := auth.NewPasswordChangeService(passwordChangeRepository)
+	sessionManagementService := auth.NewSessionManagementService(sessionRepository)
+	revokeOthersService := auth.NewRevokeOthersService(sessionRepository)
 
 	//Rate Limiter
 	registrationRateLimiter := security.NewRateLimiter(5, time.Minute)
@@ -117,10 +117,9 @@ func main() {
 	refreshHandler := auth.NewRefreshHandler(refreshService, cfg.App.Environment == "production")
 	passwordResetHandler := auth.NewPasswordResetHandler(passwordResetService)
 	meHandler := user.NewMeHandler(meService)
-	passwordChangeHandler := auth.NewPasswordChangeHandler(
-		passwordChangeService,
-		trustedProxy,
-	)
+	passwordChangeHandler := auth.NewPasswordChangeHandler(passwordChangeService, trustedProxy)
+	sessionManagementHandler := auth.NewSessionManagementHandler(sessionManagementService)
+	revokeOthersHandler := auth.NewRevokeOthersHandler(revokeOthersService)
 
 	//Middleware
 	registrationRateLimitMiddleware :=
@@ -163,7 +162,7 @@ func main() {
 		)
 
 	//Authentication
-	authMiddleware := auth.NewAuthMiddleware(tokenService)
+	authMiddleware := auth.NewAuthMiddleware(tokenService, sessionService)
 	requireAuthMiddleware := authMiddleware.Middleware
 
 	router := httpserver.NewRouter(
@@ -176,6 +175,8 @@ func main() {
 		passwordResetHandler,
 		meHandler,
 		passwordChangeHandler,
+		sessionManagementHandler,
+		revokeOthersHandler,
 		registrationRateLimitMiddleware,
 		resendVerificationRateLimitMiddleware,
 		requireAuthMiddleware,

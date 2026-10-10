@@ -13,7 +13,8 @@ import (
 const refreshTokenBytes = 32
 
 type AccessTokenClaims struct {
-	UserID string `json:"uid"`
+	UserID    string `json:"uid"`
+	SessionID string `json:"sid"`
 	jwt.RegisteredClaims
 }
 
@@ -33,6 +34,7 @@ func NewTokenService(cfg config.Config) *TokenService {
 
 func (s *TokenService) CreateAccessToken(
 	userID string,
+	sessionID string,
 ) (string, error) {
 	now := time.Now()
 
@@ -42,7 +44,8 @@ func (s *TokenService) CreateAccessToken(
 	}
 
 	claims := AccessTokenClaims{
-		UserID: userID,
+		UserID:    userID,
+		SessionID: sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "wraplink-api",
 			Audience:  jwt.ClaimStrings{"wraplink-web"},

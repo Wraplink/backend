@@ -20,6 +20,8 @@ func NewRouter(
 	passwordResetHandler *auth.PasswordResetHandler,
 	meHandler *user.MeHandler,
 	passwordChangeHandler *auth.PasswordChangeHandler,
+	sessionManagementHandler *auth.SessionManagementHandler,
+	revokeOthersHandler *auth.RevokeOthersHandler,
 	registrationRateLimitMiddleware func(http.Handler) http.Handler,
 	resendVerificationRateLimitMiddleware func(http.Handler) http.Handler,
 	requireAuthMiddleware func(http.Handler) http.Handler,
@@ -73,6 +75,9 @@ func NewRouter(
 		r.Patch("/", meHandler.Update)
 		r.Post("/password", passwordChangeHandler.Change)
 
+		r.Get("/sessions", sessionManagementHandler.List)
+		r.Delete("/sessions/{sessionID}", sessionManagementHandler.Revoke)
+		r.Post("/sessions/revoke-others", revokeOthersHandler.Revoke)
 	})
 
 	return r

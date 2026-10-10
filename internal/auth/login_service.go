@@ -119,27 +119,13 @@ func (s *LoginService) Login(
 		)
 	}
 
-	accessToken, err := s.tokenService.CreateAccessToken(
-		account.ID.String(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"create access token: %w",
-			err,
-		)
-	}
-
 	refreshToken, refreshUntil, err :=
 		s.tokenService.CreateRefreshToken()
-
 	if err != nil {
-		return nil, fmt.Errorf(
-			"create refresh token: %w",
-			err,
-		)
+		return nil, fmt.Errorf("create refresh token: %w", err)
 	}
 
-	_, err = s.sessions.Create(
+	session, err := s.sessions.Create(
 		ctx,
 		account.ID,
 		req.IPAddress,
@@ -148,10 +134,15 @@ func (s *LoginService) Login(
 		refreshToken,
 	)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"create session: %w",
-			err,
-		)
+		return nil, fmt.Errorf("create session: %w", err)
+	}
+
+	accessToken, err := s.tokenService.CreateAccessToken(
+		account.ID.String(),
+		session.ID.String(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create access token: %w", err)
 	}
 
 	return &LoginResult{
