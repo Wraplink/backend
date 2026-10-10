@@ -19,6 +19,7 @@ func NewRouter(
 	resendVerificationHandler *auth.ResendVerificationHandler,
 	passwordResetHandler *auth.PasswordResetHandler,
 	meHandler *user.MeHandler,
+	passwordChangeHandler *auth.PasswordChangeHandler,
 	registrationRateLimitMiddleware func(http.Handler) http.Handler,
 	resendVerificationRateLimitMiddleware func(http.Handler) http.Handler,
 	requireAuthMiddleware func(http.Handler) http.Handler,
@@ -70,6 +71,8 @@ func NewRouter(
 
 		r.Get("/", meHandler.Get)
 		r.Patch("/", meHandler.Update)
+		r.Post("/password", passwordChangeHandler.Change)
+
 	})
 
 	return r

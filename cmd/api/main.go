@@ -85,6 +85,7 @@ func main() {
 	loginRepository := auth.NewLoginRepository(db)
 	sessionRepository := auth.NewSessionRepository(db)
 	passwordResetRepository := auth.NewPasswordResetRepository(db)
+	passwordChangeRepository := auth.NewPasswordChangeRepository(db)
 
 	//Service
 	tokenService := auth.NewTokenService(cfg)
@@ -97,6 +98,9 @@ func main() {
 	registrationService := auth.NewRegistrationService(db, emailSender)
 	meService := user.NewMeService(userRepository)
 	passwordResetService := auth.NewPasswordResetService(userRepository, passwordResetRepository, emailSender)
+	passwordChangeService := auth.NewPasswordChangeService(
+		passwordChangeRepository,
+	)
 
 	//Rate Limiter
 	registrationRateLimiter := security.NewRateLimiter(5, time.Minute)
@@ -113,6 +117,10 @@ func main() {
 	refreshHandler := auth.NewRefreshHandler(refreshService, cfg.App.Environment == "production")
 	passwordResetHandler := auth.NewPasswordResetHandler(passwordResetService)
 	meHandler := user.NewMeHandler(meService)
+	passwordChangeHandler := auth.NewPasswordChangeHandler(
+		passwordChangeService,
+		trustedProxy,
+	)
 
 	//Middleware
 	registrationRateLimitMiddleware :=
@@ -167,6 +175,7 @@ func main() {
 		resendVerificationHandler,
 		passwordResetHandler,
 		meHandler,
+		passwordChangeHandler,
 		registrationRateLimitMiddleware,
 		resendVerificationRateLimitMiddleware,
 		requireAuthMiddleware,
