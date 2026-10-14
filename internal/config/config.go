@@ -58,13 +58,13 @@ type PaymentsConfig struct {
 }
 
 type NetworkConfig struct {
-	UsageIngestKey   string             `yaml:"usage-ingest-key"`
-	EdgeSyncKey      string             `yaml:"edge-sync-key"`
-	IdleReleaseAfter time.Duration      `yaml:"idle-release-after"`
-	EdgeOfflineAfter time.Duration      `yaml:"edge-offline-after"`
-	ReconcileInterval time.Duration     `yaml:"reconcile-interval"`
-	DNSServers       []string           `yaml:"dns-servers"`
-	Proxy            NetworkProxyConfig `yaml:"proxy"`
+	UsageIngestKey    string             `yaml:"usage-ingest-key"`
+	EdgeSyncKey       string             `yaml:"edge-sync-key"`
+	IdleReleaseAfter  time.Duration      `yaml:"idle-release-after"`
+	EdgeOfflineAfter  time.Duration      `yaml:"edge-offline-after"`
+	ReconcileInterval time.Duration      `yaml:"reconcile-interval"`
+	DNSServers        []string           `yaml:"dns-servers"`
+	Proxy             NetworkProxyConfig `yaml:"proxy"`
 }
 
 type NetworkProxyConfig struct {
