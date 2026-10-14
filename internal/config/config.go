@@ -58,9 +58,13 @@ type PaymentsConfig struct {
 }
 
 type NetworkConfig struct {
-	UsageIngestKey string             `yaml:"usage-ingest-key"`
-	DNSServers     []string           `yaml:"dns-servers"`
-	Proxy          NetworkProxyConfig `yaml:"proxy"`
+	UsageIngestKey    string             `yaml:"usage-ingest-key"`
+	EdgeSyncKey       string             `yaml:"edge-sync-key"`
+	IdleReleaseAfter  time.Duration      `yaml:"idle-release-after"`
+	EdgeOfflineAfter  time.Duration      `yaml:"edge-offline-after"`
+	ReconcileInterval time.Duration      `yaml:"reconcile-interval"`
+	DNSServers        []string           `yaml:"dns-servers"`
+	Proxy             NetworkProxyConfig `yaml:"proxy"`
 }
 
 type NetworkProxyConfig struct {
@@ -80,132 +84,89 @@ type ServerConfig struct {
 func Load(path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return Config{}, fmt.Errorf(
-			"read config file: %w",
-			err,
-		)
+		return Config{}, fmt.Errorf("read config file: %w", err)
 	}
 
-	// Environment variables are deliberately supported
-	// inside YAML using ${VARIABLE} syntax.
-	data = []byte(
-		os.ExpandEnv(string(data)),
-	)
+	data = []byte(os.ExpandEnv(string(data)))
 
 	var cfg Config
-
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return Config{}, fmt.Errorf(
-			"parse config file: %w",
-			err,
-		)
+		return Config{}, fmt.Errorf("parse config file: %w", err)
 	}
-
 	if err := validate(cfg); err != nil {
 		return Config{}, err
 	}
-
 	return cfg, nil
 }
 
 func validate(cfg Config) error {
-
 	if strings.TrimSpace(cfg.App.FrontendURL) == "" {
 		return errors.New("app.frontend-url is required")
 	}
-
 	if strings.TrimSpace(cfg.App.Name) == "" {
-		return errors.New(
-			"app.name is required",
-		)
+		return errors.New("app.name is required")
 	}
-
 	if strings.TrimSpace(cfg.App.Environment) == "" {
-		return errors.New(
-			"app.environment is required",
-		)
+		return errors.New("app.environment is required")
 	}
-
 	if strings.TrimSpace(cfg.HTTP.Host) == "" {
-		return errors.New(
-			"http.host is required",
-		)
+		return errors.New("http.host is required")
 	}
-
 	if strings.TrimSpace(cfg.HTTP.Port) == "" {
-		return errors.New(
-			"http.port is required",
-		)
+		return errors.New("http.port is required")
 	}
-
 	if strings.TrimSpace(cfg.Database.URL) == "" {
-		return errors.New(
-			"database.url is required",
-		)
+		return errors.New("database.url is required")
 	}
-
 	if cfg.Database.MaxConns < 1 {
-		return errors.New(
-			"database.max-conns must be greater than zero",
-		)
+		return errors.New("database.max-conns must be greater than zero")
 	}
-
 	if cfg.Database.MinConns < 0 {
-		return errors.New(
-			"database.min-conns cannot be negative",
-		)
+		return errors.New("database.min-conns cannot be negative")
 	}
-
 	if cfg.Database.MinConns > cfg.Database.MaxConns {
-		return errors.New(
-			"database.min-conns cannot exceed database.max-conns",
-		)
+		return errors.New("database.min-conns cannot exceed database.max-conns")
 	}
-
 	if len(cfg.Security.JWTSecret) < 64 {
-		return errors.New(
-			"security.jwt-secret must contain at least 64 characters",
-		)
+		return errors.New("security.jwt-secret must contain at least 64 characters")
 	}
-
 	if cfg.Security.AccessTokenTTL <= 0 {
-		return errors.New(
-			"security.access-token-ttl must be greater than zero",
-		)
+		return errors.New("security.access-token-ttl must be greater than zero")
 	}
-
 	if cfg.Security.RefreshTokenTTL <= 0 {
-		return errors.New(
-			"security.refresh-token-ttl must be greater than zero",
-		)
+		return errors.New("security.refresh-token-ttl must be greater than zero")
 	}
-
 	if cfg.Security.AccessTokenTTL >= cfg.Security.RefreshTokenTTL {
-		return errors.New(
-			"security.access-token-ttl must be shorter than refresh-token-ttl",
-		)
+		return errors.New("security.access-token-ttl must be shorter than refresh-token-ttl")
 	}
 
 	devSettlementKey := strings.TrimSpace(cfg.Payments.DevSettlementKey)
 	if devSettlementKey != "" && len(devSettlementKey) < 32 {
-		return errors.New(
-			"payments.dev-settlement-key must contain at least 32 characters when configured",
-		)
+		return errors.New("payments.dev-settlement-key must contain at least 32 characters when configured")
 	}
 
 	usageIngestKey := strings.TrimSpace(cfg.Network.UsageIngestKey)
 	if usageIngestKey != "" && len(usageIngestKey) < 32 {
-		return errors.New(
-			"network.usage-ingest-key must contain at least 32 characters when configured",
-		)
+		return errors.New("network.usage-ingest-key must contain at least 32 characters when configured")
+	}
+	edgeSyncKey := strings.TrimSpace(cfg.Network.EdgeSyncKey)
+	if edgeSyncKey != "" && len(edgeSyncKey) < 32 {
+		return errors.New("network.edge-sync-key must contain at least 32 characters when configured")
+	}
+	if cfg.Network.IdleReleaseAfter <= 0 {
+		return errors.New("network.idle-release-after must be greater than zero")
+	}
+	if cfg.Network.EdgeOfflineAfter <= 0 {
+		return errors.New("network.edge-offline-after must be greater than zero")
+	}
+	if cfg.Network.ReconcileInterval <= 0 {
+		return errors.New("network.reconcile-interval must be greater than zero")
 	}
 
 	for _, server := range cfg.Network.DNSServers {
 		server = strings.TrimSpace(server)
 		if server == "" || net.ParseIP(server) == nil {
-			return errors.New(
-				"network.dns-servers must contain valid IP addresses",
-			)
+			return errors.New("network.dns-servers must contain valid IP addresses")
 		}
 	}
 
@@ -213,35 +174,24 @@ func validate(cfg Config) error {
 	proxyProtocol := strings.TrimSpace(cfg.Network.Proxy.Protocol)
 	if proxyHost == "" {
 		if cfg.Network.Proxy.Port != 0 || proxyProtocol != "" {
-			return errors.New(
-				"network.proxy.host is required when proxy port or protocol is configured",
-			)
+			return errors.New("network.proxy.host is required when proxy port or protocol is configured")
 		}
 	} else {
 		if cfg.Network.Proxy.Port < 1 || cfg.Network.Proxy.Port > 65535 {
-			return errors.New(
-				"network.proxy.port must be between 1 and 65535",
-			)
+			return errors.New("network.proxy.port must be between 1 and 65535")
 		}
 		if proxyProtocol == "" {
-			return errors.New(
-				"network.proxy.protocol is required when proxy host is configured",
-			)
+			return errors.New("network.proxy.protocol is required when proxy host is configured")
 		}
 	}
 
 	if strings.EqualFold(cfg.App.Environment, "production") {
 		if !cfg.Security.SecureCookies {
-			return errors.New(
-				"security.secure-cookies must be enabled in production",
-			)
+			return errors.New("security.secure-cookies must be enabled in production")
 		}
 		if devSettlementKey != "" {
-			return errors.New(
-				"payments.dev-settlement-key must be empty in production",
-			)
+			return errors.New("payments.dev-settlement-key must be empty in production")
 		}
 	}
-
 	return nil
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"backend/internal/auth"
+	"backend/internal/edgeaccess"
 	"backend/internal/email"
 	"backend/internal/networkaccess"
 	"backend/internal/payments"
@@ -25,61 +26,29 @@ import (
 )
 
 func main() {
-	logger := slog.New(
-		slog.NewJSONHandler(
-			os.Stdout,
-			nil,
-		),
-	)
-
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	cfg, err := config.Load(
-		"config.yml",
-	)
+	cfg, err := config.Load("config.yml")
 	if err != nil {
-		logger.Error(
-			"failed to load configuration",
-			"error", err,
-		)
-
+		logger.Error("failed to load configuration", "error", err)
 		os.Exit(1)
 	}
 
-	ctx, stop := signal.NotifyContext(
-		context.Background(),
-		os.Interrupt,
-		syscall.SIGTERM,
-	)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	db, err := database.NewPostgres(
-		ctx,
-		cfg,
-	)
-
+	db, err := database.NewPostgres(ctx, cfg)
 	if err != nil {
-		logger.Error(
-			"failed to connect to database",
-			"error", err,
-		)
-
+		logger.Error("failed to connect to database", "error", err)
 		os.Exit(1)
 	}
 	defer db.Close()
 
-	cors := security.NewCORS(
-		cfg.CORS.AllowedOrigins,
-	)
-
-	trustedProxy, err := security.NewTrustedProxy(
-		cfg.Server.TrustedProxies,
-	)
+	cors := security.NewCORS(cfg.CORS.AllowedOrigins)
+	trustedProxy, err := security.NewTrustedProxy(cfg.Server.TrustedProxies)
 	if err != nil {
-		logger.Error(
-			"invalid trusted proxy configuration",
-			"error", err,
-		)
+		logger.Error("invalid trusted proxy configuration", "error", err)
 		return
 	}
 
@@ -90,6 +59,7 @@ func main() {
 	subscriptionsRepository := subscriptions.NewRepository(db)
 	paymentsRepository := payments.NewRepository(db)
 	networkRepository := networkaccess.NewRepository(db)
+	edgeRepository := edgeaccess.NewRepository(db)
 	userRepository := user.NewRepository(db)
 	loginRepository := auth.NewLoginRepository(db)
 	sessionRepository := auth.NewSessionRepository(db)
@@ -124,6 +94,12 @@ func main() {
 		}
 	}
 	networkService := networkaccess.NewService(networkRepository, connection)
+	edgeService := edgeaccess.NewService(
+		edgeRepository,
+		cfg.Network.EdgeSyncKey,
+		cfg.Network.IdleReleaseAfter,
+		cfg.Network.EdgeOfflineAfter,
+	)
 
 	// Rate Limiter
 	registrationRateLimiter := security.NewRateLimiter(5, time.Minute)
@@ -141,6 +117,7 @@ func main() {
 		cfg.App.Environment != "production",
 	)
 	networkHandler := networkaccess.NewHandler(networkService, cfg.Network.UsageIngestKey)
+	edgeHandler := edgeaccess.NewHandler(edgeService, trustedProxy)
 	loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
 	logoutHandler := auth.NewLogoutHandler(logoutService, cfg.App.Environment == "production")
 	resendVerificationHandler := auth.NewResendVerificationHandler(resendVerificationService, resendVerificationEmailLimiter)
@@ -154,44 +131,27 @@ func main() {
 	revokeOthersHandler := auth.NewRevokeOthersHandler(revokeOthersService)
 
 	// Middleware
-	registrationRateLimitMiddleware :=
-		registrationRateLimiter.Middleware(
-			func(r *http.Request) string {
-				ip := trustedProxy.ClientIP(r)
-
-				if ip == nil {
-					return "unknown"
-				}
-
-				return ip.String()
-			},
-		)
-
-	resendVerificationRateLimitMiddleware :=
-		resendVerificationRateLimiter.Middleware(
-			func(r *http.Request) string {
-				ip := trustedProxy.ClientIP(r)
-
-				if ip == nil {
-					return "unknown"
-				}
-
-				return ip.String()
-			},
-		)
-
-	passwordResetRateLimitMiddleware :=
-		passwordResetRateLimiter.Middleware(
-			func(r *http.Request) string {
-				ip := trustedProxy.ClientIP(r)
-
-				if ip == nil {
-					return "unknown"
-				}
-
-				return ip.String()
-			},
-		)
+	registrationRateLimitMiddleware := registrationRateLimiter.Middleware(func(r *http.Request) string {
+		ip := trustedProxy.ClientIP(r)
+		if ip == nil {
+			return "unknown"
+		}
+		return ip.String()
+	})
+	resendVerificationRateLimitMiddleware := resendVerificationRateLimiter.Middleware(func(r *http.Request) string {
+		ip := trustedProxy.ClientIP(r)
+		if ip == nil {
+			return "unknown"
+		}
+		return ip.String()
+	})
+	passwordResetRateLimitMiddleware := passwordResetRateLimiter.Middleware(func(r *http.Request) string {
+		ip := trustedProxy.ClientIP(r)
+		if ip == nil {
+			return "unknown"
+		}
+		return ip.String()
+	})
 
 	// Authentication
 	authMiddleware := auth.NewAuthMiddleware(tokenService, sessionService)
@@ -203,6 +163,7 @@ func main() {
 		paymentsHandler,
 		depositHandler,
 		networkHandler,
+		edgeHandler,
 		registerHandler,
 		loginHandler,
 		refreshHandler,
@@ -219,7 +180,10 @@ func main() {
 		requireAuthMiddleware,
 		passwordResetRateLimitMiddleware,
 		cors,
-		logger)
+		logger,
+	)
+
+	go runEdgeReconciler(ctx, edgeService, cfg.Network.ReconcileInterval, logger)
 
 	server := &http.Server{
 		Addr:         cfg.HTTP.Host + ":" + cfg.HTTP.Port,
@@ -230,50 +194,53 @@ func main() {
 	}
 
 	serverErr := make(chan error, 1)
-
 	go func() {
-		logger.Info(
-			"HTTP server started",
-			"address", server.Addr,
-		)
-
+		logger.Info("HTTP server started", "address", server.Addr)
 		serverErr <- server.ListenAndServe()
 	}()
 
 	select {
 	case err := <-serverErr:
-		if !errors.Is(
-			err,
-			http.ErrServerClosed,
-		) {
-			logger.Error(
-				"HTTP server failed",
-				"error", err,
-			)
-
+		if !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("HTTP server failed", "error", err)
 			os.Exit(1)
 		}
-
 	case <-ctx.Done():
-		logger.Info(
-			"shutdown signal received",
-		)
+		logger.Info("shutdown signal received")
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(
-		context.Background(),
-		cfg.HTTP.ShutdownTimeout,
-	)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.HTTP.ShutdownTimeout)
 	defer cancel()
-
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		logger.Error(
-			"HTTP server shutdown failed",
-			"error", err,
-		)
-
+		logger.Error("HTTP server shutdown failed", "error", err)
 		os.Exit(1)
 	}
-
 	logger.Info("HTTP server stopped")
+}
+
+func runEdgeReconciler(ctx context.Context, service *edgeaccess.Service, interval time.Duration, logger *slog.Logger) {
+	reconcile := func() {
+		count, err := service.Reconcile(ctx)
+		if err != nil {
+			if ctx.Err() == nil {
+				logger.Error("edge access reconciliation failed", "error", err)
+			}
+			return
+		}
+		if count > 0 {
+			logger.Info("edge access reconciliation queued removals", "count", count)
+		}
+	}
+
+	reconcile()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			reconcile()
+		}
+	}
 }

@@ -22,21 +22,24 @@ security:
   jwt-secret: ${JWT_SECRET}
   access-token-ttl: 15m
   refresh-token-ttl: 720h
-  # Local HTTP development
   secure-cookies: false
-  # Empty means current host
   refresh-cookie-domain: ""
 #  refresh-cookie-domain: ".wraplink.ir"
 
 payments:
-  # Development only. Leave empty to disable the local settlement endpoint.
-  # Must be at least 32 characters when configured and must be empty in production.
   dev-settlement-key: ${PAYMENTS_DEV_SETTLEMENT_KEY}
 
 network:
-  # Shared only with trusted edge/master services. Leave empty to disable usage ingest.
+  # Trusted edge/master integrations. Leave empty to disable each internal API family.
   usage-ingest-key: ${NETWORK_USAGE_INGEST_KEY}
-  # Environment-specific access details returned to users with active subscriptions.
+  edge-sync-key: ${NETWORK_EDGE_SYNC_KEY}
+
+  # Active access is released when no activity has been reported for this period.
+  idle-release-after: 15m
+  # Nodes missing heartbeats for this period are excluded from new allocations.
+  edge-offline-after: 2m
+  reconcile-interval: 1m
+
   dns-servers: []
   proxy:
     host: ""
