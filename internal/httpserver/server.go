@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"backend/internal/auth"
+	"backend/internal/edgeaccess"
 	"backend/internal/networkaccess"
 	"backend/internal/payments"
 	"backend/internal/plans"
@@ -20,6 +21,7 @@ func NewRouter(
 	paymentsHandler *payments.Handler,
 	depositHandler *payments.DepositHandler,
 	networkHandler *networkaccess.Handler,
+	edgeHandler *edgeaccess.Handler,
 	registerHandler *auth.RegisterHandler,
 	loginHandler *auth.LoginHandler,
 	refreshHandler *auth.RefreshHandler,
@@ -46,37 +48,31 @@ func NewRouter(
 	r.Use(cors.Middleware)
 	r.Use(security.SecurityHeaders)
 
-	r.Get("/health/live", func(
-		w http.ResponseWriter,
-		_ *http.Request,
-	) {
-		w.Header().Set(
-			"Content-Type",
-			"application/json",
-		)
-
+	r.Get("/health/live", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-
-		_, _ = w.Write([]byte(
-			`{"status":"ok"}`,
-		))
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
 	r.Get("/api/v1/plans", plansHandler.List)
 	r.Get("/api/v1/plans/{code}", plansHandler.Get)
 
 	if depositHandler.DevelopmentSettlementEnabled() {
-		r.Post(
-			"/api/v1/dev/deposits/{depositID}/settle",
-			depositHandler.SettleDevelopment,
-		)
+		r.Post("/api/v1/dev/deposits/{depositID}/settle", depositHandler.SettleDevelopment)
 	}
 
 	if networkHandler.UsageIngestEnabled() {
-		r.Post(
-			"/api/v1/internal/usage/reports",
-			networkHandler.IngestUsage,
-		)
+		r.Post("/api/v1/internal/usage/reports", networkHandler.IngestUsage)
+	}
+
+	if edgeHandler.InternalEnabled() {
+		r.Route("/api/v1/internal/edges", func(r chi.Router) {
+			r.Post("/register", edgeHandler.RegisterEdge)
+			r.Post("/{edgeCode}/heartbeat", edgeHandler.Heartbeat)
+			r.Get("/{edgeCode}/sync", edgeHandler.Sync)
+			r.Post("/{edgeCode}/ack", edgeHandler.Acknowledge)
+			r.Post("/{edgeCode}/activity", edgeHandler.Activity)
+		})
 	}
 
 	r.Route("/api/v1/auth", func(r chi.Router) {
@@ -84,13 +80,9 @@ func NewRouter(
 		r.Post("/login", loginHandler.Login)
 		r.Post("/verify-email", emailVerificationHandler.Verify)
 		r.With(resendVerificationRateLimitMiddleware).Post("/resend-verification", resendVerificationHandler.Resend)
-
 		r.Post("/refresh", refreshHandler.Refresh)
-
 		r.With(requireAuthMiddleware).Post("/logout", logoutHandler.Logout)
-
 		r.With(passwordResetRateLimitMiddleware).Post("/password-reset/request", passwordResetHandler.Request)
-
 		r.Post("/password-reset/confirm", passwordResetHandler.Confirm)
 	})
 
@@ -112,6 +104,9 @@ func NewRouter(
 		r.Post("/subscriptions/{subscriptionID}/pay-with-wallet", paymentsHandler.PaySubscriptionWithWallet)
 
 		r.Get("/network/access", networkHandler.Access)
+		r.Post("/network/provision", edgeHandler.Provision)
+		r.Get("/network/provisioning", edgeHandler.Current)
+		r.Delete("/network/provisioning", edgeHandler.Release)
 		r.Get("/usage", networkHandler.Usage)
 
 		r.Get("/wallet", paymentsHandler.Wallet)
