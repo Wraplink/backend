@@ -3,6 +3,7 @@ package main
 import (
 	"backend/internal/auth"
 	"backend/internal/email"
+	"backend/internal/networkaccess"
 	"backend/internal/payments"
 	"backend/internal/plans"
 	"backend/internal/security"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -87,6 +89,7 @@ func main() {
 	plansRepository := plans.NewRepository(db)
 	subscriptionsRepository := subscriptions.NewRepository(db)
 	paymentsRepository := payments.NewRepository(db)
+	networkRepository := networkaccess.NewRepository(db)
 	userRepository := user.NewRepository(db)
 	loginRepository := auth.NewLoginRepository(db)
 	sessionRepository := auth.NewSessionRepository(db)
@@ -110,6 +113,18 @@ func main() {
 	subscriptionsService := subscriptions.NewService(subscriptionsRepository, plansRepository)
 	paymentsService := payments.NewService(paymentsRepository)
 
+	connection := networkaccess.ConnectionDetails{
+		DNSServers: append([]string(nil), cfg.Network.DNSServers...),
+	}
+	if strings.TrimSpace(cfg.Network.Proxy.Host) != "" {
+		connection.Proxy = &networkaccess.ProxyConnection{
+			Host:     cfg.Network.Proxy.Host,
+			Port:     cfg.Network.Proxy.Port,
+			Protocol: cfg.Network.Proxy.Protocol,
+		}
+	}
+	networkService := networkaccess.NewService(networkRepository, connection)
+
 	// Rate Limiter
 	registrationRateLimiter := security.NewRateLimiter(5, time.Minute)
 	resendVerificationEmailLimiter := security.NewRateLimiter(3, time.Hour)
@@ -125,6 +140,7 @@ func main() {
 		cfg.Payments.DevSettlementKey,
 		cfg.App.Environment != "production",
 	)
+	networkHandler := networkaccess.NewHandler(networkService, cfg.Network.UsageIngestKey)
 	loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
 	logoutHandler := auth.NewLogoutHandler(logoutService, cfg.App.Environment == "production")
 	resendVerificationHandler := auth.NewResendVerificationHandler(resendVerificationService, resendVerificationEmailLimiter)
@@ -186,6 +202,7 @@ func main() {
 		subscriptionsHandler,
 		paymentsHandler,
 		depositHandler,
+		networkHandler,
 		registerHandler,
 		loginHandler,
 		refreshHandler,
