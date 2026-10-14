@@ -4,9 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
+	"backend/internal/bootstrap"
 	"backend/internal/config"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func NewPostgres(
@@ -47,6 +48,11 @@ func NewPostgres(
 	}
 
 	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, err
+	}
+
+	if err := bootstrap.EnsureRequiredData(ctx, pool, nil); err != nil {
 		pool.Close()
 		return nil, err
 	}
