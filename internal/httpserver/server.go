@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"backend/internal/auth"
+	"backend/internal/plans"
 	"backend/internal/security"
 	"backend/internal/user"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 )
 
 func NewRouter(
+	plansHandler *plans.Handler,
 	registerHandler *auth.RegisterHandler,
 	loginHandler *auth.LoginHandler,
 	refreshHandler *auth.RefreshHandler,
@@ -52,6 +54,9 @@ func NewRouter(
 			`{"status":"ok"}`,
 		))
 	})
+
+	r.Get("/api/v1/plans", plansHandler.List)
+	r.Get("/api/v1/plans/{code}", plansHandler.Get)
 
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		r.With(registrationRateLimitMiddleware).Post("/register", registerHandler.Register)
