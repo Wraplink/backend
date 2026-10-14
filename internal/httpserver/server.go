@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"backend/internal/auth"
+	"backend/internal/networkaccess"
 	"backend/internal/payments"
 	"backend/internal/plans"
 	"backend/internal/security"
@@ -18,6 +19,7 @@ func NewRouter(
 	subscriptionsHandler *subscriptions.Handler,
 	paymentsHandler *payments.Handler,
 	depositHandler *payments.DepositHandler,
+	networkHandler *networkaccess.Handler,
 	registerHandler *auth.RegisterHandler,
 	loginHandler *auth.LoginHandler,
 	refreshHandler *auth.RefreshHandler,
@@ -70,6 +72,13 @@ func NewRouter(
 		)
 	}
 
+	if networkHandler.UsageIngestEnabled() {
+		r.Post(
+			"/api/v1/internal/usage/reports",
+			networkHandler.IngestUsage,
+		)
+	}
+
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		r.With(registrationRateLimitMiddleware).Post("/register", registerHandler.Register)
 		r.Post("/login", loginHandler.Login)
@@ -101,6 +110,9 @@ func NewRouter(
 		r.Get("/subscriptions/current", subscriptionsHandler.Current)
 		r.Delete("/subscriptions/{subscriptionID}", subscriptionsHandler.CancelPending)
 		r.Post("/subscriptions/{subscriptionID}/pay-with-wallet", paymentsHandler.PaySubscriptionWithWallet)
+
+		r.Get("/network/access", networkHandler.Access)
+		r.Get("/usage", networkHandler.Usage)
 
 		r.Get("/wallet", paymentsHandler.Wallet)
 		r.Get("/wallet/transactions", paymentsHandler.Transactions)
