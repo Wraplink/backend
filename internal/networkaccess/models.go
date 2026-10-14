@@ -15,8 +15,8 @@ const (
 )
 
 var (
-	ErrNoActiveSubscription = errors.New("no active subscription")
-	ErrSubscriptionNotFound = errors.New("subscription not found")
+	ErrNoActiveSubscription  = errors.New("no active subscription")
+	ErrSubscriptionNotFound  = errors.New("subscription not found")
 	ErrSubscriptionNotUsable = errors.New("subscription is not usable for traffic accounting")
 	ErrInvalidReport         = errors.New("invalid usage report")
 	ErrReportConflict        = errors.New("usage report ID conflict")
