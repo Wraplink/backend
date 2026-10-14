@@ -20,14 +20,14 @@ const (
 
 var (
 	ErrNoUsableSubscription = errors.New("no usable subscription")
-	ErrNoEdgeCapacity        = errors.New("no edge capacity available")
-	ErrAssignmentNotFound    = errors.New("network assignment not found")
-	ErrEdgeNotFound          = errors.New("edge node not found")
-	ErrInvalidEdgeRequest    = errors.New("invalid edge request")
-	ErrInvalidClientIP       = errors.New("invalid client IP")
-	ErrInternalSyncDisabled  = errors.New("edge sync is disabled")
-	ErrUnauthorizedEdge      = errors.New("unauthorized edge request")
-	ErrRevisionNotFound      = errors.New("sync revision not found")
+	ErrNoEdgeCapacity       = errors.New("no edge capacity available")
+	ErrAssignmentNotFound   = errors.New("network assignment not found")
+	ErrEdgeNotFound         = errors.New("edge node not found")
+	ErrInvalidEdgeRequest   = errors.New("invalid edge request")
+	ErrInvalidClientIP      = errors.New("invalid client IP")
+	ErrInternalSyncDisabled = errors.New("edge sync is disabled")
+	ErrUnauthorizedEdge     = errors.New("unauthorized edge request")
+	ErrRevisionNotFound     = errors.New("sync revision not found")
 )
 
 type Assignment struct {
