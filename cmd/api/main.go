@@ -126,7 +126,7 @@ func main() {
 	refreshHandler := auth.NewRefreshHandler(refreshService, cfg.App.Environment == "production")
 	passwordResetHandler := auth.NewPasswordResetHandler(passwordResetService)
 	meHandler := user.NewMeHandler(meService)
-	passwordChangeHandler := auth.NewPasswordChangeHandler(passwordChangeRepository)
+	passwordChangeHandler := auth.NewPasswordChangeHandler(passwordChangeService, trustedProxy)
 	sessionManagementHandler := auth.NewSessionManagementHandler(sessionManagementService)
 	revokeOthersHandler := auth.NewRevokeOthersHandler(revokeOthersService)
 
