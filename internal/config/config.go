@@ -16,6 +16,7 @@ type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
 	Security SecurityConfig `yaml:"security"`
+	Payments PaymentsConfig `yaml:"payments"`
 	CORS     CORSConfig     `yaml:"cors"`
 }
 
@@ -48,6 +49,10 @@ type SecurityConfig struct {
 	RefreshTokenTTL     time.Duration `yaml:"refresh-token-ttl"`
 	SecureCookies       bool          `yaml:"secure-cookies"`
 	RefreshCookieDomain string        `yaml:"refresh-cookie-domain"`
+}
+
+type PaymentsConfig struct {
+	DevSettlementKey string `yaml:"dev-settlement-key"`
 }
 
 type CORSConfig struct {
@@ -167,13 +172,24 @@ func validate(cfg Config) error {
 		)
 	}
 
-	if strings.EqualFold(
-		cfg.App.Environment,
-		"production",
-	) && !cfg.Security.SecureCookies {
+	devSettlementKey := strings.TrimSpace(cfg.Payments.DevSettlementKey)
+	if devSettlementKey != "" && len(devSettlementKey) < 32 {
 		return errors.New(
-			"security.secure-cookies must be enabled in production",
+			"payments.dev-settlement-key must contain at least 32 characters when configured",
 		)
+	}
+
+	if strings.EqualFold(cfg.App.Environment, "production") {
+		if !cfg.Security.SecureCookies {
+			return errors.New(
+				"security.secure-cookies must be enabled in production",
+			)
+		}
+		if devSettlementKey != "" {
+			return errors.New(
+				"payments.dev-settlement-key must be empty in production",
+			)
+		}
 	}
 
 	return nil
