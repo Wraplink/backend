@@ -2,6 +2,7 @@ package main
 
 import (
 	"backend/internal/auth"
+	"backend/internal/plans"
 	"backend/internal/email"
 	"backend/internal/security"
 	"backend/internal/user"
@@ -79,6 +80,9 @@ func main() {
 	}
 
 	emailSender := email.NewLogSender(logger, cfg.App.FrontendURL)
+
+	plansRepository := plans.NewRepository(db)
+	plansHandler := plans.NewHandler(plansRepository, logger)
 
 	//Repository
 	userRepository := user.NewRepository(db)
@@ -166,6 +170,7 @@ func main() {
 	requireAuthMiddleware := authMiddleware.Middleware
 
 	router := httpserver.NewRouter(
+		plansHandler,
 		registerHandler,
 		loginHandler,
 		refreshHandler,
