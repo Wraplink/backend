@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="c40d6049-9323-4f8b-a0c3-28694d27716c" name="FN-Hetzner">
+        <fileTransfer rootFolder="/opt" accessType="SFTP" host="65.109.209.104" port="22" sshConfigId="142d94db-299b-4227-b0c2-d326971d0949" sshConfig="FN_Hetzner" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+      <webServer id="3110d4d6-d7e3-4c7e-b066-10377cac565a" name="TCI">
+        <fileTransfer rootFolder="/opt/wraplink" accessType="SFTP" host="80.210.62.115" port="22" sshConfigId="f55177a4-f788-4aec-9836-2fd0254a73aa" sshConfig="TCI">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

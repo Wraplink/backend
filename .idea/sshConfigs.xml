@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="SshConfigs">
+    <configs>
+      <sshConfig authType="PASSWORD" host="80.210.62.115" id="f55177a4-f788-4aec-9836-2fd0254a73aa" port="22" customName="TCI" nameFormat="CUSTOM" username="wraplink" useOpenSSHConfig="true">
+        <option name="customName" value="TCI" />
+      </sshConfig>
+    </configs>
+  </component>
+</project>
