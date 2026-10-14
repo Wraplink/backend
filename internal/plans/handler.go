@@ -2,6 +2,7 @@ package plans
 
 import (
  "encoding/json"
+ "github.com/go-chi/chi/v5"
  "log/slog"
  "net/http"
  "strings"
@@ -18,7 +19,7 @@ func (h *Handler) List(w http.ResponseWriter,r *http.Request){
 }
 
 func (h *Handler) Get(w http.ResponseWriter,r *http.Request){
- code:=strings.TrimSpace(r.PathValue("code"))
+ code:=strings.TrimSpace(chi.URLParam(r,"code"))
  if code=="" {http.Error(w,"invalid plan code",http.StatusBadRequest);return}
  item,err:=h.repository.GetActiveByCode(r.Context(),code)
  if err!=nil {h.logger.Error("get plan failed","error",err);http.Error(w,"internal server error",http.StatusInternalServerError);return}
