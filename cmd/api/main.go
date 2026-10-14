@@ -120,6 +120,11 @@ func main() {
 	plansHandler := plans.NewHandler(plansRepository, logger)
 	subscriptionsHandler := subscriptions.NewHandler(subscriptionsService)
 	paymentsHandler := payments.NewHandler(paymentsService)
+	depositHandler := payments.NewDepositHandler(
+		paymentsService,
+		cfg.Payments.DevSettlementKey,
+		cfg.App.Environment != "production",
+	)
 	loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
 	logoutHandler := auth.NewLogoutHandler(logoutService, cfg.App.Environment == "production")
 	resendVerificationHandler := auth.NewResendVerificationHandler(resendVerificationService, resendVerificationEmailLimiter)
@@ -180,6 +185,7 @@ func main() {
 		plansHandler,
 		subscriptionsHandler,
 		paymentsHandler,
+		depositHandler,
 		registerHandler,
 		loginHandler,
 		refreshHandler,
