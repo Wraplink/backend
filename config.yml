@@ -28,6 +28,11 @@ security:
   refresh-cookie-domain: ""
 #  refresh-cookie-domain: ".wraplink.ir"
 
+payments:
+  # Development only. Leave empty to disable the local settlement endpoint.
+  # Must be at least 32 characters when configured and must be empty in production.
+  dev-settlement-key: ${PAYMENTS_DEV_SETTLEMENT_KEY}
+
 cors:
   allowed-origins:
     - http://localhost:3000
