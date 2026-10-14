@@ -5,7 +5,7 @@ app:
 
 http:
   host: 0.0.0.0
-  port: 8080
+  port: 7080
   read-timeout: 15s
   write-timeout: 15s
   idle-timeout: 60s
