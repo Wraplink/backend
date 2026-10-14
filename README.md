@@ -84,3 +84,40 @@ X-Settlement-Key: <PAYMENTS_DEV_SETTLEMENT_KEY>
 Settlement is transactional and idempotent. A successful settlement creates a gateway payment record, credits the wallet, writes a wallet ledger entry, and marks the deposit succeeded. Replaying the same settlement does not credit the wallet again.
 
 `PAYMENTS_DEV_SETTLEMENT_KEY` must be at least 32 characters when configured and must be empty in production.
+
+## Network access and traffic usage
+Connection details are environment-specific and are configured under `network` in `config.yml`. The authenticated access endpoint returns those details only when the user has a current active subscription.
+
+```text
+GET /api/v1/me/network/access
+GET /api/v1/me/usage?days=30
+```
+
+Access status is derived independently from the subscription lifecycle and can be `active`, `quota_exhausted`, or `expired`.
+
+Trusted edge/master services can report traffic deltas through an internal idempotent endpoint. Enable it with a secret of at least 32 characters:
+
+```shell
+export NETWORK_USAGE_INGEST_KEY="$(openssl rand -hex 32)"
+```
+
+```text
+POST /api/v1/internal/usage/reports
+X-Usage-Key: <NETWORK_USAGE_INGEST_KEY>
+Content-Type: application/json
+
+{
+  "reports": [
+    {
+      "reportId": "edge-eu-1:counter-123:2026-10-14T12:00:00Z",
+      "subscriptionId": "<subscription-uuid>",
+      "source": "edge-eu-1",
+      "uploadBytes": 1048576,
+      "downloadBytes": 5242880,
+      "reportedAt": "2026-10-14T12:00:00Z"
+    }
+  ]
+}
+```
+
+A report ID can be retried safely. The same report ID with the same subscription/source/byte counters is returned as already applied; reusing it with different usage data is rejected. Usage reports are preserved in `traffic_usage_reports`, while `user_subscriptions.used_bytes` remains the fast aggregate used for quota enforcement.
