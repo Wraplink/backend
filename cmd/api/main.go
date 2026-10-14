@@ -2,9 +2,10 @@ package main
 
 import (
 	"backend/internal/auth"
-	"backend/internal/plans"
 	"backend/internal/email"
+	"backend/internal/plans"
 	"backend/internal/security"
+	"backend/internal/subscriptions"
 	"backend/internal/user"
 	"context"
 	"errors"
@@ -81,17 +82,16 @@ func main() {
 
 	emailSender := email.NewLogSender(logger, cfg.App.FrontendURL)
 
+	// Repository
 	plansRepository := plans.NewRepository(db)
-	plansHandler := plans.NewHandler(plansRepository, logger)
-
-	//Repository
+	subscriptionsRepository := subscriptions.NewRepository(db)
 	userRepository := user.NewRepository(db)
 	loginRepository := auth.NewLoginRepository(db)
 	sessionRepository := auth.NewSessionRepository(db)
 	passwordResetRepository := auth.NewPasswordResetRepository(db)
 	passwordChangeRepository := auth.NewPasswordChangeRepository(db)
 
-	//Service
+	// Service
 	tokenService := auth.NewTokenService(cfg)
 	sessionService := auth.NewSessionService(db)
 	loginService := auth.NewLoginService(loginRepository, tokenService, sessionService, cfg.Security)
@@ -105,14 +105,17 @@ func main() {
 	passwordChangeService := auth.NewPasswordChangeService(passwordChangeRepository)
 	sessionManagementService := auth.NewSessionManagementService(sessionRepository)
 	revokeOthersService := auth.NewRevokeOthersService(sessionRepository)
+	subscriptionsService := subscriptions.NewService(subscriptionsRepository, plansRepository)
 
-	//Rate Limiter
+	// Rate Limiter
 	registrationRateLimiter := security.NewRateLimiter(5, time.Minute)
 	resendVerificationEmailLimiter := security.NewRateLimiter(3, time.Hour)
 	resendVerificationRateLimiter := security.NewRateLimiter(3, 15*time.Minute)
 	passwordResetRateLimiter := security.NewRateLimiter(5, time.Minute)
 
-	//Handler
+	// Handler
+	plansHandler := plans.NewHandler(plansRepository, logger)
+	subscriptionsHandler := subscriptions.NewHandler(subscriptionsService)
 	loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
 	logoutHandler := auth.NewLogoutHandler(logoutService, cfg.App.Environment == "production")
 	resendVerificationHandler := auth.NewResendVerificationHandler(resendVerificationService, resendVerificationEmailLimiter)
@@ -125,7 +128,7 @@ func main() {
 	sessionManagementHandler := auth.NewSessionManagementHandler(sessionManagementService)
 	revokeOthersHandler := auth.NewRevokeOthersHandler(revokeOthersService)
 
-	//Middleware
+	// Middleware
 	registrationRateLimitMiddleware :=
 		registrationRateLimiter.Middleware(
 			func(r *http.Request) string {
@@ -165,12 +168,13 @@ func main() {
 			},
 		)
 
-	//Authentication
+	// Authentication
 	authMiddleware := auth.NewAuthMiddleware(tokenService, sessionService)
 	requireAuthMiddleware := authMiddleware.Middleware
 
 	router := httpserver.NewRouter(
 		plansHandler,
+		subscriptionsHandler,
 		registerHandler,
 		loginHandler,
 		refreshHandler,
