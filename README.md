@@ -28,3 +28,46 @@ Missing default plans are inserted automatically. Existing plans with the same `
 | `pro` | Pro | 5,000,000 | IRR | 30 days | 500 GiB |
 
 The bootstrap is intentionally limited to system/reference data. It does not create users, wallet balances, payments, or subscriptions.
+
+## Development wallet deposits
+Production wallet credit must come from a trusted payment-provider settlement flow. For local development only, the backend can expose a protected settlement endpoint.
+
+Generate a development settlement key:
+
+```shell
+export PAYMENTS_DEV_SETTLEMENT_KEY="$(openssl rand -hex 32)"
+```
+
+When `app.environment` is not `production` and this variable is set, the route below is registered:
+
+```text
+POST /api/v1/dev/deposits/{depositID}/settle
+X-Settlement-Key: <PAYMENTS_DEV_SETTLEMENT_KEY>
+```
+
+Create a deposit first with the authenticated API:
+
+```text
+POST /api/v1/me/deposits
+Idempotency-Key: <unique-key>
+
+{
+  "amountMinor": 5000000,
+  "currency": "IRR"
+}
+```
+
+Then settle it in development:
+
+```text
+POST /api/v1/dev/deposits/{depositID}/settle
+X-Settlement-Key: <PAYMENTS_DEV_SETTLEMENT_KEY>
+
+{
+  "providerReference": "dev-reference-001"
+}
+```
+
+Settlement is transactional and idempotent. A successful settlement creates a gateway payment record, credits the wallet, writes a wallet ledger entry, and marks the deposit succeeded. Replaying the same settlement does not credit the wallet again.
+
+`PAYMENTS_DEV_SETTLEMENT_KEY` must be at least 32 characters when configured and must be empty in production.
