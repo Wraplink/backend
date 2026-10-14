@@ -9,17 +9,14 @@ import (
 
 const (
 	ProviderDevelopment = "development"
-	ReasonWalletDeposit = "wallet_deposit"
+	ReasonWalletDeposit  = "wallet_deposit"
 )
 
-var (
-	ErrDepositNotFound              = errors.New("deposit not found")
-	ErrDepositNotPending            = errors.New("deposit is not pending")
-	ErrInvalidDepositAmount         = errors.New("invalid deposit amount")
-	ErrInvalidDepositID             = errors.New("invalid deposit ID")
-	ErrInvalidProviderReference     = errors.New("invalid provider reference")
-	ErrDevelopmentSettlementDisabled = errors.New("development settlement is disabled")
-)
+var ErrDepositNotFound = errors.New("deposit not found")
+var ErrDepositNotPending = errors.New("deposit is not pending")
+var ErrInvalidDepositAmount = errors.New("invalid deposit amount")
+var ErrInvalidDepositID = errors.New("invalid deposit ID")
+var ErrInvalidProviderReference = errors.New("invalid provider reference")
 
 type Deposit struct {
 	ID                uuid.UUID  `json:"id"`
