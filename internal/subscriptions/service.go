@@ -11,10 +11,10 @@ import (
 )
 
 var (
-	ErrPlanNotFound          = errors.New("plan not found")
+	ErrPlanNotFound         = errors.New("plan not found")
 	ErrSubscriptionNotFound = errors.New("subscription not found")
-	ErrInvalidUserID         = errors.New("invalid user ID")
-	ErrInvalidPlanCode       = errors.New("invalid plan code")
+	ErrInvalidUserID        = errors.New("invalid user ID")
+	ErrInvalidPlanCode      = errors.New("invalid plan code")
 )
 
 type Service struct {
