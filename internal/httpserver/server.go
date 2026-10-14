@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"backend/internal/auth"
+	"backend/internal/payments"
 	"backend/internal/plans"
 	"backend/internal/security"
 	"backend/internal/subscriptions"
@@ -15,6 +16,7 @@ import (
 func NewRouter(
 	plansHandler *plans.Handler,
 	subscriptionsHandler *subscriptions.Handler,
+	paymentsHandler *payments.Handler,
 	registerHandler *auth.RegisterHandler,
 	loginHandler *auth.LoginHandler,
 	refreshHandler *auth.RefreshHandler,
@@ -90,6 +92,13 @@ func NewRouter(
 		r.Get("/subscriptions", subscriptionsHandler.List)
 		r.Get("/subscriptions/current", subscriptionsHandler.Current)
 		r.Delete("/subscriptions/{subscriptionID}", subscriptionsHandler.CancelPending)
+		r.Post("/subscriptions/{subscriptionID}/pay-with-wallet", paymentsHandler.PaySubscriptionWithWallet)
+
+		r.Get("/wallet", paymentsHandler.Wallet)
+		r.Get("/wallet/transactions", paymentsHandler.Transactions)
+
+		r.Get("/payments", paymentsHandler.Payments)
+		r.Get("/payments/{paymentID}", paymentsHandler.Payment)
 	})
 
 	return r
