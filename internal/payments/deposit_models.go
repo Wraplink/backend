@@ -9,7 +9,7 @@ import (
 
 const (
 	ProviderDevelopment = "development"
-	ReasonWalletDeposit  = "wallet_deposit"
+	ReasonWalletDeposit = "wallet_deposit"
 )
 
 var ErrDepositNotFound = errors.New("deposit not found")
