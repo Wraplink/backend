@@ -33,6 +33,16 @@ payments:
   # Must be at least 32 characters when configured and must be empty in production.
   dev-settlement-key: ${PAYMENTS_DEV_SETTLEMENT_KEY}
 
+network:
+  # Shared only with trusted edge/master services. Leave empty to disable usage ingest.
+  usage-ingest-key: ${NETWORK_USAGE_INGEST_KEY}
+  # Environment-specific access details returned to users with active subscriptions.
+  dns-servers: []
+  proxy:
+    host: ""
+    port: 0
+    protocol: ""
+
 cors:
   allowed-origins:
     - http://localhost:3000
