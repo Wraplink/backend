@@ -17,6 +17,7 @@ func NewRouter(
 	plansHandler *plans.Handler,
 	subscriptionsHandler *subscriptions.Handler,
 	paymentsHandler *payments.Handler,
+	depositHandler *payments.DepositHandler,
 	registerHandler *auth.RegisterHandler,
 	loginHandler *auth.LoginHandler,
 	refreshHandler *auth.RefreshHandler,
@@ -62,6 +63,13 @@ func NewRouter(
 	r.Get("/api/v1/plans", plansHandler.List)
 	r.Get("/api/v1/plans/{code}", plansHandler.Get)
 
+	if depositHandler.DevelopmentSettlementEnabled() {
+		r.Post(
+			"/api/v1/dev/deposits/{depositID}/settle",
+			depositHandler.SettleDevelopment,
+		)
+	}
+
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		r.With(registrationRateLimitMiddleware).Post("/register", registerHandler.Register)
 		r.Post("/login", loginHandler.Login)
@@ -96,6 +104,10 @@ func NewRouter(
 
 		r.Get("/wallet", paymentsHandler.Wallet)
 		r.Get("/wallet/transactions", paymentsHandler.Transactions)
+
+		r.Post("/deposits", depositHandler.Create)
+		r.Get("/deposits", depositHandler.List)
+		r.Get("/deposits/{depositID}", depositHandler.Get)
 
 		r.Get("/payments", paymentsHandler.Payments)
 		r.Get("/payments/{paymentID}", paymentsHandler.Payment)
