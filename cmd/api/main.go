@@ -3,6 +3,7 @@ package main
 import (
 	"backend/internal/auth"
 	"backend/internal/email"
+	"backend/internal/payments"
 	"backend/internal/plans"
 	"backend/internal/security"
 	"backend/internal/subscriptions"
@@ -85,6 +86,7 @@ func main() {
 	// Repository
 	plansRepository := plans.NewRepository(db)
 	subscriptionsRepository := subscriptions.NewRepository(db)
+	paymentsRepository := payments.NewRepository(db)
 	userRepository := user.NewRepository(db)
 	loginRepository := auth.NewLoginRepository(db)
 	sessionRepository := auth.NewSessionRepository(db)
@@ -106,6 +108,7 @@ func main() {
 	sessionManagementService := auth.NewSessionManagementService(sessionRepository)
 	revokeOthersService := auth.NewRevokeOthersService(sessionRepository)
 	subscriptionsService := subscriptions.NewService(subscriptionsRepository, plansRepository)
+	paymentsService := payments.NewService(paymentsRepository)
 
 	// Rate Limiter
 	registrationRateLimiter := security.NewRateLimiter(5, time.Minute)
@@ -116,6 +119,7 @@ func main() {
 	// Handler
 	plansHandler := plans.NewHandler(plansRepository, logger)
 	subscriptionsHandler := subscriptions.NewHandler(subscriptionsService)
+	paymentsHandler := payments.NewHandler(paymentsService)
 	loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
 	logoutHandler := auth.NewLogoutHandler(logoutService, cfg.App.Environment == "production")
 	resendVerificationHandler := auth.NewResendVerificationHandler(resendVerificationService, resendVerificationEmailLimiter)
@@ -175,6 +179,7 @@ func main() {
 	router := httpserver.NewRouter(
 		plansHandler,
 		subscriptionsHandler,
+		paymentsHandler,
 		registerHandler,
 		loginHandler,
 		refreshHandler,
