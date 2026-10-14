@@ -16,6 +16,19 @@ migrate \
   up
 ```
 
+## Update database
+```shell
+
+set -a
+source .env
+set +a
+
+migrate \
+  -path migrations \
+  -database "$DATABASE_URL" \
+  up
+```
+
 ## Required startup data
 After PostgreSQL is connected, the backend runs an idempotent reference-data bootstrap before starting the HTTP server.
 

@@ -7,11 +7,15 @@
     <file url="file://$PROJECT_DIR$/internal/auth/register_service.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
     <file url="file://$PROJECT_DIR$/internal/auth/session_repository.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
     <file url="file://$PROJECT_DIR$/internal/auth/session_service.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
+    <file url="file://$PROJECT_DIR$/internal/bootstrap/bootstrap.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
     <file url="file://$PROJECT_DIR$/internal/user/credentials.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
     <file url="file://$PROJECT_DIR$/internal/user/login_security.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
     <file url="file://$PROJECT_DIR$/internal/user/repository.go" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
     <file url="file://$PROJECT_DIR$/migrations/000001_initial.up.sql" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
+    <file url="file://$PROJECT_DIR$/migrations/000002_auth_security.down.sql" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
     <file url="file://$PROJECT_DIR$/migrations/000003_refresh_token_rotation.down.sql" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
     <file url="file://$PROJECT_DIR$/migrations/000003_refresh_token_rotation.up.sql" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
+    <file url="file://$PROJECT_DIR$/migrations/000010_plans.up.sql" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
+    <file url="file://$PROJECT_DIR$/migrations/000012_wallet_payments.up.sql" value="54578c82-8302-4edb-896f-3a3373fa0e02" />
   </component>
 </project>
