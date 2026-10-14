@@ -4,6 +4,7 @@ import (
 	"backend/internal/auth"
 	"backend/internal/plans"
 	"backend/internal/security"
+	"backend/internal/subscriptions"
 	"backend/internal/user"
 	"log/slog"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 func NewRouter(
 	plansHandler *plans.Handler,
+	subscriptionsHandler *subscriptions.Handler,
 	registerHandler *auth.RegisterHandler,
 	loginHandler *auth.LoginHandler,
 	refreshHandler *auth.RefreshHandler,
@@ -83,6 +85,11 @@ func NewRouter(
 		r.Get("/sessions", sessionManagementHandler.List)
 		r.Delete("/sessions/{sessionID}", sessionManagementHandler.Revoke)
 		r.Post("/sessions/revoke-others", revokeOthersHandler.Revoke)
+
+		r.Post("/subscriptions", subscriptionsHandler.CreatePending)
+		r.Get("/subscriptions", subscriptionsHandler.List)
+		r.Get("/subscriptions/current", subscriptionsHandler.Current)
+		r.Delete("/subscriptions/{subscriptionID}", subscriptionsHandler.CancelPending)
 	})
 
 	return r
