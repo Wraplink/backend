@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -17,6 +18,7 @@ type Config struct {
 	Database DatabaseConfig `yaml:"database"`
 	Security SecurityConfig `yaml:"security"`
 	Payments PaymentsConfig `yaml:"payments"`
+	Network  NetworkConfig  `yaml:"network"`
 	CORS     CORSConfig     `yaml:"cors"`
 }
 
@@ -53,6 +55,18 @@ type SecurityConfig struct {
 
 type PaymentsConfig struct {
 	DevSettlementKey string `yaml:"dev-settlement-key"`
+}
+
+type NetworkConfig struct {
+	UsageIngestKey string             `yaml:"usage-ingest-key"`
+	DNSServers     []string           `yaml:"dns-servers"`
+	Proxy          NetworkProxyConfig `yaml:"proxy"`
+}
+
+type NetworkProxyConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Protocol string `yaml:"protocol"`
 }
 
 type CORSConfig struct {
@@ -177,6 +191,43 @@ func validate(cfg Config) error {
 		return errors.New(
 			"payments.dev-settlement-key must contain at least 32 characters when configured",
 		)
+	}
+
+	usageIngestKey := strings.TrimSpace(cfg.Network.UsageIngestKey)
+	if usageIngestKey != "" && len(usageIngestKey) < 32 {
+		return errors.New(
+			"network.usage-ingest-key must contain at least 32 characters when configured",
+		)
+	}
+
+	for _, server := range cfg.Network.DNSServers {
+		server = strings.TrimSpace(server)
+		if server == "" || net.ParseIP(server) == nil {
+			return errors.New(
+				"network.dns-servers must contain valid IP addresses",
+			)
+		}
+	}
+
+	proxyHost := strings.TrimSpace(cfg.Network.Proxy.Host)
+	proxyProtocol := strings.TrimSpace(cfg.Network.Proxy.Protocol)
+	if proxyHost == "" {
+		if cfg.Network.Proxy.Port != 0 || proxyProtocol != "" {
+			return errors.New(
+				"network.proxy.host is required when proxy port or protocol is configured",
+			)
+		}
+	} else {
+		if cfg.Network.Proxy.Port < 1 || cfg.Network.Proxy.Port > 65535 {
+			return errors.New(
+				"network.proxy.port must be between 1 and 65535",
+			)
+		}
+		if proxyProtocol == "" {
+			return errors.New(
+				"network.proxy.protocol is required when proxy host is configured",
+			)
+		}
 	}
 
 	if strings.EqualFold(cfg.App.Environment, "production") {
