@@ -4,6 +4,7 @@ import (
 	"backend/internal/auth"
 	"backend/internal/config"
 	"backend/internal/database"
+	"backend/internal/dnsregistry"
 	"backend/internal/email"
 	"backend/internal/httpserver"
 	"backend/internal/networkaccess"
@@ -65,6 +66,10 @@ func main() {
 	passwordResetRepository := auth.NewPasswordResetRepository(db)
 	passwordChangeRepository := auth.NewPasswordChangeRepository(db)
 
+	// Runtime control-plane registry. dns-control nodes refresh this registry
+	// periodically, so backend restarts recover without database state.
+	dnsControlStore := dnsregistry.NewStore()
+
 	// Services.
 	tokenService := auth.NewTokenService(cfg)
 	sessionService := auth.NewSessionService(db)
@@ -93,7 +98,12 @@ func main() {
 			Protocol: cfg.Network.Proxy.Protocol,
 		}
 	}
-	networkService := networkaccess.NewService(networkRepository, connection)
+	networkService := networkaccess.NewService(
+		networkRepository,
+		connection,
+		dnsControlStore,
+		cfg.Network.ControlNodeOfflineAfter,
+	)
 
 	// Rate limiters.
 	registrationRateLimiter := security.NewRateLimiter(5, time.Minute)
@@ -115,6 +125,11 @@ func main() {
 		entitlementService,
 		trustedProxy,
 		cfg.Network.ControlSyncKey,
+	)
+	dnsRegistryHandler := dnsregistry.NewHandler(
+		dnsControlStore,
+		cfg.Network.ControlSyncKey,
+		cfg.Network.ControlNodeOfflineAfter,
 	)
 	loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
 	logoutHandler := auth.NewLogoutHandler(logoutService, cfg.App.Environment == "production")
@@ -160,6 +175,7 @@ func main() {
 		depositHandler,
 		networkHandler,
 		entitlementHandler,
+		dnsRegistryHandler,
 		registerHandler,
 		loginHandler,
 		refreshHandler,
