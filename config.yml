@@ -32,9 +32,13 @@ payments:
 network:
   # Trusted network integrations. Leave empty to disable each internal API.
   usage-ingest-key: ${NETWORK_USAGE_INGEST_KEY}
-  # Shared only with dns-control for the read-only entitlement snapshot.
+  # Shared with dns-control for entitlement snapshots and DNS-node registration.
   control-sync-key: ${NETWORK_CONTROL_SYNC_KEY}
+  # Registered dns-control nodes older than this are excluded from DNS selection.
+  control-node-offline-after: 45s
 
+  # Optional fallback DNS values. Healthy registered dns-control addresses are
+  # selected first and these are used only if fewer than two are available.
   dns-servers: []
   proxy:
     host: ""
