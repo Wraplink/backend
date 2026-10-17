@@ -2,8 +2,8 @@ package httpserver
 
 import (
 	"backend/internal/auth"
-	"backend/internal/edgeaccess"
 	"backend/internal/networkaccess"
+	"backend/internal/networkentitlement"
 	"backend/internal/payments"
 	"backend/internal/plans"
 	"backend/internal/security"
@@ -21,7 +21,7 @@ func NewRouter(
 	paymentsHandler *payments.Handler,
 	depositHandler *payments.DepositHandler,
 	networkHandler *networkaccess.Handler,
-	edgeHandler *edgeaccess.Handler,
+	entitlementHandler *networkentitlement.Handler,
 	registerHandler *auth.RegisterHandler,
 	loginHandler *auth.LoginHandler,
 	refreshHandler *auth.RefreshHandler,
@@ -65,14 +65,11 @@ func NewRouter(
 		r.Post("/api/v1/internal/usage/reports", networkHandler.IngestUsage)
 	}
 
-	if edgeHandler.InternalEnabled() {
-		r.Route("/api/v1/internal/edges", func(r chi.Router) {
-			r.Post("/register", edgeHandler.RegisterEdge)
-			r.Post("/{edgeCode}/heartbeat", edgeHandler.Heartbeat)
-			r.Get("/{edgeCode}/sync", edgeHandler.Sync)
-			r.Post("/{edgeCode}/ack", edgeHandler.Acknowledge)
-			r.Post("/{edgeCode}/activity", edgeHandler.Activity)
-		})
+	if entitlementHandler.SnapshotEnabled() {
+		r.Get(
+			"/api/v1/internal/network/entitlements",
+			entitlementHandler.Snapshot,
+		)
 	}
 
 	r.Route("/api/v1/auth", func(r chi.Router) {
@@ -104,9 +101,9 @@ func NewRouter(
 		r.Post("/subscriptions/{subscriptionID}/pay-with-wallet", paymentsHandler.PaySubscriptionWithWallet)
 
 		r.Get("/network/access", networkHandler.Access)
-		r.Post("/network/provision", edgeHandler.Provision)
-		r.Get("/network/provisioning", edgeHandler.Current)
-		r.Delete("/network/provisioning", edgeHandler.Release)
+		r.Post("/network/entitlement", entitlementHandler.Activate)
+		r.Get("/network/entitlement", entitlementHandler.Current)
+		r.Delete("/network/entitlement", entitlementHandler.Deactivate)
 		r.Get("/usage", networkHandler.Usage)
 
 		r.Get("/wallet", paymentsHandler.Wallet)

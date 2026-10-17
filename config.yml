@@ -30,15 +30,10 @@ payments:
   dev-settlement-key: ${PAYMENTS_DEV_SETTLEMENT_KEY}
 
 network:
-  # Trusted edge/master integrations. Leave empty to disable each internal API family.
+  # Trusted network integrations. Leave empty to disable each internal API.
   usage-ingest-key: ${NETWORK_USAGE_INGEST_KEY}
-  edge-sync-key: ${NETWORK_EDGE_SYNC_KEY}
-
-  # Active access is released when no activity has been reported for this period.
-  idle-release-after: 15m
-  # Nodes missing heartbeats for this period are excluded from new allocations.
-  edge-offline-after: 2m
-  reconcile-interval: 1m
+  # Shared only with dns-control for the read-only entitlement snapshot.
+  control-sync-key: ${NETWORK_CONTROL_SYNC_KEY}
 
   dns-servers: []
   proxy:

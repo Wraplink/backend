@@ -2,9 +2,12 @@ package main
 
 import (
 	"backend/internal/auth"
-	"backend/internal/edgeaccess"
+	"backend/internal/config"
+	"backend/internal/database"
 	"backend/internal/email"
+	"backend/internal/httpserver"
 	"backend/internal/networkaccess"
+	"backend/internal/networkentitlement"
 	"backend/internal/payments"
 	"backend/internal/plans"
 	"backend/internal/security"
@@ -19,10 +22,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"backend/internal/config"
-	"backend/internal/database"
-	"backend/internal/httpserver"
 )
 
 func main() {
@@ -49,24 +48,24 @@ func main() {
 	trustedProxy, err := security.NewTrustedProxy(cfg.Server.TrustedProxies)
 	if err != nil {
 		logger.Error("invalid trusted proxy configuration", "error", err)
-		return
+		os.Exit(1)
 	}
 
 	emailSender := email.NewLogSender(logger, cfg.App.FrontendURL)
 
-	// Repository
+	// Repositories.
 	plansRepository := plans.NewRepository(db)
 	subscriptionsRepository := subscriptions.NewRepository(db)
 	paymentsRepository := payments.NewRepository(db)
 	networkRepository := networkaccess.NewRepository(db)
-	edgeRepository := edgeaccess.NewRepository(db)
+	entitlementRepository := networkentitlement.NewRepository(db)
 	userRepository := user.NewRepository(db)
 	loginRepository := auth.NewLoginRepository(db)
 	sessionRepository := auth.NewSessionRepository(db)
 	passwordResetRepository := auth.NewPasswordResetRepository(db)
 	passwordChangeRepository := auth.NewPasswordChangeRepository(db)
 
-	// Service
+	// Services.
 	tokenService := auth.NewTokenService(cfg)
 	sessionService := auth.NewSessionService(db)
 	loginService := auth.NewLoginService(loginRepository, tokenService, sessionService, cfg.Security)
@@ -82,6 +81,7 @@ func main() {
 	revokeOthersService := auth.NewRevokeOthersService(sessionRepository)
 	subscriptionsService := subscriptions.NewService(subscriptionsRepository, plansRepository)
 	paymentsService := payments.NewService(paymentsRepository)
+	entitlementService := networkentitlement.NewService(entitlementRepository)
 
 	connection := networkaccess.ConnectionDetails{
 		DNSServers: append([]string(nil), cfg.Network.DNSServers...),
@@ -94,20 +94,14 @@ func main() {
 		}
 	}
 	networkService := networkaccess.NewService(networkRepository, connection)
-	edgeService := edgeaccess.NewService(
-		edgeRepository,
-		cfg.Network.EdgeSyncKey,
-		cfg.Network.IdleReleaseAfter,
-		cfg.Network.EdgeOfflineAfter,
-	)
 
-	// Rate Limiter
+	// Rate limiters.
 	registrationRateLimiter := security.NewRateLimiter(5, time.Minute)
 	resendVerificationEmailLimiter := security.NewRateLimiter(3, time.Hour)
 	resendVerificationRateLimiter := security.NewRateLimiter(3, 15*time.Minute)
 	passwordResetRateLimiter := security.NewRateLimiter(5, time.Minute)
 
-	// Handler
+	// Handlers.
 	plansHandler := plans.NewHandler(plansRepository, logger)
 	subscriptionsHandler := subscriptions.NewHandler(subscriptionsService)
 	paymentsHandler := payments.NewHandler(paymentsService)
@@ -117,7 +111,11 @@ func main() {
 		cfg.App.Environment != "production",
 	)
 	networkHandler := networkaccess.NewHandler(networkService, cfg.Network.UsageIngestKey)
-	edgeHandler := edgeaccess.NewHandler(edgeService, trustedProxy)
+	entitlementHandler := networkentitlement.NewHandler(
+		entitlementService,
+		trustedProxy,
+		cfg.Network.ControlSyncKey,
+	)
 	loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
 	logoutHandler := auth.NewLogoutHandler(logoutService, cfg.App.Environment == "production")
 	resendVerificationHandler := auth.NewResendVerificationHandler(resendVerificationService, resendVerificationEmailLimiter)
@@ -130,7 +128,6 @@ func main() {
 	sessionManagementHandler := auth.NewSessionManagementHandler(sessionManagementService)
 	revokeOthersHandler := auth.NewRevokeOthersHandler(revokeOthersService)
 
-	// Middleware
 	registrationRateLimitMiddleware := registrationRateLimiter.Middleware(func(r *http.Request) string {
 		ip := trustedProxy.ClientIP(r)
 		if ip == nil {
@@ -153,7 +150,6 @@ func main() {
 		return ip.String()
 	})
 
-	// Authentication
 	authMiddleware := auth.NewAuthMiddleware(tokenService, sessionService)
 	requireAuthMiddleware := authMiddleware.Middleware
 
@@ -163,7 +159,7 @@ func main() {
 		paymentsHandler,
 		depositHandler,
 		networkHandler,
-		edgeHandler,
+		entitlementHandler,
 		registerHandler,
 		loginHandler,
 		refreshHandler,
@@ -182,8 +178,6 @@ func main() {
 		cors,
 		logger,
 	)
-
-	go runEdgeReconciler(ctx, edgeService, cfg.Network.ReconcileInterval, logger)
 
 	server := &http.Server{
 		Addr:         cfg.HTTP.Host + ":" + cfg.HTTP.Port,
@@ -216,31 +210,4 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("HTTP server stopped")
-}
-
-func runEdgeReconciler(ctx context.Context, service *edgeaccess.Service, interval time.Duration, logger *slog.Logger) {
-	reconcile := func() {
-		count, err := service.Reconcile(ctx)
-		if err != nil {
-			if ctx.Err() == nil {
-				logger.Error("edge access reconciliation failed", "error", err)
-			}
-			return
-		}
-		if count > 0 {
-			logger.Info("edge access reconciliation queued removals", "count", count)
-		}
-	}
-
-	reconcile()
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			reconcile()
-		}
-	}
 }

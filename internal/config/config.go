@@ -58,13 +58,10 @@ type PaymentsConfig struct {
 }
 
 type NetworkConfig struct {
-	UsageIngestKey    string             `yaml:"usage-ingest-key"`
-	EdgeSyncKey       string             `yaml:"edge-sync-key"`
-	IdleReleaseAfter  time.Duration      `yaml:"idle-release-after"`
-	EdgeOfflineAfter  time.Duration      `yaml:"edge-offline-after"`
-	ReconcileInterval time.Duration      `yaml:"reconcile-interval"`
-	DNSServers        []string           `yaml:"dns-servers"`
-	Proxy             NetworkProxyConfig `yaml:"proxy"`
+	UsageIngestKey string             `yaml:"usage-ingest-key"`
+	ControlSyncKey string             `yaml:"control-sync-key"`
+	DNSServers     []string           `yaml:"dns-servers"`
+	Proxy          NetworkProxyConfig `yaml:"proxy"`
 }
 
 type NetworkProxyConfig struct {
@@ -149,18 +146,10 @@ func validate(cfg Config) error {
 	if usageIngestKey != "" && len(usageIngestKey) < 32 {
 		return errors.New("network.usage-ingest-key must contain at least 32 characters when configured")
 	}
-	edgeSyncKey := strings.TrimSpace(cfg.Network.EdgeSyncKey)
-	if edgeSyncKey != "" && len(edgeSyncKey) < 32 {
-		return errors.New("network.edge-sync-key must contain at least 32 characters when configured")
-	}
-	if cfg.Network.IdleReleaseAfter <= 0 {
-		return errors.New("network.idle-release-after must be greater than zero")
-	}
-	if cfg.Network.EdgeOfflineAfter <= 0 {
-		return errors.New("network.edge-offline-after must be greater than zero")
-	}
-	if cfg.Network.ReconcileInterval <= 0 {
-		return errors.New("network.reconcile-interval must be greater than zero")
+
+	controlSyncKey := strings.TrimSpace(cfg.Network.ControlSyncKey)
+	if controlSyncKey != "" && len(controlSyncKey) < 32 {
+		return errors.New("network.control-sync-key must contain at least 32 characters when configured")
 	}
 
 	for _, server := range cfg.Network.DNSServers {
