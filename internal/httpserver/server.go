@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"backend/internal/auth"
+	"backend/internal/dnsregistry"
 	"backend/internal/networkaccess"
 	"backend/internal/networkentitlement"
 	"backend/internal/payments"
@@ -22,6 +23,7 @@ func NewRouter(
 	depositHandler *payments.DepositHandler,
 	networkHandler *networkaccess.Handler,
 	entitlementHandler *networkentitlement.Handler,
+	dnsRegistryHandler *dnsregistry.Handler,
 	registerHandler *auth.RegisterHandler,
 	loginHandler *auth.LoginHandler,
 	refreshHandler *auth.RefreshHandler,
@@ -69,6 +71,17 @@ func NewRouter(
 		r.Get(
 			"/api/v1/internal/network/entitlements",
 			entitlementHandler.Snapshot,
+		)
+	}
+
+	if dnsRegistryHandler.Enabled() {
+		r.Post(
+			"/api/v1/internal/network/dns-controls/register",
+			dnsRegistryHandler.Register,
+		)
+		r.Get(
+			"/api/v1/internal/network/dns-controls",
+			dnsRegistryHandler.List,
 		)
 	}
 

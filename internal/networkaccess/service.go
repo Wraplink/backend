@@ -1,6 +1,7 @@
 package networkaccess
 
 import (
+	"backend/internal/dnsregistry"
 	"context"
 	"math"
 	"strings"
@@ -16,18 +17,27 @@ const (
 )
 
 type Service struct {
-	repository *Repository
-	connection ConnectionDetails
+	repository             *Repository
+	connection             ConnectionDetails
+	dnsControls            *dnsregistry.Store
+	dnsControlOfflineAfter time.Duration
 }
 
-func NewService(repository *Repository, connection ConnectionDetails) *Service {
+func NewService(
+	repository *Repository,
+	connection ConnectionDetails,
+	dnsControls *dnsregistry.Store,
+	dnsControlOfflineAfter time.Duration,
+) *Service {
 	if repository == nil {
 		panic("networkaccess: nil repository")
 	}
 
 	return &Service{
-		repository: repository,
-		connection: connection,
+		repository:             repository,
+		connection:             connection,
+		dnsControls:            dnsControls,
+		dnsControlOfflineAfter: dnsControlOfflineAfter,
 	}
 }
 
@@ -56,8 +66,17 @@ func (s *Service) Access(
 		ExpiresAt:      *state.ExpiresAt,
 	}
 
-	if len(s.connection.DNSServers) > 0 || s.connection.Proxy != nil {
-		connection := s.connection
+	connection := s.connection
+	connection.DNSServers = append([]string(nil), s.connection.DNSServers...)
+	if s.dnsControls != nil {
+		connection.DNSServers = mergeDNSServers(
+			s.dnsControls.SelectAddresses(2, s.dnsControlOfflineAfter),
+			connection.DNSServers,
+			2,
+		)
+	}
+
+	if len(connection.DNSServers) > 0 || connection.Proxy != nil {
 		result.Connection = &connection
 	}
 
@@ -127,6 +146,30 @@ func (s *Service) Ingest(
 	}
 
 	return &IngestResponse{Results: results}, nil
+}
+
+func mergeDNSServers(primary, fallback []string, limit int) []string {
+	if limit <= 0 {
+		return nil
+	}
+	result := make([]string, 0, limit)
+	seen := make(map[string]struct{})
+	appendValues := func(values []string) {
+		for _, value := range values {
+			value = strings.TrimSpace(value)
+			if value == "" || len(result) >= limit {
+				continue
+			}
+			if _, exists := seen[value]; exists {
+				continue
+			}
+			seen[value] = struct{}{}
+			result = append(result, value)
+		}
+	}
+	appendValues(primary)
+	appendValues(fallback)
+	return result
 }
 
 func normalizeReport(report UsageReport) UsageReport {
