@@ -18,10 +18,10 @@ const diagnosticTimeout = 3 * time.Second
 // DiagnosticResponse always describes a check made from the backend host,
 // not an ICMP ping or traceroute from the customer's device.
 type DiagnosticResponse struct {
-	Success	bool	`json:"success"`
-	Value	string	`json:"value"`
-	Latency	float64	`json:"latency,omitempty"`
-	Scope	string	`json:"scope"`
+	Success bool    `json:"success"`
+	Value   string  `json:"value"`
+	Latency float64 `json:"latency,omitempty"`
+	Scope   string  `json:"scope"`
 }
 
 // Diagnostic performs bounded checks against server-selected DNS endpoints.

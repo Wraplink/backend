@@ -17,7 +17,7 @@ func TestRouteReadinessUsesHealthyRegisteredNode(t *testing.T) {
 		t.Fatal("expected valid node")
 	}
 	h := &Handler{service: &Service{
-		dnsControls: nodes,
+		dnsControls:            nodes,
 		dnsControlOfflineAfter: time.Minute,
 	}}
 
@@ -34,7 +34,7 @@ func TestRouteReadinessRejectsUnregisteredAddress(t *testing.T) {
 	nodes := dnsregistry.NewStore()
 	_, _ = nodes.Upsert("dns-eu-1", "eu-1", []string{"185.80.196.100"})
 	h := &Handler{service: &Service{
-		dnsControls: nodes,
+		dnsControls:            nodes,
 		dnsControlOfflineAfter: time.Minute,
 	}}
 	response := h.checkRouteReadiness([]string{"185.80.196.101"})
@@ -47,7 +47,7 @@ func TestRouteReadinessRequiresHealthyNode(t *testing.T) {
 	nodes := dnsregistry.NewStore()
 	_, _ = nodes.Upsert("dns-eu-1", "eu-1", []string{"185.80.196.100"})
 	h := &Handler{service: &Service{
-		dnsControls: nodes,
+		dnsControls:            nodes,
 		dnsControlOfflineAfter: time.Nanosecond,
 	}}
 	time.Sleep(time.Millisecond)
@@ -81,4 +81,3 @@ func TestDiagnosticRequiresAuthentication(t *testing.T) {
 		t.Fatalf("expected 401, got %d", response.Code)
 	}
 }
-
