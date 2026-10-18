@@ -81,3 +81,4 @@ func TestDiagnosticRequiresAuthentication(t *testing.T) {
 		t.Fatalf("expected 401, got %d", response.Code)
 	}
 }
+
