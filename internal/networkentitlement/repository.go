@@ -182,6 +182,7 @@ func (r *Repository) Current(
 				ELSE 'inactive'
 			END,
 			s.plan_code,
+			COALESCE(m.mode, 'smart'),
 			s.data_limit_bytes,
 			s.used_bytes,
 			GREATEST(s.data_limit_bytes - s.used_bytes, 0),
@@ -190,6 +191,7 @@ func (r *Repository) Current(
 			e.activated_at
 		FROM network_entitlements e
 		JOIN user_subscriptions s ON s.id = e.subscription_id
+		LEFT JOIN user_connection_modes m ON m.user_id = e.user_id
 		WHERE e.user_id = $1
 		  AND e.status = 'active'
 		ORDER BY e.activated_at DESC
@@ -203,6 +205,7 @@ func (r *Repository) Current(
 		&result.ClientIP,
 		&result.Status,
 		&result.PlanCode,
+		&result.ConnectionMode,
 		&result.DataLimitBytes,
 		&result.UsedBytes,
 		&result.RemainingBytes,
@@ -243,6 +246,37 @@ func (r *Repository) Deactivate(
 	return nil
 }
 
+// GetMode returns the saved user preference, defaulting to smart for new users.
+func (r *Repository) GetMode(ctx context.Context, userID uuid.UUID) (ConnectionMode, error) {
+	var mode ConnectionMode
+	err := r.db.QueryRow(ctx,
+		`SELECT COALESCE((SELECT mode FROM user_connection_modes WHERE user_id = $1), 'smart')`,
+		userID,
+	).Scan(&mode)
+	if err != nil {
+		return "", fmt.Errorf("get connection mode: %w", err)
+	}
+	return mode, nil
+}
+
+// SetMode persists a user-scoped preference, regardless of connection state.
+func (r *Repository) SetMode(ctx context.Context, userID uuid.UUID, mode ConnectionMode) error {
+	if !mode.Valid() {
+		return ErrInvalidConnectionMode
+	}
+	_, err := r.db.Exec(ctx,
+		`INSERT INTO user_connection_modes (user_id, mode)
+		 VALUES ($1, $2)
+		 ON CONFLICT (user_id) DO UPDATE
+		   SET mode = EXCLUDED.mode, updated_at = now()`,
+		userID, mode,
+	)
+	if err != nil {
+		return fmt.Errorf("save connection mode: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) Snapshot(
 	ctx context.Context,
 ) ([]SnapshotItem, error) {
@@ -253,12 +287,14 @@ func (r *Repository) Snapshot(
 			e.subscription_id,
 			host(e.client_ip),
 			s.plan_code,
+			COALESCE(m.mode, 'smart'),
 			s.data_limit_bytes,
 			s.used_bytes,
 			GREATEST(s.data_limit_bytes - s.used_bytes, 0),
 			s.expires_at
 		FROM network_entitlements e
 		JOIN user_subscriptions s ON s.id = e.subscription_id
+		LEFT JOIN user_connection_modes m ON m.user_id = e.user_id
 		WHERE e.status = 'active'
 		  AND s.status = 'active'
 		  AND s.starts_at <= now()
@@ -282,6 +318,7 @@ func (r *Repository) Snapshot(
 			&item.SubscriptionID,
 			&item.ClientIP,
 			&item.PlanCode,
+			&item.ConnectionMode,
 			&item.DataLimitBytes,
 			&item.UsedBytes,
 			&item.RemainingBytes,
