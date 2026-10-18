@@ -53,7 +53,7 @@ func (c *CORS) Middleware(
 
 				w.Header().Set(
 					"Access-Control-Allow-Headers",
-					"Content-Type, Authorization, X-Request-ID",
+					"Content-Type, Authorization, Idempotency-Key, X-Request-ID",
 				)
 
 				w.Header().Set(
