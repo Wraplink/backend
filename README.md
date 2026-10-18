@@ -121,3 +121,36 @@ Content-Type: application/json
 ```
 
 A report ID can be retried safely. The same report ID with the same subscription/source/byte counters is returned as already applied; reusing it with different usage data is rejected. Usage reports are preserved in `traffic_usage_reports`, while `user_subscriptions.used_bytes` remains the fast aggregate used for quota enforcement.
+
+
+## Per-user connection mode (Smart / Gaming / Streaming)
+
+Apply migration **000017_user_connection_modes** before deploying the backend:
+
+```sh
+set -a
+source .env.local
+set +a
+migrate -path migrations -database "$DATABASE_URL" up
+```
+
+The authenticated user can select a persistent mode even while disconnected:
+
+```http
+GET /api/v1/me/network/mode
+Authorization: Bearer <access-token>
+```
+
+Returns `{"mode":"smart"}` (default), `{"mode":"gaming"}`, or `{"mode":"streaming"}`.
+
+```http
+PUT /api/v1/me/network/mode
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{"mode":"gaming"}
+```
+
+Invalid modes return HTTP 400; a valid PUT returns the saved mode. The choice is per user, not a global DNS server mode. The internal entitlement snapshot contains `connectionMode` for each active client IP so dns-control can apply tagged managed domain rules. DNS-control's refresh interval determines propagation delay (normally about 10 seconds). Mode changes do **not** alter the allocated DNS IP addresses, accelerate traffic, or guarantee a specific bypass without suitable provisioned DNS/edge rules.
+
+Deploy in order: apply DB migration, deploy backend, deploy dns-control rule support, then deploy web. Add `connection_modes: ["gaming"]` or `["streaming"]` to eligible managed domain entries in dns-control's configuration; untagged rules remain available in all modes and Smart retains all managed rules.
