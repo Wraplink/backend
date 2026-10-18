@@ -12,7 +12,31 @@ var (
 	ErrEntitlementNotFound  = errors.New("network entitlement not found")
 	ErrClientIPInUse        = errors.New("client IP is already in use")
 	ErrInvalidClientIP      = errors.New("invalid client IP")
+	ErrInvalidConnectionMode = errors.New("invalid connection mode")
 )
+
+// ConnectionMode is a per-user preference. Smart preserves existing managed
+// DNS behavior; gaming and streaming select tagged domain policies.
+type ConnectionMode string
+
+const (
+	ConnectionModeSmart     ConnectionMode = "smart"
+	ConnectionModeGaming    ConnectionMode = "gaming"
+	ConnectionModeStreaming ConnectionMode = "streaming"
+)
+
+func (m ConnectionMode) Valid() bool {
+	switch m {
+	case ConnectionModeSmart, ConnectionModeGaming, ConnectionModeStreaming:
+		return true
+	default:
+		return false
+	}
+}
+
+type ModeResponse struct {
+	Mode ConnectionMode `json:"mode"`
+}
 
 type Entitlement struct {
 	ID             uuid.UUID `json:"id"`
@@ -20,6 +44,7 @@ type Entitlement struct {
 	ClientIP       string    `json:"clientIp"`
 	Status         string    `json:"status"`
 	PlanCode       string    `json:"planCode"`
+	ConnectionMode ConnectionMode `json:"connectionMode"`
 	DataLimitBytes int64     `json:"dataLimitBytes"`
 	UsedBytes      int64     `json:"usedBytes"`
 	RemainingBytes int64     `json:"remainingBytes"`
