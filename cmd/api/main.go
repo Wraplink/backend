@@ -3,8 +3,8 @@ package main
 import (
 	"backend/internal/auth"
 	"backend/internal/config"
-	"backend/internal/database"
 	"backend/internal/dashboard"
+	"backend/internal/database"
 	"backend/internal/dnsregistry"
 	"backend/internal/email"
 	"backend/internal/httpserver"
