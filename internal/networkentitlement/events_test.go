@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"backend/internal/requestcontext"
 	"github.com/google/uuid"
 )
 
@@ -41,6 +43,41 @@ func TestConnectionEventJSONContract(t *testing.T) {
 	} {
 		if decoded[field] != expected {
 			t.Errorf("%s = %v, want %q", field, decoded[field], expected)
+		}
+	}
+}
+
+func TestEventCursorRoundTrip(t *testing.T) {
+	event := ConnectionEvent{
+		ID:   uuid.New(),
+		Time: time.Date(2026, time.October, 18, 14, 0, 0, 123456789, time.FixedZone("IR", 3*3600+30*60)),
+	}
+	cursor, err := parseEventCursor(encodeEventCursor(event))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cursor.ID != event.ID || !cursor.Time.Equal(event.Time) {
+		t.Fatalf("cursor = %+v, want ID %s at %s", cursor, event.ID, event.Time)
+	}
+}
+
+func TestEventCursorRejectsMalformedValues(t *testing.T) {
+	for _, value := range []string{"not-base64!", "Zm9v", "MjAyNi0xMC0xOFQxNDowMDowMFp8bm90LWEtdXVpZA", strings.Repeat("a", 201)} {
+		if _, err := parseEventCursor(value); err == nil {
+			t.Errorf("expected invalid cursor %q to fail", value)
+		}
+	}
+}
+
+func TestEventsRejectsInvalidPaginationBeforeDatabase(t *testing.T) {
+	handler := &Handler{}
+	for _, query := range []string{"?limit=zero", "?limit=-2", "?before=broken!"} {
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/me/network/events"+query, nil)
+		request = request.WithContext(requestcontext.WithUserID(request.Context(), uuid.New()))
+		response := httptest.NewRecorder()
+		handler.Events(response, request)
+		if response.Code != http.StatusBadRequest {
+			t.Errorf("%s returned %d, want 400", query, response.Code)
 		}
 	}
 }
