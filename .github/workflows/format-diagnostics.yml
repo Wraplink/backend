@@ -1,0 +1,29 @@
+name: Format diagnostics (temporary)
+on:
+  push:
+    branches: [feat/network-diagnostics-20261018]
+    paths:
+      - internal/networkaccess/diagnostics.go
+      - internal/networkaccess/diagnostics_test.go
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Format diagnostics and update branch
+        run: |
+          gofmt -w internal/networkaccess/diagnostics.go internal/networkaccess/diagnostics_test.go
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add internal/networkaccess/diagnostics.go internal/networkaccess/diagnostics_test.go
+            git commit -m "Apply gofmt to diagnostics"
+            git push
+          fi
