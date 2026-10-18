@@ -115,6 +115,7 @@ func NewRouter(
 
 		r.Get("/network/access", networkHandler.Access)
 		r.Post("/network/diagnostics/{type}", networkHandler.Diagnostic)
+		r.Get("/network/events", entitlementHandler.Events)
 		r.Get("/network/mode", entitlementHandler.GetMode)
 		r.Put("/network/mode", entitlementHandler.SetMode)
 		r.Post("/network/entitlement", entitlementHandler.Activate)
