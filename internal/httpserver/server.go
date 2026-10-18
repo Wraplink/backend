@@ -2,8 +2,8 @@ package httpserver
 
 import (
 	"backend/internal/auth"
-	"backend/internal/dnsregistry"
 	"backend/internal/dashboard"
+	"backend/internal/dnsregistry"
 	"backend/internal/networkaccess"
 	"backend/internal/networkentitlement"
 	"backend/internal/payments"
