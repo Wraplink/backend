@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 
@@ -96,6 +97,51 @@ func (h *Handler) Current(
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+// GetMode returns the selected per-user policy even when not connected.
+func (h *Handler) GetMode(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requestcontext.UserID(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	mode, err := h.service.GetMode(r.Context(), userID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "could not read connection mode")
+		return
+	}
+	writeJSON(w, http.StatusOK, ModeResponse{Mode: mode})
+}
+
+// SetMode accepts only an explicit known mode; never modifies global policy.
+func (h *Handler) SetMode(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requestcontext.UserID(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var request ModeResponse
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid connection mode request")
+		return
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		writeJSONError(w, http.StatusBadRequest, "invalid connection mode request")
+		return
+	}
+	if !request.Mode.Valid() {
+		writeJSONError(w, http.StatusBadRequest, "mode must be smart, gaming, or streaming")
+		return
+	}
+	if err := h.service.SetMode(r.Context(), userID, request.Mode); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "could not update connection mode")
+		return
+	}
+	writeJSON(w, http.StatusOK, ModeResponse{Mode: request.Mode})
 }
 
 func (h *Handler) Deactivate(

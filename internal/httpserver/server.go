@@ -114,6 +114,8 @@ func NewRouter(
 		r.Post("/subscriptions/{subscriptionID}/pay-with-wallet", paymentsHandler.PaySubscriptionWithWallet)
 
 		r.Get("/network/access", networkHandler.Access)
+		r.Get("/network/mode", entitlementHandler.GetMode)
+		r.Put("/network/mode", entitlementHandler.SetMode)
 		r.Post("/network/entitlement", entitlementHandler.Activate)
 		r.Get("/network/entitlement", entitlementHandler.Current)
 		r.Delete("/network/entitlement", entitlementHandler.Deactivate)

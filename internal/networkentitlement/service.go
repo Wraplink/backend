@@ -25,11 +25,16 @@ func (s *Service) Activate(
 	userID uuid.UUID,
 	clientIP net.IP,
 ) (*Entitlement, error) {
-	return s.repository.Activate(
-		ctx,
-		userID,
-		clientIP,
-	)
+	mode, err := s.repository.GetMode(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	entitlement, err := s.repository.Activate(ctx, userID, clientIP)
+	if err != nil {
+		return nil, err
+	}
+	entitlement.ConnectionMode = mode
+	return entitlement, nil
 }
 
 func (s *Service) Current(
@@ -37,6 +42,17 @@ func (s *Service) Current(
 	userID uuid.UUID,
 ) (*Entitlement, error) {
 	return s.repository.Current(ctx, userID)
+}
+
+func (s *Service) GetMode(ctx context.Context, userID uuid.UUID) (ConnectionMode, error) {
+	return s.repository.GetMode(ctx, userID)
+}
+
+func (s *Service) SetMode(ctx context.Context, userID uuid.UUID, mode ConnectionMode) error {
+	if !mode.Valid() {
+		return ErrInvalidConnectionMode
+	}
+	return s.repository.SetMode(ctx, userID, mode)
 }
 
 func (s *Service) Deactivate(
