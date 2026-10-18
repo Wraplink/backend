@@ -16,9 +16,11 @@ import (
 )
 
 type fakeWallet struct{}
+
 func (fakeWallet) Wallet(_ context.Context, _ uuid.UUID, _ string) (*payments.Wallet, error) {
 	return &payments.Wallet{Currency: "IRR", BalanceMinor: 5000}, nil
 }
+
 func (fakeWallet) Payments(_ context.Context, _ uuid.UUID, limit int) ([]payments.Payment, error) {
 	if limit != 5 {
 		panic("expected recent payments limit 5")
@@ -27,11 +29,13 @@ func (fakeWallet) Payments(_ context.Context, _ uuid.UUID, limit int) ([]payment
 }
 
 type fakeAccess struct{}
+
 func (fakeAccess) Access(context.Context, uuid.UUID) (*networkaccess.AccessInfo, error) {
 	return nil, networkaccess.ErrNoActiveSubscription
 }
 
 type fakeEntitlement struct{}
+
 func (fakeEntitlement) Current(context.Context, uuid.UUID) (*networkentitlement.Entitlement, error) {
 	return nil, networkentitlement.ErrEntitlementNotFound
 }
@@ -55,10 +59,10 @@ func TestSummaryHasHonestEmptyState(t *testing.T) {
 		t.Fatalf("got %d, want 200: %s", resp.Code, resp.Body.String())
 	}
 	var decoded struct {
-		Wallet *payments.Wallet `json:"wallet"`
-		Access *networkaccess.AccessInfo `json:"access"`
-		Entitlement *networkentitlement.Entitlement `json:"entitlement"`
-		RecentPayments []payments.Payment `json:"recentPayments"`
+		Wallet         *payments.Wallet                `json:"wallet"`
+		Access         *networkaccess.AccessInfo       `json:"access"`
+		Entitlement    *networkentitlement.Entitlement `json:"entitlement"`
+		RecentPayments []payments.Payment              `json:"recentPayments"`
 	}
 	if err := json.Unmarshal(resp.Body.Bytes(), &decoded); err != nil {
 		t.Fatal(err)
