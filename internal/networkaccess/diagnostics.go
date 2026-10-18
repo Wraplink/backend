@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"backend/internal/requestcontext"
+
 	"github.com/go-chi/chi/v5"
 )
 
@@ -111,13 +112,13 @@ func checkDNSResolution(ctx context.Context, servers []string) DiagnosticRespons
 			},
 		}
 		start := time.Now()
-		ips, err := resolver.LookupIPAddr(ctx, "example.com.")
+		ips, err := resolver.LookupIPAddr(ctx, "www.playstation.com.")
 		if err != nil || len(ips) == 0 {
 			continue
 		}
 		result.Success = true
 		result.Latency = float64(time.Since(start).Microseconds()) / 1000
-		result.Value = fmt.Sprintf("example.com resolved via %s (backend to DNS)", address)
+		result.Value = fmt.Sprintf("www.playstation.com resolved via %s (backend to DNS)", address)
 		return result
 	}
 	return result
