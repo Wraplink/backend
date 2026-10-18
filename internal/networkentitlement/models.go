@@ -59,6 +59,7 @@ type SnapshotItem struct {
 	SubscriptionID uuid.UUID `json:"subscriptionId"`
 	ClientIP       string    `json:"clientIp"`
 	PlanCode       string    `json:"planCode"`
+	ConnectionMode ConnectionMode `json:"connectionMode"`
 	DataLimitBytes int64     `json:"dataLimitBytes"`
 	UsedBytes      int64     `json:"usedBytes"`
 	RemainingBytes int64     `json:"remainingBytes"`
