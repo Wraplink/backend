@@ -73,6 +73,7 @@ func (h *Handler) Activate(
 		return
 	}
 
+	h.recordEvent(r.Context(), userID, "success", "Connection activated")
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -141,6 +142,7 @@ func (h *Handler) SetMode(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "could not update connection mode")
 		return
 	}
+	h.recordEvent(r.Context(), userID, "info", "Connection mode changed to "+string(request.Mode))
 	writeJSON(w, http.StatusOK, ModeResponse{Mode: request.Mode})
 }
 
@@ -163,6 +165,7 @@ func (h *Handler) Deactivate(
 		return
 	}
 
+	h.recordEvent(r.Context(), userID, "info", "Connection disconnected")
 	w.WriteHeader(http.StatusNoContent)
 }
 
