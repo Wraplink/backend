@@ -56,7 +56,7 @@ func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wallet, err := h.wallet.Wallet(r.Context(), userID, "")
+	wallet, err := h.wallet.Wallet(r.Context(), userID, "IRR")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not load dashboard")
 		return
