@@ -1,6 +1,8 @@
 package dashboard
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -9,9 +11,7 @@ import (
 	"backend/internal/payments"
 	"backend/internal/requestcontext"
 
-	"context"
 	"github.com/google/uuid"
-	"encoding/json"
 )
 
 type walletService interface {
@@ -41,10 +41,10 @@ func NewHandler(wallet walletService, access accessService, entitlement entitlem
 }
 
 type Summary struct {
-	Wallet         *payments.Wallet                 `json:"wallet"`
-	Access         *networkaccess.AccessInfo        `json:"access"`
-	Entitlement    *networkentitlement.Entitlement  `json:"entitlement"`
-	RecentPayments []payments.Payment               `json:"recentPayments"`
+	Wallet         *payments.Wallet                `json:"wallet"`
+	Access         *networkaccess.AccessInfo       `json:"access"`
+	Entitlement    *networkentitlement.Entitlement `json:"entitlement"`
+	RecentPayments []payments.Payment              `json:"recentPayments"`
 }
 
 // Summary returns real account information in one authenticated request.
