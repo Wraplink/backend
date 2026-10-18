@@ -2,10 +2,13 @@ package networkaccess
 
 import (
     "strings"
+    "net/http"
+    "net/http/httptest"
     "testing"
     "time"
 
     "backend/internal/dnsregistry"
+    "github.com/go-chi/chi/v5"
 )
 
 func TestRouteReadinessUsesHealthyRegisteredNode(t *testing.T) {
@@ -51,5 +54,30 @@ func TestRouteReadinessRequiresHealthyNode(t *testing.T) {
     response := h.checkRouteReadiness([]string{"185.80.196.100"})
     if response.Success {
         t.Fatalf("offline node accepted: %+v", response)
+    }
+}
+
+func TestDiagnosticRejectsUnknownType(t *testing.T) {
+    h := &Handler{}
+    request := httptest.NewRequest(http.MethodPost, "/api/v1/me/network/diagnostics/unknown", nil)
+    // Route parameters are populated by chi; check the route below with its router.
+    router := chi.NewRouter()
+    router.Post("/api/v1/me/network/diagnostics/{type}", h.Diagnostic)
+    response := httptest.NewRecorder()
+    router.ServeHTTP(response, request)
+    if response.Code != http.StatusBadRequest {
+        t.Fatalf("expected 400, got %d", response.Code)
+    }
+}
+
+func TestDiagnosticRequiresAuthentication(t *testing.T) {
+    h := &Handler{}
+    request := httptest.NewRequest(http.MethodPost, "/api/v1/me/network/diagnostics/ping", nil)
+    router := chi.NewRouter()
+    router.Post("/api/v1/me/network/diagnostics/{type}", h.Diagnostic)
+    response := httptest.NewRecorder()
+    router.ServeHTTP(response, request)
+    if response.Code != http.StatusUnauthorized {
+        t.Fatalf("expected 401, got %d", response.Code)
     }
 }
