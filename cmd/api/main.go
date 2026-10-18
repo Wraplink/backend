@@ -5,6 +5,7 @@ import (
 	"backend/internal/config"
 	"backend/internal/database"
 	"backend/internal/dnsregistry"
+	"backend/internal/dashboard"
 	"backend/internal/email"
 	"backend/internal/httpserver"
 	"backend/internal/networkaccess"
@@ -121,6 +122,7 @@ func main() {
 		cfg.App.Environment != "production",
 	)
 	networkHandler := networkaccess.NewHandler(networkService, cfg.Network.UsageIngestKey)
+	dashboardHandler := dashboard.NewHandler(paymentsService, networkService, entitlementService)
 	entitlementHandler := networkentitlement.NewHandler(
 		entitlementService,
 		trustedProxy,
@@ -174,6 +176,7 @@ func main() {
 		paymentsHandler,
 		depositHandler,
 		networkHandler,
+		dashboardHandler,
 		entitlementHandler,
 		dnsRegistryHandler,
 		registerHandler,
