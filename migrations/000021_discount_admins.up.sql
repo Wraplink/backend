@@ -1,0 +1,1 @@
+CREATE TABLE discount_admins (user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, granted_at TIMESTAMPTZ NOT NULL DEFAULT now());
