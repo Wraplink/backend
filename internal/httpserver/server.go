@@ -87,6 +87,12 @@ func NewRouter(
 		)
 	}
 
+	r.Route("/api/v1/admin/access", func(r chi.Router) {
+        r.Use(requireAuthMiddleware)
+        r.Get("/permissions", paymentsHandler.ListAdminPermissions)
+        r.Put("/users/{userID}/permissions/{permission}", paymentsHandler.UpdateAdminPermission)
+    })
+
 	r.Route("/api/v1/admin/payment-reviews", func(r chi.Router) {
         r.Use(requireAuthMiddleware)
         r.Get("/discounts", paymentsHandler.AdminListDiscounts)
