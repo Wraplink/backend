@@ -64,6 +64,11 @@ func (h *Handler) ReviewReceipt(w http.ResponseWriter,r *http.Request){
  if errors.Is(err,pgx.ErrNoRows){writeJSONError(w,409,"receipt already reviewed or subscription not pending");return}
  if err!=nil {writeJSONError(w,500,"database error");return}
  if body.Decision=="approved" {
+  // Serialize approvals for different subscriptions belonging to the same user.
+  // This lock prevents two reviewers from simultaneously activating two plans.
+  var lockedUser uuid.UUID
+  err=tx.QueryRow(r.Context(),"SELECT id FROM users WHERE id=$1 FOR UPDATE",user).Scan(&lockedUser)
+  if err!=nil {writeJSONError(w,500,"database error");return}
   var active bool
   err=tx.QueryRow(r.Context(),"SELECT EXISTS(SELECT 1 FROM user_subscriptions WHERE user_id=$1 AND status='active' AND expires_at>now())",user).Scan(&active)
   if err!=nil {writeJSONError(w,500,"database error");return}
