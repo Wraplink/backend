@@ -293,6 +293,7 @@ func (r *Repository) CancelPending(
 		WHERE id = $1
 		  AND user_id = $2
 		  AND status = $4
+          AND NOT EXISTS (SELECT 1 FROM card_transfer_receipts WHERE subscription_id = $1 AND status = 'pending_review')
 	`
 
 	result, err := r.db.Exec(
