@@ -10,8 +10,6 @@ import (
 	"strings"
 )
 
-const refreshTokenCookieName = "wraplink_refresh_token"
-
 type loginHTTPRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
