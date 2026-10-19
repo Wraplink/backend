@@ -3,6 +3,7 @@ package payments
 import (
  "encoding/json"
  "errors"
+ "time"
  "net/http"
  "github.com/go-chi/chi/v5"
  "github.com/google/uuid"
@@ -28,7 +29,7 @@ func (h *Handler) PendingReceipts(w http.ResponseWriter,r *http.Request){
  if err!=nil {writeJSONError(w,500,"could not list receipts");return};defer rows.Close()
  items:=make([]map[string]any,0)
  for rows.Next(){
- var id,sub,user uuid.UUID;var name,typ,currency string;var payable int64;var created any
+ var id,sub,user uuid.UUID;var name,typ,currency string;var payable int64;var created time.Time
  if err=rows.Scan(&id,&sub,&user,&name,&typ,&payable,&currency,&created);err!=nil {writeJSONError(w,500,"could not read receipts");return}
  items=append(items,map[string]any{"id":id,"subscriptionId":sub,"userId":user,"filename":name,"contentType":typ,"payableMinor":payable,"currency":currency,"createdAt":created})
  }
