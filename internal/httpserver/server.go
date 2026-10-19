@@ -87,6 +87,13 @@ func NewRouter(
 		)
 	}
 
+	r.Route("/api/v1/admin/payment-reviews", func(r chi.Router) {
+        r.Use(requireAuthMiddleware)
+        r.Get("/receipts", paymentsHandler.PendingReceipts)
+        r.Get("/receipts/{receiptID}/attachment", paymentsHandler.ReceiptAttachment)
+        r.Post("/receipts/{receiptID}/decision", paymentsHandler.ReviewReceipt)
+    })
+
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		r.With(registrationRateLimitMiddleware).Post("/register", registerHandler.Register)
 		r.Post("/login", loginHandler.Login)
