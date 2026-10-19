@@ -4,6 +4,7 @@ import (
  "encoding/json"
  "errors"
  "io"
+ "math/big"
  "net/http"
  "strings"
  "time"
@@ -42,7 +43,7 @@ func (h *Handler) quoteDiscount(r *http.Request, userID uuid.UUID, subscriptionI
  if err != nil {return discountQuote{},err}
  now:=time.Now()
  if starts!=nil && now.Before(*starts) || expires!=nil && !now.Before(*expires) || maxUses!=nil && uses>=*maxUses {return discountQuote{},errors.New("discount unavailable")}
- if typ=="percent" {q.DiscountMinor=amount*value/10000} else if discountCurrency==currency {q.DiscountMinor=value} else {return discountQuote{},errors.New("discount currency mismatch")}
+ if typ=="percent" {q.DiscountMinor=percentageDiscount(amount,value)} else if discountCurrency==currency {q.DiscountMinor=value} else {return discountQuote{},errors.New("discount currency mismatch")}
  if q.DiscountMinor>amount {q.DiscountMinor=amount}
  q.PayableMinor=amount-q.DiscountMinor
  q.Code=code
@@ -80,7 +81,7 @@ func (h *Handler) SubmitCardReceipt(w http.ResponseWriter,r *http.Request) {
   err=tx.QueryRow(r.Context(),"SELECT id,discount_type,discount_value,COALESCE(currency,''),starts_at,expires_at,max_redemptions,redemptions FROM discount_codes WHERE code=$1 AND active=true FOR UPDATE",code).Scan(&did,&typ,&value,&dc,&starts,&expires,&maxUses,&uses)
   now:=time.Now()
   if err!=nil || starts!=nil && now.Before(*starts) || expires!=nil && !now.Before(*expires) || maxUses!=nil && uses>=*maxUses {writeJSONError(w,400,"discount unavailable");return}
-  if typ=="percent" {reduction=price*value/10000} else if dc==currency {reduction=value} else {writeJSONError(w,400,"discount currency mismatch");return}
+  if typ=="percent" {reduction=percentageDiscount(price,value)} else if dc==currency {reduction=value} else {writeJSONError(w,400,"discount currency mismatch");return}
   if reduction>price {reduction=price};discountID=&did
  }
  var receiptID uuid.UUID
@@ -106,4 +107,13 @@ func (h *Handler) CardReceipt(w http.ResponseWriter,r *http.Request) {
  if errors.Is(err,pgx.ErrNoRows) {writeJSONError(w,404,"receipt not found");return}
  if err!=nil {writeJSONError(w,500,"database error");return}
  writeJSON(w,200,map[string]any{"id":receiptID,"status":status,"currency":currency,"discountMinor":discount,"payableMinor":payable})
+}
+
+// percentageDiscount avoids int64 overflow when computing basis-point discounts.
+func percentageDiscount(amount, basisPoints int64) int64 {
+ if amount <= 0 || basisPoints <= 0 { return 0 }
+ n := new(big.Int).Mul(big.NewInt(amount), big.NewInt(basisPoints))
+ n.Div(n, big.NewInt(10000))
+ if !n.IsInt64() || n.Int64() > amount { return amount }
+ return n.Int64()
 }
