@@ -114,6 +114,9 @@ func NewRouter(
 		r.Get("/subscriptions/current", subscriptionsHandler.Current)
 		r.Delete("/subscriptions/{subscriptionID}", subscriptionsHandler.CancelPending)
 		r.Post("/subscriptions/{subscriptionID}/pay-with-wallet", paymentsHandler.PaySubscriptionWithWallet)
+		r.Post("/subscriptions/{subscriptionID}/discount-quote", paymentsHandler.DiscountQuote)
+		r.Post("/subscriptions/{subscriptionID}/card-receipt", paymentsHandler.SubmitCardReceipt)
+		r.Get("/subscriptions/{subscriptionID}/card-receipt", paymentsHandler.CardReceipt)
 
 		r.Get("/dashboard", dashboardHandler.Summary)
 		r.Get("/network/access", networkHandler.Access)
