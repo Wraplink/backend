@@ -8,7 +8,18 @@ import (
 
  "github.com/google/uuid"
  "github.com/go-chi/chi/v5"
+ "backend/internal/requestcontext"
 )
+
+func (h *Handler) discountAdmin(w http.ResponseWriter,r *http.Request) bool {
+ userID,ok:=requestcontext.UserID(r.Context())
+ if !ok {writeJSONError(w,401,"authentication required");return false}
+ var allowed bool
+ err:=h.service.repository.db.QueryRow(r.Context(),"SELECT EXISTS(SELECT 1 FROM discount_admins WHERE user_id=$1)",userID).Scan(&allowed)
+ if err!=nil {writeJSONError(w,500,"authorization unavailable");return false}
+ if !allowed {writeJSONError(w,403,"discount administrator access required");return false}
+ return true
+}
 
 type discountAdminRequest struct {
  Code string `json:"code"`
@@ -22,7 +33,7 @@ type discountAdminRequest struct {
 }
 
 func (h *Handler) AdminListDiscounts(w http.ResponseWriter,r *http.Request){
- if _,ok:=h.reviewAdmin(w,r);!ok{return}
+ if !h.discountAdmin(w,r){return}
  rows,err:=h.service.repository.db.Query(r.Context(),`SELECT id,code,discount_type,discount_value,currency,active,starts_at,expires_at,max_redemptions,redemptions,created_at FROM discount_codes ORDER BY created_at DESC LIMIT 200`)
  if err!=nil {writeJSONError(w,500,"database error");return};defer rows.Close()
  result:=make([]map[string]any,0)
