@@ -278,6 +278,14 @@ func (r *Repository) PaySubscriptionWithWallet(
 		return nil, ErrSubscriptionNotPending
 	}
 
+	var receiptSubmitted bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM card_transfer_receipts WHERE subscription_id=$1)", subscriptionID).Scan(&receiptSubmitted); err != nil {
+		return nil, fmt.Errorf("check receipt submission: %w", err)
+	}
+	if receiptSubmitted {
+		return nil, ErrSubscriptionNotPending
+	}
+
 	var hasActive bool
 	err = tx.QueryRow(
 		ctx,
