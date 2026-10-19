@@ -89,6 +89,9 @@ func NewRouter(
 
 	r.Route("/api/v1/admin/payment-reviews", func(r chi.Router) {
         r.Use(requireAuthMiddleware)
+        r.Get("/discounts", paymentsHandler.AdminListDiscounts)
+        r.Post("/discounts", paymentsHandler.AdminCreateDiscount)
+        r.Post("/discounts/{discountID}/disable", paymentsHandler.AdminDisableDiscount)
         r.Get("/receipts", paymentsHandler.PendingReceipts)
         r.Get("/receipts/{receiptID}/attachment", paymentsHandler.ReceiptAttachment)
         r.Post("/receipts/{receiptID}/decision", paymentsHandler.ReviewReceipt)
