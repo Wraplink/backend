@@ -7,6 +7,7 @@ import (
  "time"
 
  "github.com/google/uuid"
+ "github.com/go-chi/chi/v5"
 )
 
 type discountAdminRequest struct {
@@ -60,7 +61,7 @@ func (h *Handler) AdminCreateDiscount(w http.ResponseWriter,r *http.Request){
 
 func (h *Handler) AdminDisableDiscount(w http.ResponseWriter,r *http.Request){
  if _,ok:=h.reviewAdmin(w,r);!ok{return}
- id,err:=uuid.Parse(r.PathValue("discountID"));if err!=nil {writeJSONError(w,400,"invalid discount ID");return}
+ id,err:=uuid.Parse(chi.URLParam(r,"discountID"));if err!=nil {writeJSONError(w,400,"invalid discount ID");return}
  tag,err:=h.service.repository.db.Exec(r.Context(),"UPDATE discount_codes SET active=false WHERE id=$1",id)
  if err!=nil {writeJSONError(w,500,"database error");return}
  if tag.RowsAffected()==0 {writeJSONError(w,404,"discount not found");return}
