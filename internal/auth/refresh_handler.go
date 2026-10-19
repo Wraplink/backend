@@ -25,7 +25,7 @@ func (h *RefreshHandler) Refresh(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	cookie, err := r.Cookie(refreshTokenCookieName)
+	cookie, err := r.Cookie(refreshCookieName)
 	if err != nil {
 		if errors.Is(err, http.ErrNoCookie) {
 			writeJSONError(
@@ -98,7 +98,7 @@ func (h *RefreshHandler) Refresh(
 		return
 	}
 
-	setRefreshCookie(w, result.RefreshToken, result.RefreshTokenExpiry, h.service.config.SecureCookies)
+	setRefreshCookie(w, result.RefreshToken, result.RefreshTokenExpiry, h.secureCookie)
 
 	writeJSON(
 		w,
