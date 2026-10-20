@@ -57,5 +57,10 @@ func NewPostgres(
 		return nil, err
 	}
 
+	if err := bootstrap.EnsureDefaultAdmin(ctx, pool, nil); err != nil {
+		pool.Close()
+		return nil, err
+	}
+
 	return pool, nil
 }
