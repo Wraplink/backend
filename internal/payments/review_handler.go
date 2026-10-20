@@ -25,7 +25,7 @@ func (h *Handler) PendingReceipts(w http.ResponseWriter,r *http.Request){
  _,ok:=h.reviewAdmin(w,r);if !ok{return}
  rows,err:=h.service.repository.db.Query(r.Context(),`SELECT c.id,c.subscription_id,c.user_id,c.filename,c.content_type,c.payable_minor,s.currency,c.created_at,c.payment_group_id
  FROM card_transfer_receipts c JOIN user_subscriptions s ON s.id=c.subscription_id
- WHERE c.status='pending_review' AND (c.payment_group_id IS NULL OR c.id=(SELECT min(x.id) FROM card_transfer_receipts x WHERE x.payment_group_id=c.payment_group_id)) ORDER BY c.created_at LIMIT 100`)
+ WHERE c.status='pending_review' AND (c.payment_group_id IS NULL OR c.id=(SELECT x.id FROM card_transfer_receipts x WHERE x.payment_group_id=c.payment_group_id ORDER BY x.id LIMIT 1)) ORDER BY c.created_at LIMIT 100`)
  if err!=nil {writeJSONError(w,500,"could not list receipts");return};defer rows.Close()
  items:=make([]map[string]any,0)
  for rows.Next(){
