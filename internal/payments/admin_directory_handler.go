@@ -2,6 +2,7 @@ package payments
 
 import (
  "net/http"
+ "time"
  "strconv"
  "strings"
  "github.com/google/uuid"
@@ -25,7 +26,7 @@ func (h *Handler) AdminUsers(w http.ResponseWriter,r *http.Request){
  if err!=nil{writeJSONError(w,500,"database error");return};defer rows.Close()
  items:=make([]map[string]any,0)
  for rows.Next(){
-  var id uuid.UUID;var email,name,status string;var verified bool;var created any
+  var id uuid.UUID;var email,name,status string;var verified bool;var created time.Time
   if err=rows.Scan(&id,&email,&name,&status,&verified,&created);err!=nil{writeJSONError(w,500,"database error");return}
   items=append(items,map[string]any{"id":id,"email":email,"name":name,"status":status,"emailVerified":verified,"createdAt":created})
  }
