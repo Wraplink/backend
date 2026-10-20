@@ -23,15 +23,19 @@ func (h *Handler) reviewAdmin(w http.ResponseWriter,r *http.Request)(uuid.UUID,b
 
 func (h *Handler) PendingReceipts(w http.ResponseWriter,r *http.Request){
  _,ok:=h.reviewAdmin(w,r);if !ok{return}
- rows,err:=h.service.repository.db.Query(r.Context(),`SELECT c.id,c.subscription_id,c.user_id,c.filename,c.content_type,c.payable_minor,s.currency,c.created_at
+ rows,err:=h.service.repository.db.Query(r.Context(),`SELECT c.id,c.subscription_id,c.user_id,c.filename,c.content_type,c.payable_minor,s.currency,c.created_at,c.payment_group_id
  FROM card_transfer_receipts c JOIN user_subscriptions s ON s.id=c.subscription_id
- WHERE c.status='pending_review' ORDER BY c.created_at LIMIT 100`)
+ WHERE c.status='pending_review' AND (c.payment_group_id IS NULL OR c.id=(SELECT min(x.id) FROM card_transfer_receipts x WHERE x.payment_group_id=c.payment_group_id)) ORDER BY c.created_at LIMIT 100`)
  if err!=nil {writeJSONError(w,500,"could not list receipts");return};defer rows.Close()
  items:=make([]map[string]any,0)
  for rows.Next(){
- var id,sub,user uuid.UUID;var name,typ,currency string;var payable int64;var created time.Time
- if err=rows.Scan(&id,&sub,&user,&name,&typ,&payable,&currency,&created);err!=nil {writeJSONError(w,500,"could not read receipts");return}
- items=append(items,map[string]any{"id":id,"subscriptionId":sub,"userId":user,"filename":name,"contentType":typ,"payableMinor":payable,"currency":currency,"createdAt":created})
+ var id,sub,user uuid.UUID;var name,typ,currency string;var payable int64;var created time.Time;var groupID *uuid.UUID
+ if err=rows.Scan(&id,&sub,&user,&name,&typ,&payable,&currency,&created,&groupID);err!=nil {writeJSONError(w,500,"could not read receipts");return}
+ count:=1
+ if groupID!=nil {
+  if err=h.service.repository.db.QueryRow(r.Context(),"SELECT count(*),sum(payable_minor) FROM card_transfer_receipts WHERE payment_group_id=$1",*groupID).Scan(&count,&payable);err!=nil{writeJSONError(w,500,"could not calculate group total");return}
+ }
+ items=append(items,map[string]any{"id":id,"subscriptionId":sub,"userId":user,"filename":name,"contentType":typ,"payableMinor":payable,"currency":currency,"createdAt":created,"orderCount":count,"paymentGroupId":groupID})
  }
  if rows.Err()!=nil {writeJSONError(w,500,"could not read receipts");return}
  writeJSON(w,200,map[string]any{"receipts":items})
