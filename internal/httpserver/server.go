@@ -11,6 +11,7 @@ import (
 	"backend/internal/security"
 	"backend/internal/subscriptions"
  "backend/internal/support"
+ "backend/internal/notifications"
 	"backend/internal/user"
 	"log/slog"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 func NewRouter(
 	plansHandler *plans.Handler,
  supportHandler *support.Handler,
+ notificationsHandler *notifications.Handler,
 	subscriptionsHandler *subscriptions.Handler,
 	paymentsHandler *payments.Handler,
 	depositHandler *payments.DepositHandler,
@@ -124,6 +126,14 @@ func NewRouter(
   r.Get("/tickets/{ticketID}",supportHandler.AdminDetail)
   r.Post("/tickets/{ticketID}/messages",supportHandler.AdminMessage)
   r.Patch("/tickets/{ticketID}/status",supportHandler.AdminStatus)
+ })
+ r.Route("/api/v1/notifications",func(r chi.Router){
+  r.Use(requireAuthMiddleware)
+  r.Get("/",notificationsHandler.List)
+  r.Post("/read-all",notificationsHandler.ReadAll)
+  r.Post("/{notificationID}/read",notificationsHandler.Read)
+  r.Get("/preferences",notificationsHandler.Preferences)
+  r.Put("/preferences",notificationsHandler.SavePreferences)
  })
  r.Route("/api/v1/support",func(r chi.Router){
   r.Use(requireAuthMiddleware)
