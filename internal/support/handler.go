@@ -37,6 +37,8 @@ type ticket struct {
  Status string `json:"status"`
  CreatedAt time.Time `json:"createdAt"`
  UpdatedAt time.Time `json:"updatedAt"`
+ CustomerUnread bool `json:"customerUnread"`
+ StaffUnread bool `json:"staffUnread"`
 }
 func (h *Handler) list(w http.ResponseWriter,r *http.Request,staff bool){
  id,ok:=actor(w,r);if !ok{return}
@@ -48,14 +50,14 @@ func (h *Handler) list(w http.ResponseWriter,r *http.Request,staff bool){
  if len(search)>200{fail(w,400,"search too long");return}
  status:=r.URL.Query().Get("status")
  if status!=""&&status!="open"&&status!="pending"&&status!="resolved"&&status!="closed"{fail(w,400,"invalid status");return}
- rows,err:=h.DB.Query(r.Context(),`SELECT t.id,t.ticket_number,t.user_id,u.email,u.full_name,s.order_number,t.subject,t.category,t.priority,t.status,t.created_at,t.updated_at
+ rows,err:=h.DB.Query(r.Context(),`SELECT t.id,t.ticket_number,t.user_id,u.email,u.full_name,s.order_number,t.subject,t.category,t.priority,t.status,t.created_at,t.updated_at,t.customer_unread,t.staff_unread
  FROM support_tickets t JOIN users u ON u.id=t.user_id LEFT JOIN user_subscriptions s ON s.id=t.order_id
  WHERE ($1::boolean OR t.user_id=$2) AND ($3::text='' OR t.status=$3)
  AND ($4::text='' OR t.subject ILIKE '%'||$4||'%' OR u.email ILIKE '%'||$4||'%' OR u.full_name ILIKE '%'||$4||'%' OR t.ticket_number::text=$4 OR s.order_number::text=$4)
  ORDER BY t.updated_at DESC,t.id DESC LIMIT $5 OFFSET $6`,staff,id,status,search,limit,offset)
  if err!=nil{fail(w,500,"could not list tickets");return};defer rows.Close()
  result:=make([]ticket,0)
- for rows.Next(){var t ticket;if rows.Scan(&t.ID,&t.TicketNumber,&t.UserID,&t.Email,&t.FullName,&t.OrderNumber,&t.Subject,&t.Category,&t.Priority,&t.Status,&t.CreatedAt,&t.UpdatedAt)!=nil{fail(w,500,"could not read ticket");return};result=append(result,t)}
+ for rows.Next(){var t ticket;if rows.Scan(&t.ID,&t.TicketNumber,&t.UserID,&t.Email,&t.FullName,&t.OrderNumber,&t.Subject,&t.Category,&t.Priority,&t.Status,&t.CreatedAt,&t.UpdatedAt,&t.CustomerUnread,&t.StaffUnread)!=nil{fail(w,500,"could not read ticket");return};result=append(result,t)}
  if rows.Err()!=nil{fail(w,500,"could not read tickets");return}
  respond(w,200,map[string]any{"tickets":result,"limit":limit,"offset":offset})
 }
@@ -86,13 +88,14 @@ func(h *Handler) detail(w http.ResponseWriter,r *http.Request,staff bool){
  if staff {if _,ok=h.admin(w,r);!ok{return}}
  id,e:=uuid.Parse(chi.URLParam(r,"ticketID"));if e!=nil{fail(w,400,"invalid ticket ID");return}
  var t ticket
- e=h.DB.QueryRow(r.Context(),`SELECT t.id,t.ticket_number,t.user_id,u.email,u.full_name,s.order_number,t.subject,t.category,t.priority,t.status,t.created_at,t.updated_at FROM support_tickets t JOIN users u ON u.id=t.user_id LEFT JOIN user_subscriptions s ON s.id=t.order_id WHERE t.id=$1 AND ($2::boolean OR t.user_id=$3)`,id,staff,actorID).Scan(&t.ID,&t.TicketNumber,&t.UserID,&t.Email,&t.FullName,&t.OrderNumber,&t.Subject,&t.Category,&t.Priority,&t.Status,&t.CreatedAt,&t.UpdatedAt)
+ e=h.DB.QueryRow(r.Context(),`SELECT t.id,t.ticket_number,t.user_id,u.email,u.full_name,s.order_number,t.subject,t.category,t.priority,t.status,t.created_at,t.updated_at,t.customer_unread,t.staff_unread FROM support_tickets t JOIN users u ON u.id=t.user_id LEFT JOIN user_subscriptions s ON s.id=t.order_id WHERE t.id=$1 AND ($2::boolean OR t.user_id=$3)`,id,staff,actorID).Scan(&t.ID,&t.TicketNumber,&t.UserID,&t.Email,&t.FullName,&t.OrderNumber,&t.Subject,&t.Category,&t.Priority,&t.Status,&t.CreatedAt,&t.UpdatedAt,&t.CustomerUnread,&t.StaffUnread)
  if e==pgx.ErrNoRows{fail(w,404,"ticket not found");return};if e!=nil{fail(w,500,"could not load ticket");return}
  rows,e:=h.DB.Query(r.Context(),"SELECT id,sender_id,sender_role,message,created_at FROM support_messages WHERE ticket_id=$1 ORDER BY created_at,id",id)
  if e!=nil{fail(w,500,"could not load messages");return};defer rows.Close()
  messages:=make([]map[string]any,0)
  for rows.Next(){var mid,sender uuid.UUID;var role,msg string;var created time.Time;if rows.Scan(&mid,&sender,&role,&msg,&created)!=nil{fail(w,500,"could not read messages");return};messages=append(messages,map[string]any{"id":mid,"senderId":sender,"sender":role,"message":msg,"date":created})}
  if rows.Err()!=nil{fail(w,500,"could not read messages");return}
+ if staff {_,_=h.DB.Exec(r.Context(),"UPDATE support_tickets SET staff_unread=false WHERE id=$1",id)}else{_,_=h.DB.Exec(r.Context(),"UPDATE support_tickets SET customer_unread=false WHERE id=$1",id)}
  respond(w,200,map[string]any{"ticket":t,"messages":messages})
 }
 func(h *Handler) MyDetail(w http.ResponseWriter,r *http.Request){h.detail(w,r,false)}
@@ -109,7 +112,8 @@ func(h *Handler) message(w http.ResponseWriter,r *http.Request,staff bool){
  if status=="closed"{fail(w,409,"closed ticket cannot receive messages");return}
  role:="user";next:="open";if staff{role="support";next="pending"}
  _,e=tx.Exec(r.Context(),"INSERT INTO support_messages(ticket_id,sender_id,sender_role,message) VALUES($1,$2,$3,$4)",tid,id,role,b.Message)
- if e==nil{_,e=tx.Exec(r.Context(),"UPDATE support_tickets SET status=$2,updated_at=now() WHERE id=$1",tid,next)}
+ if e==nil{_,e=tx.Exec(r.Context(),"UPDATE support_tickets SET status=$2,updated_at=now(),customer_unread=$3,staff_unread=$4 WHERE id=$1",tid,next,staff,!staff)}
+ if e==nil && staff {_,e=tx.Exec(r.Context(),"INSERT INTO user_notifications(user_id,type,title,message,link) SELECT user_id,'support','Support reply','A support agent replied to ticket TKT-'||ticket_number,'/support?ticket='||id FROM support_tickets WHERE id=$1 AND COALESCE((SELECT support FROM notification_preferences WHERE user_id=support_tickets.user_id),true)",tid)}
  if e!=nil{fail(w,500,"could not send message");return}
  if tx.Commit(r.Context())!=nil{fail(w,500,"could not save message");return}
  respond(w,201,map[string]string{"status":next})
