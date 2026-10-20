@@ -14,6 +14,7 @@ import (
 	"backend/internal/plans"
 	"backend/internal/security"
 	"backend/internal/subscriptions"
+ "backend/internal/support"
 	"backend/internal/user"
 	"context"
 	"errors"
@@ -115,6 +116,7 @@ func main() {
 	// Handlers.
 	plansHandler := plans.NewHandler(plansRepository, logger)
 	subscriptionsHandler := subscriptions.NewHandler(subscriptionsService)
+ supportHandler := support.NewHandler(db)
 	paymentsHandler := payments.NewHandler(paymentsService)
 	depositHandler := payments.NewDepositHandler(
 		paymentsService,
@@ -172,6 +174,7 @@ func main() {
 
 	router := httpserver.NewRouter(
 		plansHandler,
+        supportHandler,
 		subscriptionsHandler,
 		paymentsHandler,
 		depositHandler,
