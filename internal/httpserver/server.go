@@ -116,6 +116,9 @@ func NewRouter(
         r.Post("/cards", paymentsHandler.AdminCreatePaymentCard)
         r.Patch("/cards/{cardID}", paymentsHandler.AdminSetPaymentCardActive)
         r.Get("/receipts", paymentsHandler.PendingReceipts)
+        r.Get("/wallet-receipts",depositHandler.PendingCardReceipts)
+        r.Get("/wallet-receipts/{receiptID}/attachment",depositHandler.CardReceiptAttachment)
+        r.Post("/wallet-receipts/{receiptID}/decision",depositHandler.DecideCardReceipt)
         r.Get("/receipts/{receiptID}/attachment", paymentsHandler.ReceiptAttachment)
         r.Post("/receipts/{receiptID}/decision", paymentsHandler.ReviewReceipt)
     })
@@ -190,6 +193,7 @@ func NewRouter(
 		r.Get("/wallet/transactions", paymentsHandler.Transactions)
 
 		r.Post("/deposits", depositHandler.Create)
+        r.Post("/deposits/card-receipt",depositHandler.SubmitCardReceipt)
 		r.Get("/deposits", depositHandler.List)
 		r.Get("/deposits/{depositID}", depositHandler.Get)
 
