@@ -18,6 +18,7 @@ import (
 // EnsureDefaultAdmin provisions an initial administrator only when explicitly configured.
 // Never ships with a known password, and never promotes an existing ordinary user.
 func EnsureDefaultAdmin(ctx context.Context, db *pgxpool.Pool, logger *slog.Logger) error {
+ if logger==nil {logger=slog.Default()}
  email:=strings.ToLower(strings.TrimSpace(os.Getenv("WRAPLINK_BOOTSTRAP_ADMIN_EMAIL")))
  secret:=os.Getenv("WRAPLINK_BOOTSTRAP_ADMIN_PASSWORD")
  if email=="" && secret=="" {return nil}
