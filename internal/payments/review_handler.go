@@ -6,6 +6,7 @@ import (
  "time"
  "net/http"
  "strings"
+ "strconv"
  "github.com/go-chi/chi/v5"
  "github.com/google/uuid"
  "github.com/jackc/pgx/v5"
@@ -25,9 +26,19 @@ func (h *Handler) reviewAdmin(w http.ResponseWriter,r *http.Request)(uuid.UUID,b
 func (h *Handler) PendingReceipts(w http.ResponseWriter,r *http.Request){
  _,ok:=h.reviewAdmin(w,r);if !ok{return}
  account:=strings.TrimSpace(r.URL.Query().Get("account"))
+ orderText:=strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("orderNumber"))),"WL-")
+ var orderNumber int64
+ if orderText!="" {n,e:=strconv.ParseInt(orderText,10,64);if e!=nil||n<=0{writeJSONError(w,400,"invalid order number");return};orderNumber=n}
+ from:=r.URL.Query().Get("dateFrom");to:=r.URL.Query().Get("dateTo")
+ if from!="" {if _,e:=time.Parse("2006-01-02",from);e!=nil{writeJSONError(w,400,"invalid start date");return}}
+ if to!="" {if _,e:=time.Parse("2006-01-02",to);e!=nil{writeJSONError(w,400,"invalid end date");return}}
  rows,err:=h.service.repository.db.Query(r.Context(),`SELECT c.id,c.subscription_id,c.user_id,c.filename,c.content_type,c.payable_minor,s.currency,c.created_at,c.payment_group_id,u.email,u.full_name,u.account_status,u.email_verified
  FROM card_transfer_receipts c JOIN user_subscriptions s ON s.id=c.subscription_id JOIN users u ON u.id=c.user_id
- WHERE c.status='pending_review' AND (c.payment_group_id IS NULL OR c.id=(SELECT x.id FROM card_transfer_receipts x WHERE x.payment_group_id=c.payment_group_id ORDER BY x.id LIMIT 1)) AND ($1::text='' OR u.email ILIKE '%'||$1||'%' OR u.full_name ILIKE '%'||$1||'%') ORDER BY c.created_at LIMIT 100`,account)
+ WHERE c.status='pending_review' AND (c.payment_group_id IS NULL OR c.id=(SELECT x.id FROM card_transfer_receipts x WHERE x.payment_group_id=c.payment_group_id ORDER BY x.id LIMIT 1)) AND ($1::text='' OR u.email ILIKE '%'||$1||'%' OR u.full_name ILIKE '%'||$1||'%' OR u.id::text=$1)
+ AND ($2::bigint=0 OR EXISTS (SELECT 1 FROM card_transfer_receipts rc JOIN user_subscriptions rs ON rs.id=rc.subscription_id WHERE rs.order_number=$2 AND (rc.payment_group_id=c.payment_group_id OR rc.id=c.id)))
+ AND ($3::text='' OR c.created_at::date >= CAST(NULLIF($3,'') AS date))
+ AND ($4::text='' OR c.created_at::date <= CAST(NULLIF($4,'') AS date))
+ ORDER BY c.created_at DESC LIMIT 100`,account,orderNumber,from,to)
  if err!=nil {writeJSONError(w,500,"could not list receipts");return};defer rows.Close()
  items:=make([]map[string]any,0)
  for rows.Next(){
