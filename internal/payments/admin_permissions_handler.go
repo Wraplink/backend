@@ -70,3 +70,10 @@ func (h *Handler) UpdateAdminPermission(w http.ResponseWriter,r *http.Request){
  if err=tx.Commit(r.Context());err!=nil{writeJSONError(w,500,"database error");return}
  writeJSON(w,200,map[string]any{"userId":target,"permission":permission,"enabled":*body.Enabled})
 }
+
+func (h *Handler) AccessAdminMiddleware(next http.Handler) http.Handler {
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  if _,ok:=h.requireAccessAdmin(w,r);!ok{return}
+  next.ServeHTTP(w,r)
+ })
+}
