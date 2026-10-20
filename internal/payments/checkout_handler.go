@@ -74,6 +74,10 @@ func (h *Handler) SubmitCardReceipt(w http.ResponseWriter,r *http.Request) {
  var price int64;var currency string
  err=tx.QueryRow(r.Context(),"SELECT price_minor,currency FROM user_subscriptions WHERE id=$1 AND user_id=$2 AND status='pending_payment' FOR UPDATE",id,userID).Scan(&price,&currency)
  if err!=nil {writeJSONError(w,409,"subscription is not pending");return}
+ cardID,err:=uuid.Parse(strings.TrimSpace(r.FormValue("paymentCardId")))
+ if err!=nil {writeJSONError(w,400,"select a valid payment card");return}
+ var cardActive bool
+ if err=tx.QueryRow(r.Context(),"SELECT active FROM payment_cards WHERE id=$1",cardID).Scan(&cardActive);err!=nil || !cardActive {writeJSONError(w,400,"payment card is unavailable");return}
  code:=strings.ToUpper(strings.TrimSpace(r.FormValue("discountCode")))
  var discountID *uuid.UUID;var reduction int64
  if code!="" {
@@ -85,8 +89,8 @@ func (h *Handler) SubmitCardReceipt(w http.ResponseWriter,r *http.Request) {
   if reduction>price {reduction=price};discountID=&did
  }
  var receiptID uuid.UUID
- err=tx.QueryRow(r.Context(),`INSERT INTO card_transfer_receipts(user_id,subscription_id,filename,content_type,receipt_bytes,discount_id,discount_minor,payable_minor)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,userID,id,header.Filename,contentType,b,discountID,reduction,price-reduction).Scan(&receiptID)
+ err=tx.QueryRow(r.Context(),`INSERT INTO card_transfer_receipts(user_id,subscription_id,filename,content_type,receipt_bytes,discount_id,discount_minor,payable_minor,payment_card_id)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,userID,id,header.Filename,contentType,b,discountID,reduction,price-reduction,cardID).Scan(&receiptID)
  if err!=nil {writeJSONError(w,409,"receipt already submitted or could not be saved");return}
  if discountID!=nil {
   _,err=tx.Exec(r.Context(),"UPDATE discount_codes SET redemptions=redemptions+1 WHERE id=$1",*discountID);if err!=nil {writeJSONError(w,500,"database error");return}
