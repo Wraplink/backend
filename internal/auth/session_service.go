@@ -410,11 +410,13 @@ func (s *SessionService) IsActive(
 	const query = `
 		SELECT EXISTS (
 			SELECT 1
-			FROM user_sessions
-			WHERE id = $1
-			  AND user_id = $2
-			  AND revoked_at IS NULL
-			  AND expires_at > now()
+			FROM user_sessions s
+            JOIN users u ON u.id = s.user_id
+			WHERE s.id = $1
+			  AND s.user_id = $2
+              AND u.account_status = 'active'
+			  AND s.revoked_at IS NULL
+			  AND s.expires_at > now()
 		)
 	`
 
