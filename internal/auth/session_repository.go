@@ -186,7 +186,7 @@ func (r *SessionRepository) RevokeOthers(
 		UPDATE user_sessions
 		SET
 			revoked_at = now(),
-			revoked_reason = 'revoked_others'
+			revoked_reason = 'admin_revoked'
 		WHERE user_id = $1
 		  AND id <> $2
 		  AND revoked_at IS NULL
