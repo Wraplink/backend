@@ -21,6 +21,7 @@ const (
 
 type Subscription struct {
 	ID             uuid.UUID  `json:"id"`
+	OrderNumber    int64      `json:"orderNumber"`
 	UserID         uuid.UUID  `json:"userId"`
 	PlanID         uuid.UUID  `json:"planId"`
 	PlanCode       string     `json:"planCode"`
@@ -82,6 +83,7 @@ func (r *Repository) CreatePending(
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 		RETURNING
 			id,
+			order_number,
 			user_id,
 			plan_id,
 			plan_code,
@@ -117,6 +119,7 @@ func (r *Repository) CreatePending(
 		StatusPendingPayment,
 	).Scan(
 		&result.ID,
+		&result.OrderNumber,
 		&result.UserID,
 		&result.PlanID,
 		&result.PlanCode,
@@ -185,6 +188,7 @@ func (r *Repository) ListByUser(
 
 		if err := rows.Scan(
 			&item.ID,
+			&item.OrderNumber,
 			&item.UserID,
 			&item.PlanID,
 			&item.PlanCode,
