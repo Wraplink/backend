@@ -32,10 +32,27 @@ func (h *Handler) PendingReceipts(w http.ResponseWriter,r *http.Request){
  var id,sub,user uuid.UUID;var name,typ,currency string;var payable int64;var created time.Time;var groupID *uuid.UUID
  if err=rows.Scan(&id,&sub,&user,&name,&typ,&payable,&currency,&created,&groupID);err!=nil {writeJSONError(w,500,"could not read receipts");return}
  count:=1
- if groupID!=nil {
-  if err=h.service.repository.db.QueryRow(r.Context(),"SELECT count(*),sum(payable_minor) FROM card_transfer_receipts WHERE payment_group_id=$1",*groupID).Scan(&count,&payable);err!=nil{writeJSONError(w,500,"could not calculate group total");return}
+ var total int64
+ type planLine struct {OrderNumber int64 `json:"orderNumber"`;SubscriptionID uuid.UUID `json:"subscriptionId"`;PlanName string `json:"planName"`;PlanCode string `json:"planCode"`;AmountMinor int64 `json:"amountMinor"`;Currency string `json:"currency"`;DurationDays int `json:"durationDays"`;DataLimitBytes int64 `json:"dataLimitBytes"`}
+ lines:=make([]planLine,0)
+ query:=`SELECT s.order_number,s.id,s.plan_name,s.plan_code,c.payable_minor,s.currency,s.duration_days,s.data_limit_bytes
+ FROM card_transfer_receipts c JOIN user_subscriptions s ON s.id=c.subscription_id
+ WHERE c.id=$1 ORDER BY s.order_number`
+ key:=any(id)
+ if groupID!=nil {query=`SELECT s.order_number,s.id,s.plan_name,s.plan_code,c.payable_minor,s.currency,s.duration_days,s.data_limit_bytes
+ FROM card_transfer_receipts c JOIN user_subscriptions s ON s.id=c.subscription_id
+ WHERE c.payment_group_id=$1 ORDER BY s.order_number`;key=*groupID}
+ detailRows,e:=h.service.repository.db.Query(r.Context(),query,key)
+ if e!=nil{writeJSONError(w,500,"could not load order details");return}
+ for detailRows.Next(){var line planLine
+  if e=detailRows.Scan(&line.OrderNumber,&line.SubscriptionID,&line.PlanName,&line.PlanCode,&line.AmountMinor,&line.Currency,&line.DurationDays,&line.DataLimitBytes);e!=nil{break}
+  lines=append(lines,line);total+=line.AmountMinor
  }
- items=append(items,map[string]any{"id":id,"subscriptionId":sub,"userId":user,"filename":name,"contentType":typ,"payableMinor":payable,"currency":currency,"createdAt":created,"orderCount":count,"paymentGroupId":groupID})
+ rowErr:=detailRows.Err();detailRows.Close()
+ if e!=nil||rowErr!=nil||len(lines)==0{writeJSONError(w,500,"could not load order details");return}
+ count=len(lines);payable=total
+ items=append(items,map[string]any{"id":id,"subscriptionId":sub,"userId":user,"filename":name,"contentType":typ,"payableMinor":payable,"currency":currency,"createdAt":created,"orderCount":count,"paymentGroupId":groupID,"plans":lines})
+
  }
  if rows.Err()!=nil {writeJSONError(w,500,"could not read receipts");return}
  writeJSON(w,200,map[string]any{"receipts":items})
