@@ -90,7 +90,8 @@ func (r *Repository) DailyUsage(
 			COALESCE(SUM(download_bytes), 0)
 		FROM traffic_usage_reports
 		WHERE subscription_id = $1
-		  AND reported_at >= now() - (($2::integer - 1) * INTERVAL '1 day')
+		  AND reported_at >= (date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') - (($2::integer - 1) * INTERVAL '1 day')
+          AND reported_at < (date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') + INTERVAL '1 day'
 		GROUP BY (reported_at AT TIME ZONE 'UTC')::date
 		ORDER BY (reported_at AT TIME ZONE 'UTC')::date DESC
 	`
