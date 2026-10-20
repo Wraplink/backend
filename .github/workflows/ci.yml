@@ -24,6 +24,12 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Test before formatting audit
+        run: go test ./...
+
+      - name: Vet before formatting audit
+        run: go vet ./...
+
       - name: Verify formatting
         run: |
           files="$(gofmt -l .)"
