@@ -179,6 +179,7 @@ func (r *Repository) Current(
 				 AND s.starts_at <= now()
 				 AND s.expires_at > now()
 				 AND s.used_bytes < s.data_limit_bytes
+                 AND e.last_activity_at >= now() - INTERVAL '30 minutes'
 				THEN 'active'
 				ELSE 'inactive'
 			END,
