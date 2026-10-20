@@ -87,6 +87,12 @@ func NewRouter(
 		)
 	}
 
+	r.Route("/api/v1/admin/network", func(r chi.Router) {
+        r.Use(requireAuthMiddleware)
+        r.Use(paymentsHandler.AccessAdminMiddleware)
+        r.Get("/dns-controls", dnsRegistryHandler.AdminNodes)
+    })
+
 	r.Route("/api/v1/admin/access", func(r chi.Router) {
         r.Use(requireAuthMiddleware)
         r.Get("/permissions", paymentsHandler.ListAdminPermissions)
