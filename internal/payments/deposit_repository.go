@@ -213,7 +213,7 @@ func (r *Repository) SettleDevelopmentDeposit(
 	if err != nil {
 		return nil, fmt.Errorf("lock deposit: %w", err)
 	}
-	if deposit.Provider != ProviderDevelopment {
+	if deposit.Provider != ProviderDevelopment && deposit.Provider != "card_transfer" {
 		return nil, ErrDepositNotPending
 	}
 
@@ -245,7 +245,7 @@ func (r *Repository) SettleDevelopmentDeposit(
 			  AND provider_reference = $2
 			  AND id <> $3
 		)`,
-		ProviderDevelopment,
+		deposit.Provider,
 		providerReference,
 		depositID,
 	).Scan(&referenceUsed)
@@ -301,7 +301,7 @@ func (r *Repository) SettleDevelopmentDeposit(
 		           now())
 		 RETURNING id, method, amount_minor, currency, status, created_at, completed_at`,
 		userID,
-		"gateway",
+		map[bool]string{true:"card_transfer",false:"gateway"}[deposit.Provider=="card_transfer"],
 		deposit.AmountMinor,
 		deposit.Currency,
 		StatusSucceeded,
@@ -386,6 +386,11 @@ func (r *Repository) SettleDevelopmentDeposit(
 		return nil, fmt.Errorf("complete deposit: %w", err)
 	}
 
+	if deposit.Provider == "card_transfer" {
+        tag,e:=tx.Exec(ctx,`UPDATE wallet_card_receipts SET status='approved',reviewed_at=now() WHERE deposit_id=$1 AND status='pending_review'`,deposit.ID)
+        if e!=nil{return nil,fmt.Errorf("approve receipt: %w",e)}
+        if tag.RowsAffected()!=1{return nil,ErrDepositNotPending}
+    }
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit deposit settlement: %w", err)
 	}
