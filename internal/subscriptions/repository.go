@@ -14,6 +14,7 @@ import (
 const (
 	StatusPendingPayment = "pending_payment"
 	StatusActive         = "active"
+	StatusConfirmed      = "confirmed"
 	StatusExpired        = "expired"
 	StatusCancelled      = "cancelled"
 )
@@ -145,6 +146,7 @@ func (r *Repository) ListByUser(
 	ctx context.Context,
 	userID uuid.UUID,
 ) ([]Subscription, error) {
+	if _, err := r.db.Exec(ctx, "SELECT promote_user_subscription($1)", userID); err != nil {return nil, fmt.Errorf("reconcile subscription queue: %w",err)}
 	const query = `
 		SELECT
 			id,
@@ -218,6 +220,7 @@ func (r *Repository) Current(
 	ctx context.Context,
 	userID uuid.UUID,
 ) (*Subscription, error) {
+	if _, err := r.db.Exec(ctx, "SELECT promote_user_subscription($1)", userID); err != nil {return nil, fmt.Errorf("reconcile subscription queue: %w",err)}
 	const query = `
 		SELECT
 			id,
