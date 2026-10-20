@@ -90,3 +90,17 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 func writeJSONError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }
+
+func (h *Handler) AdminNodes(w http.ResponseWriter,r *http.Request) {
+ nodes:=h.store.List(0)
+ cutoff:=time.Now().UTC().Add(-h.offlineAfter)
+ result:=make([]map[string]any,0,len(nodes))
+ for _,node:=range nodes {
+  online:=h.offlineAfter>0 && !node.LastSeenAt.Before(cutoff)
+  result=append(result,map[string]any{
+   "id":node.ID,"region":node.Region,"addresses":node.Addresses,
+   "lastSeenAt":node.LastSeenAt,"online":online,
+  })
+ }
+ writeJSON(w,http.StatusOK,map[string]any{"nodes":result})
+}
