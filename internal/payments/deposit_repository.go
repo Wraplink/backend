@@ -301,7 +301,7 @@ func (r *Repository) SettleDevelopmentDeposit(
 		           now())
 		 RETURNING id, method, amount_minor, currency, status, created_at, completed_at`,
 		userID,
-		map[bool]string{true:"card_transfer",false:"gateway"}[deposit.Provider=="card_transfer"],
+		map[bool]string{true:"card_to_card",false:"gateway"}[deposit.Provider=="card_transfer"],
 		deposit.AmountMinor,
 		deposit.Currency,
 		StatusSucceeded,
