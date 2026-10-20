@@ -97,6 +97,7 @@ func NewRouter(
         r.Use(requireAuthMiddleware)
         r.Get("/permissions", paymentsHandler.ListAdminPermissions)
         r.Get("/users", paymentsHandler.AdminUsers)
+        r.Patch("/users/{userID}/status", paymentsHandler.AdminUpdateUserStatus)
         r.Get("/orders", paymentsHandler.AdminOrders)
         r.Put("/users/{userID}/permissions/{permission}", paymentsHandler.UpdateAdminPermission)
     })
