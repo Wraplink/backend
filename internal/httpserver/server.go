@@ -58,6 +58,7 @@ func NewRouter(
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
+	r.Get("/api/v1/payment-cards", paymentsHandler.ListPaymentCards)
 	r.Get("/api/v1/plans", plansHandler.List)
 	r.Get("/api/v1/plans/{code}", plansHandler.Get)
 
@@ -107,6 +108,9 @@ func NewRouter(
         r.Get("/discounts", paymentsHandler.AdminListDiscounts)
         r.Post("/discounts", paymentsHandler.AdminCreateDiscount)
         r.Post("/discounts/{discountID}/disable", paymentsHandler.AdminDisableDiscount)
+        r.Get("/cards", paymentsHandler.AdminListPaymentCards)
+        r.Post("/cards", paymentsHandler.AdminCreatePaymentCard)
+        r.Patch("/cards/{cardID}", paymentsHandler.AdminSetPaymentCardActive)
         r.Get("/receipts", paymentsHandler.PendingReceipts)
         r.Get("/receipts/{receiptID}/attachment", paymentsHandler.ReceiptAttachment)
         r.Post("/receipts/{receiptID}/decision", paymentsHandler.ReviewReceipt)
