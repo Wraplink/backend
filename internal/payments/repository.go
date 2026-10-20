@@ -286,24 +286,6 @@ func (r *Repository) PaySubscriptionWithWallet(
 		return nil, ErrSubscriptionNotPending
 	}
 
-	var hasActive bool
-	err = tx.QueryRow(
-		ctx,
-		`SELECT EXISTS (
-			SELECT 1
-			FROM user_subscriptions
-			WHERE user_id = $1
-			  AND status = 'active'
-			  AND expires_at > now()
-		)`,
-		userID,
-	).Scan(&hasActive)
-	if err != nil {
-		return nil, fmt.Errorf("check active subscription: %w", err)
-	}
-	if hasActive {
-		return nil, ErrActiveSubscriptionExists
-	}
 
 	_, err = tx.Exec(
 		ctx,
@@ -417,17 +399,13 @@ func (r *Repository) PaySubscriptionWithWallet(
 	result := &PaymentResult{
 		Payment:            payment,
 		SubscriptionID:     subscriptionID,
-		SubscriptionStatus: "active",
+		SubscriptionStatus: "confirmed",
 	}
 
 	err = tx.QueryRow(
 		ctx,
 		`UPDATE user_subscriptions
-		 SET status = 'active',
-		     starts_at = now(),
-		     expires_at = now() + (duration_days * INTERVAL '1 day'),
-		     activated_at = now(),
-		     updated_at = now()
+		 SET status = 'confirmed', updated_at = now()
 		 WHERE id = $1
 		   AND user_id = $2
 		   AND status = 'pending_payment'
@@ -439,6 +417,12 @@ func (r *Repository) PaySubscriptionWithWallet(
 		return nil, fmt.Errorf("activate paid subscription: %w", err)
 	}
 
+	if _, err := tx.Exec(ctx, "SELECT promote_user_subscription($1)", userID); err != nil {
+		return nil, fmt.Errorf("promote confirmed subscription: %w", err)
+	}
+	if err := tx.QueryRow(ctx, "SELECT status, starts_at, expires_at FROM user_subscriptions WHERE id=$1", subscriptionID).Scan(&result.SubscriptionStatus, &result.StartsAt, &result.ExpiresAt); err != nil {
+		return nil, fmt.Errorf("load confirmed subscription: %w", err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit wallet payment: %w", err)
 	}
