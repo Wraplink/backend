@@ -1,0 +1,2 @@
+ALTER TABLE card_transfer_receipts ADD COLUMN payment_group_id uuid;
+CREATE INDEX idx_card_transfer_receipts_payment_group ON card_transfer_receipts(payment_group_id);
