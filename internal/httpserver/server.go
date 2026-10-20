@@ -90,6 +90,8 @@ func NewRouter(
 	r.Route("/api/v1/admin/access", func(r chi.Router) {
         r.Use(requireAuthMiddleware)
         r.Get("/permissions", paymentsHandler.ListAdminPermissions)
+        r.Get("/users", paymentsHandler.AdminUsers)
+        r.Get("/orders", paymentsHandler.AdminOrders)
         r.Put("/users/{userID}/permissions/{permission}", paymentsHandler.UpdateAdminPermission)
     })
 
