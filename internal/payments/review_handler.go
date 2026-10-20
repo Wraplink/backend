@@ -94,6 +94,7 @@ func (h *Handler) ReviewReceipt(w http.ResponseWriter,r *http.Request){
     _,e=tx.Exec(r.Context(),"UPDATE user_subscriptions SET status='confirmed',updated_at=now() WHERE id=$1",v.sub)
     if e!=nil{writeJSONError(w,500,"could not confirm order");return}
    }
+   if body.Decision=="rejected" {if _,e=tx.Exec(r.Context(),"UPDATE user_subscriptions SET status='cancelled',cancelled_at=now(),updated_at=now() WHERE id=$1 AND status='pending_payment'",v.sub);e!=nil{writeJSONError(w,500,"could not reject order");return}}
    _,e=tx.Exec(r.Context(),"UPDATE card_transfer_receipts SET status=$2,reviewed_at=now() WHERE id=$1",v.id,body.Decision)
    if e!=nil{writeJSONError(w,500,"could not review receipt");return}
    _,e=tx.Exec(r.Context(),"INSERT INTO payment_review_events(receipt_id,reviewer_id,decision) VALUES($1,$2,$3)",v.id,reviewer,body.Decision)
@@ -122,11 +123,14 @@ func (h *Handler) ReviewReceipt(w http.ResponseWriter,r *http.Request){
  WHERE id=$1 AND status='pending_payment'`,sub)
   if e!=nil || tag.RowsAffected()!=1 {writeJSONError(w,409,"subscription could not be confirmed");return}
   if _,err=tx.Exec(r.Context(),"SELECT promote_user_subscription($1)",user);err!=nil {writeJSONError(w,500,"subscription activation failed");return}
- }else if discount!=nil{
+ }else {
+  if _,err=tx.Exec(r.Context(),"UPDATE user_subscriptions SET status='cancelled',cancelled_at=now(),updated_at=now() WHERE id=$1 AND status='pending_payment'",sub);err!=nil{writeJSONError(w,500,"could not reject order");return}
+  if discount!=nil {
   _,err=tx.Exec(r.Context(),"DELETE FROM discount_redemptions WHERE discount_id=$1 AND subscription_id=$2",*discount,sub)
   if err!=nil {writeJSONError(w,500,"database error");return}
   _,err=tx.Exec(r.Context(),"UPDATE discount_codes SET redemptions=GREATEST(0,redemptions-1) WHERE id=$1",*discount)
   if err!=nil {writeJSONError(w,500,"database error");return}
+  }
  }
  tag,err:=tx.Exec(r.Context(),"UPDATE card_transfer_receipts SET status=$2,reviewed_at=now() WHERE id=$1 AND status='pending_review'",id,body.Decision)
  if err!=nil || tag.RowsAffected()!=1 {writeJSONError(w,409,"receipt could not be reviewed");return}
