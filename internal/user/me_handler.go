@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+ "io"
 	"net/http"
 	"strings"
 
@@ -110,7 +111,9 @@ func (h *MeHandler) Update(
 
 	var request UpdateMeRequest
 
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+	decoder:=json.NewDecoder(http.MaxBytesReader(w,r.Body,4096))
+ decoder.DisallowUnknownFields()
+ if err := decoder.Decode(&request); err != nil {
 		http.Error(
 			w,
 			"invalid request body",
@@ -119,7 +122,9 @@ func (h *MeHandler) Update(
 		return
 	}
 
-	request.FullName = strings.TrimSpace(
+	var extra any
+ if err:=decoder.Decode(&extra);!errors.Is(err,io.EOF){http.Error(w,"invalid request body",http.StatusBadRequest);return}
+ request.FullName = strings.TrimSpace(
 		request.FullName,
 	)
 
