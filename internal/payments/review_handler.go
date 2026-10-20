@@ -5,6 +5,7 @@ import (
  "errors"
  "time"
  "net/http"
+ "strings"
  "github.com/go-chi/chi/v5"
  "github.com/google/uuid"
  "github.com/jackc/pgx/v5"
@@ -23,14 +24,15 @@ func (h *Handler) reviewAdmin(w http.ResponseWriter,r *http.Request)(uuid.UUID,b
 
 func (h *Handler) PendingReceipts(w http.ResponseWriter,r *http.Request){
  _,ok:=h.reviewAdmin(w,r);if !ok{return}
- rows,err:=h.service.repository.db.Query(r.Context(),`SELECT c.id,c.subscription_id,c.user_id,c.filename,c.content_type,c.payable_minor,s.currency,c.created_at,c.payment_group_id
- FROM card_transfer_receipts c JOIN user_subscriptions s ON s.id=c.subscription_id
- WHERE c.status='pending_review' AND (c.payment_group_id IS NULL OR c.id=(SELECT x.id FROM card_transfer_receipts x WHERE x.payment_group_id=c.payment_group_id ORDER BY x.id LIMIT 1)) ORDER BY c.created_at LIMIT 100`)
+ account:=strings.TrimSpace(r.URL.Query().Get("account"))
+ rows,err:=h.service.repository.db.Query(r.Context(),`SELECT c.id,c.subscription_id,c.user_id,c.filename,c.content_type,c.payable_minor,s.currency,c.created_at,c.payment_group_id,u.email,u.full_name,u.account_status,u.email_verified
+ FROM card_transfer_receipts c JOIN user_subscriptions s ON s.id=c.subscription_id JOIN users u ON u.id=c.user_id
+ WHERE c.status='pending_review' AND (c.payment_group_id IS NULL OR c.id=(SELECT x.id FROM card_transfer_receipts x WHERE x.payment_group_id=c.payment_group_id ORDER BY x.id LIMIT 1)) AND ($1::text='' OR u.email ILIKE '%'||$1||'%' OR u.full_name ILIKE '%'||$1||'%') ORDER BY c.created_at LIMIT 100`,account)
  if err!=nil {writeJSONError(w,500,"could not list receipts");return};defer rows.Close()
  items:=make([]map[string]any,0)
  for rows.Next(){
- var id,sub,user uuid.UUID;var name,typ,currency string;var payable int64;var created time.Time;var groupID *uuid.UUID
- if err=rows.Scan(&id,&sub,&user,&name,&typ,&payable,&currency,&created,&groupID);err!=nil {writeJSONError(w,500,"could not read receipts");return}
+ var id,sub,user uuid.UUID;var name,typ,currency string;var payable int64;var created time.Time;var groupID *uuid.UUID;var email,fullName,accountStatus string;var emailVerified bool
+ if err=rows.Scan(&id,&sub,&user,&name,&typ,&payable,&currency,&created,&groupID,&email,&fullName,&accountStatus,&emailVerified);err!=nil {writeJSONError(w,500,"could not read receipts");return}
  count:=1
  var total int64
  type planLine struct {OrderNumber int64 `json:"orderNumber"`;SubscriptionID uuid.UUID `json:"subscriptionId"`;PlanName string `json:"planName"`;PlanCode string `json:"planCode"`;AmountMinor int64 `json:"amountMinor"`;Currency string `json:"currency"`;DurationDays int `json:"durationDays"`;DataLimitBytes int64 `json:"dataLimitBytes"`}
@@ -51,7 +53,7 @@ func (h *Handler) PendingReceipts(w http.ResponseWriter,r *http.Request){
  rowErr:=detailRows.Err();detailRows.Close()
  if e!=nil||rowErr!=nil||len(lines)==0{writeJSONError(w,500,"could not load order details");return}
  count=len(lines);payable=total
- items=append(items,map[string]any{"id":id,"subscriptionId":sub,"userId":user,"filename":name,"contentType":typ,"payableMinor":payable,"currency":currency,"createdAt":created,"orderCount":count,"paymentGroupId":groupID,"plans":lines})
+ items=append(items,map[string]any{"id":id,"subscriptionId":sub,"userId":user,"filename":name,"contentType":typ,"payableMinor":payable,"currency":currency,"createdAt":created,"orderCount":count,"paymentGroupId":groupID,"plans":lines,"customer":map[string]any{"email":email,"fullName":fullName,"accountStatus":accountStatus,"emailVerified":emailVerified}})
 
  }
  if rows.Err()!=nil {writeJSONError(w,500,"could not read receipts");return}
