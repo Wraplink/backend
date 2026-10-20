@@ -47,7 +47,7 @@ func (h *Handler) AdminListDiscounts(w http.ResponseWriter,r *http.Request){
 }
 
 func (h *Handler) AdminCreateDiscount(w http.ResponseWriter,r *http.Request){
- if _,ok:=h.reviewAdmin(w,r);!ok{return}
+ if !h.discountAdmin(w,r){return}
  var req discountAdminRequest
  dec:=json.NewDecoder(http.MaxBytesReader(w,r.Body,8192));dec.DisallowUnknownFields()
  if err:=dec.Decode(&req);err!=nil {writeJSONError(w,400,"invalid discount payload");return}
@@ -71,7 +71,7 @@ func (h *Handler) AdminCreateDiscount(w http.ResponseWriter,r *http.Request){
 }
 
 func (h *Handler) AdminDisableDiscount(w http.ResponseWriter,r *http.Request){
- if _,ok:=h.reviewAdmin(w,r);!ok{return}
+ if !h.discountAdmin(w,r){return}
  id,err:=uuid.Parse(chi.URLParam(r,"discountID"));if err!=nil {writeJSONError(w,400,"invalid discount ID");return}
  tag,err:=h.service.repository.db.Exec(r.Context(),"UPDATE discount_codes SET active=false WHERE id=$1",id)
  if err!=nil {writeJSONError(w,500,"database error");return}
