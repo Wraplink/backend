@@ -10,6 +10,7 @@ import (
 	"backend/internal/plans"
 	"backend/internal/security"
 	"backend/internal/subscriptions"
+ "backend/internal/support"
 	"backend/internal/user"
 	"log/slog"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 
 func NewRouter(
 	plansHandler *plans.Handler,
+ supportHandler *support.Handler,
 	subscriptionsHandler *subscriptions.Handler,
 	paymentsHandler *payments.Handler,
 	depositHandler *payments.DepositHandler,
@@ -116,7 +118,22 @@ func NewRouter(
         r.Post("/receipts/{receiptID}/decision", paymentsHandler.ReviewReceipt)
     })
 
-	r.Route("/api/v1/auth", func(r chi.Router) {
+ r.Route("/api/v1/admin/support",func(r chi.Router){
+  r.Use(requireAuthMiddleware)
+  r.Get("/tickets",supportHandler.AdminList)
+  r.Get("/tickets/{ticketID}",supportHandler.AdminDetail)
+  r.Post("/tickets/{ticketID}/messages",supportHandler.AdminMessage)
+  r.Patch("/tickets/{ticketID}/status",supportHandler.AdminStatus)
+ })
+ r.Route("/api/v1/support",func(r chi.Router){
+  r.Use(requireAuthMiddleware)
+  r.Get("/tickets",supportHandler.MyList)
+  r.Post("/tickets",supportHandler.Create)
+  r.Get("/tickets/{ticketID}",supportHandler.MyDetail)
+  r.Post("/tickets/{ticketID}/messages",supportHandler.MyMessage)
+  r.Patch("/tickets/{ticketID}/status",supportHandler.MyStatus)
+ })
+ r.Route("/api/v1/auth", func(r chi.Router) {
 		r.With(registrationRateLimitMiddleware).Post("/register", registerHandler.Register)
 		r.Post("/login", loginHandler.Login)
 		r.Post("/verify-email", emailVerificationHandler.Verify)
