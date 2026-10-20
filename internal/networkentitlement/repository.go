@@ -63,7 +63,11 @@ func (r *Repository) Activate(
 		return nil, err
 	}
 
-	existing, err := currentEntitlementForUpdate(
+	if _, err := tx.Exec(ctx, "UPDATE network_entitlements SET status = 'revoked', revoked_at = now(), updated_at = now() WHERE status = 'active' AND last_activity_at < now() - INTERVAL '30 minutes'"); err != nil {
+        return nil, fmt.Errorf("expire idle network access: %w", err)
+    }
+
+    existing, err := currentEntitlementForUpdate(
 		ctx,
 		tx,
 		userID,
@@ -76,7 +80,10 @@ func (r *Repository) Activate(
 	if existing != nil &&
 		existing.SubscriptionID == subscription.ID &&
 		existing.ClientIP == clientIPText {
-		existing.Status = "active"
+		if _, err := tx.Exec(ctx, "UPDATE network_entitlements SET last_activity_at = now(), updated_at = now() WHERE id = $1", existing.ID); err != nil {
+            return nil, fmt.Errorf("renew connection activity: %w", err)
+        }
+        existing.Status = "active"
 		existing.PlanCode = subscription.PlanCode
 		existing.DataLimitBytes = subscription.DataLimitBytes
 		existing.UsedBytes = subscription.UsedBytes
