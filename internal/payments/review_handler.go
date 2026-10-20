@@ -69,15 +69,16 @@ func (h *Handler) ReviewReceipt(w http.ResponseWriter,r *http.Request){
   var lockedUser uuid.UUID
   err=tx.QueryRow(r.Context(),"SELECT id FROM users WHERE id=$1 FOR UPDATE",user).Scan(&lockedUser)
   if err!=nil {writeJSONError(w,500,"database error");return}
-  var active bool
-  err=tx.QueryRow(r.Context(),"SELECT EXISTS(SELECT 1 FROM user_subscriptions WHERE user_id=$1 AND status='active' AND expires_at>now())",user).Scan(&active)
-  if err!=nil {writeJSONError(w,500,"database error");return}
-  if active {writeJSONError(w,409,"user already has an active subscription");return}
+  // Reconcile expired/exhausted plans and activate the oldest confirmed order.
+  if _,err=tx.Exec(r.Context(),"SELECT promote_user_subscription($1)",user);err!=nil {writeJSONError(w,500,"subscription reconciliation failed");return}
   _,err=tx.Exec(r.Context(),`INSERT INTO payments(user_id,subscription_id,method,amount_minor,currency,status,idempotency_key,completed_at)
  VALUES($1,$2,'card_to_card',$3,$4,'succeeded',$5,now())`,user,sub,amount,currency,"card-receipt:"+id.String())
   if err!=nil {writeJSONError(w,409,"payment already recorded");return}
-  tag,e:=tx.Exec(r.Context(),`UPDATE user_subscriptions SET status='active',starts_at=now(),expires_at=now()+(duration_days*interval '1 day'),activated_at=now(),updated_at=now() WHERE id=$1 AND status='pending_payment'`,sub)
-  if e!=nil || tag.RowsAffected()!=1 {writeJSONError(w,409,"subscription could not be activated");return}
+  // Approval reserves a paid plan; only the first available plan becomes active.
+  tag,e:=tx.Exec(r.Context(),`UPDATE user_subscriptions SET status='confirmed',updated_at=now()
+ WHERE id=$1 AND status='pending_payment'`,sub)
+  if e!=nil || tag.RowsAffected()!=1 {writeJSONError(w,409,"subscription could not be confirmed");return}
+  if _,err=tx.Exec(r.Context(),"SELECT promote_user_subscription($1)",user);err!=nil {writeJSONError(w,500,"subscription activation failed");return}
  }else if discount!=nil{
   _,err=tx.Exec(r.Context(),"DELETE FROM discount_redemptions WHERE discount_id=$1 AND subscription_id=$2",*discount,sub)
   if err!=nil {writeJSONError(w,500,"database error");return}
