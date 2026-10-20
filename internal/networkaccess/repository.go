@@ -182,6 +182,7 @@ func (r *Repository) ApplyUsageReport(
 	}
 
 	if applied {
+        if _, err := tx.Exec(ctx, `UPDATE network_entitlements SET last_activity_at = GREATEST(last_activity_at, $2), updated_at = now() WHERE subscription_id = $1 AND status = 'active' AND last_activity_at >= now() - INTERVAL '30 minutes'`, report.SubscriptionID, report.ReportedAt); err != nil { return nil, fmt.Errorf("record network activity: %w", err) }
 		totalBytes := report.UploadBytes + report.DownloadBytes
 		err = tx.QueryRow(
 			ctx,
