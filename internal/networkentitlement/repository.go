@@ -168,6 +168,7 @@ func (r *Repository) Current(
 	ctx context.Context,
 	userID uuid.UUID,
 ) (*Entitlement, error) {
+	if _, err := r.db.Exec(ctx, "SELECT promote_user_subscription($1)", userID); err != nil {return nil, fmt.Errorf("reconcile network subscription: %w",err)}
 	const query = `
 		SELECT
 			e.id,
@@ -280,6 +281,7 @@ func (r *Repository) SetMode(ctx context.Context, userID uuid.UUID, mode Connect
 func (r *Repository) Snapshot(
 	ctx context.Context,
 ) ([]SnapshotItem, error) {
+	if _, err := r.db.Exec(ctx, "SELECT promote_user_subscription(id) FROM users WHERE EXISTS (SELECT 1 FROM user_subscriptions WHERE user_id=users.id AND status='active' AND (expires_at<=now() OR used_bytes>=data_limit_bytes))"); err != nil {return nil, fmt.Errorf("reconcile network snapshot: %w",err)}
 	const query = `
 		SELECT
 			e.id,
