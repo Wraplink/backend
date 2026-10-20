@@ -153,6 +153,7 @@ func (r *Repository) ListByUser(
 	const query = `
 		SELECT
 			id,
+			order_number,
 			user_id,
 			plan_id,
 			plan_code,
@@ -228,6 +229,7 @@ func (r *Repository) Current(
 	const query = `
 		SELECT
 			id,
+			order_number,
 			user_id,
 			plan_id,
 			plan_code,
@@ -258,6 +260,7 @@ func (r *Repository) Current(
 
 	err := r.db.QueryRow(ctx, query, userID, StatusActive).Scan(
 		&result.ID,
+		&result.OrderNumber,
 		&result.UserID,
 		&result.PlanID,
 		&result.PlanCode,
