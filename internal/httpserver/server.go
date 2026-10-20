@@ -144,6 +144,7 @@ func NewRouter(
 		r.Delete("/subscriptions/{subscriptionID}", subscriptionsHandler.CancelPending)
 		r.Post("/subscriptions/{subscriptionID}/pay-with-wallet", paymentsHandler.PaySubscriptionWithWallet)
 		r.Post("/subscriptions/{subscriptionID}/discount-quote", paymentsHandler.DiscountQuote)
+		r.Post("/checkout/card-receipt", paymentsHandler.SubmitGroupedCardReceipt)
 		r.Post("/subscriptions/{subscriptionID}/card-receipt", paymentsHandler.SubmitCardReceipt)
 		r.Get("/subscriptions/{subscriptionID}/card-receipt", paymentsHandler.CardReceipt)
 
