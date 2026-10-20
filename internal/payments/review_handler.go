@@ -57,12 +57,51 @@ func (h *Handler) ReviewReceipt(w http.ResponseWriter,r *http.Request){
  var body struct{Decision string `json:"decision"`}
  if err=json.NewDecoder(http.MaxBytesReader(w,r.Body,2048)).Decode(&body);err!=nil || (body.Decision!="approved" && body.Decision!="rejected"){writeJSONError(w,400,"decision must be approved or rejected");return}
  tx,err:=h.service.repository.db.Begin(r.Context());if err!=nil {writeJSONError(w,500,"database error");return};defer tx.Rollback(r.Context())
- var sub,user uuid.UUID;var discount *uuid.UUID;var amount int64;var currency string
- err=tx.QueryRow(r.Context(),`SELECT c.subscription_id,c.user_id,c.discount_id,c.payable_minor,s.currency
+ var sub,user uuid.UUID;var discount *uuid.UUID;var amount int64;var currency string;var groupID *uuid.UUID
+ err=tx.QueryRow(r.Context(),`SELECT c.subscription_id,c.user_id,c.discount_id,c.payable_minor,s.currency,c.payment_group_id
  FROM card_transfer_receipts c JOIN user_subscriptions s ON s.id=c.subscription_id
- WHERE c.id=$1 AND c.status='pending_review' AND s.status='pending_payment' FOR UPDATE OF c,s`,id).Scan(&sub,&user,&discount,&amount,&currency)
+ WHERE c.id=$1 AND c.status='pending_review' AND s.status='pending_payment' FOR UPDATE OF c,s`,id).Scan(&sub,&user,&discount,&amount,&currency,&groupID)
  if errors.Is(err,pgx.ErrNoRows){writeJSONError(w,409,"receipt already reviewed or subscription not pending");return}
  if err!=nil {writeJSONError(w,500,"database error");return}
+ if groupID!=nil {
+  // A single review decision applies atomically to every order sharing this receipt.
+  var lockedUser uuid.UUID
+  if tx.QueryRow(r.Context(),"SELECT id FROM users WHERE id=$1 FOR UPDATE",user).Scan(&lockedUser)!=nil{writeJSONError(w,500,"database error");return}
+  rows,e:=tx.Query(r.Context(),`SELECT c.id,c.subscription_id,c.payable_minor,s.currency
+   FROM card_transfer_receipts c JOIN user_subscriptions s ON s.id=c.subscription_id
+   WHERE c.payment_group_id=$1 AND c.user_id=$2 AND c.status='pending_review' AND s.status='pending_payment'
+   ORDER BY c.subscription_id FOR UPDATE OF c,s`,*groupID,user)
+  if e!=nil{writeJSONError(w,500,"could not lock grouped orders");return}
+  type entry struct{id,sub uuid.UUID;amount int64;currency string}
+  entries:=[]entry{}
+  for rows.Next(){var v entry;if rows.Scan(&v.id,&v.sub,&v.amount,&v.currency)!=nil{rows.Close();writeJSONError(w,500,"could not read grouped orders");return};entries=append(entries,v)}
+  readErr:=rows.Err();rows.Close()
+  if readErr!=nil||len(entries)==0{writeJSONError(w,409,"group already reviewed");return}
+  var groupCount int
+  if tx.QueryRow(r.Context(),"SELECT count(*) FROM card_transfer_receipts WHERE payment_group_id=$1",*groupID).Scan(&groupCount)!=nil||groupCount!=len(entries){writeJSONError(w,409,"group changed; refresh");return}
+  if body.Decision=="approved" {
+   if _,e=tx.Exec(r.Context(),"SELECT promote_user_subscription($1)",user);e!=nil{writeJSONError(w,500,"queue reconciliation failed");return}
+  }
+  for _,v:=range entries{
+   if body.Decision=="approved" {
+    _,e=tx.Exec(r.Context(),`INSERT INTO payments(user_id,subscription_id,method,amount_minor,currency,status,idempotency_key,completed_at)
+    VALUES($1,$2,'card_to_card',$3,$4,'succeeded',$5,now())`,user,v.sub,v.amount,v.currency,"card-receipt:"+v.id.String())
+    if e!=nil{writeJSONError(w,409,"payment already recorded");return}
+    _,e=tx.Exec(r.Context(),"UPDATE user_subscriptions SET status='confirmed',updated_at=now() WHERE id=$1",v.sub)
+    if e!=nil{writeJSONError(w,500,"could not confirm order");return}
+   }
+   _,e=tx.Exec(r.Context(),"UPDATE card_transfer_receipts SET status=$2,reviewed_at=now() WHERE id=$1",v.id,body.Decision)
+   if e!=nil{writeJSONError(w,500,"could not review receipt");return}
+   _,e=tx.Exec(r.Context(),"INSERT INTO payment_review_events(receipt_id,reviewer_id,decision) VALUES($1,$2,$3)",v.id,reviewer,body.Decision)
+   if e!=nil{writeJSONError(w,500,"could not log review");return}
+  }
+  if body.Decision=="approved" {
+   if _,e=tx.Exec(r.Context(),"SELECT promote_user_subscription($1)",user);e!=nil{writeJSONError(w,500,"could not activate queue");return}
+  }
+  if tx.Commit(r.Context())!=nil{writeJSONError(w,500,"could not commit review");return}
+  writeJSON(w,200,map[string]any{"id":*groupID,"status":body.Decision,"orderCount":len(entries)})
+  return
+ }
  if body.Decision=="approved" {
   // Serialize approvals for different subscriptions belonging to the same user.
   // This lock prevents two reviewers from simultaneously activating two plans.
