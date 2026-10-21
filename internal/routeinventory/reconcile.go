@@ -69,9 +69,6 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
   if _,err=tx.Exec(ctx,"DELETE FROM network_route_assignments WHERE domain=$1",a.Domain);err!=nil{return err}
  }
  for _,a:=range next {
-  found:=false
-  for _,old:=range previous {if old==a {found=true;break}}
-  if found {continue}
   var raw []byte
   err=tx.QueryRow(ctx,"SELECT route FROM network_domain_policies WHERE domain=$1",a.Domain).Scan(&raw)
   if err!=nil{return err}
@@ -83,7 +80,24 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
   }
   if err=json.Unmarshal(raw,&route);err!=nil{return err}
   route.DestinationIP=resolved[a.Domain]
-  if net.ParseIP(route.DestinationIP)==nil||net.ParseIP(route.DestinationIP).To4()==nil{return errors.New("invalid destination IPv4")}
+  if ip:=net.ParseIP(route.DestinationIP);ip==nil||ip.To4()==nil{return errors.New("invalid destination IPv4")}
+  found:=false
+  for _,old:=range previous {if old==a {found=true;break}}
+  if found {
+   // A binding can keep the same agent and public IP while its destination
+   // or transport policy changes. Bump generation so stale edge ACKs fail.
+   _,err=tx.Exec(ctx,`UPDATE network_route_assignments SET
+     destination_ip=$2::inet, protocol=$3,
+     destination_port_start=NULLIF($4,0), destination_port_end=NULLIF($5,0),
+     state='pending', generation=generation+1
+     WHERE domain=$1 AND (destination_ip IS DISTINCT FROM $2::inet
+       OR protocol IS DISTINCT FROM $3
+       OR destination_port_start IS DISTINCT FROM NULLIF($4,0)
+       OR destination_port_end IS DISTINCT FROM NULLIF($5,0))`,
+    a.Domain,route.DestinationIP,route.Protocol,route.DestinationPortStart,route.DestinationPortEnd)
+   if err!=nil{return err}
+   continue
+  }
   _,err=tx.Exec(ctx,`INSERT INTO network_route_assignments(domain,agent_ip_id,destination_ip,protocol,destination_port_start,destination_port_end,state,generation)
   SELECT $1,id,$2::inet,$3,NULLIF($4,0),NULLIF($5,0),'pending',1 FROM network_route_agent_ips WHERE agent_id=$6 AND public_ip=$7::inet`,
    a.Domain,route.DestinationIP,route.Protocol,route.DestinationPortStart,route.DestinationPortEnd,a.AgentID,a.PublicIP)
