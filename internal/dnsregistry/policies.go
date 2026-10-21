@@ -35,7 +35,7 @@ func validPolicy(p DomainPolicy) bool {
  case "specific_ip":return net.ParseIP(p.SpecificIP)!=nil&&p.Route==nil
  case "route":
   if p.Route==nil||p.SpecificIP!=""||net.ParseIP(p.Route.DestinationIP)==nil||net.ParseIP(p.Route.DestinationIP).To4()==nil {return false}
-  if p.Route.Protocol!="tcp"&&p.Route.Protocol!="udp" {return false}
+  if p.Route.Protocol!="tcp"&&p.Route.Protocol!="udp"&&p.Route.Protocol!="tcp_udp" {return false}
   return (p.Route.DestinationPortStart==0&&p.Route.DestinationPortEnd==0)||(p.Route.DestinationPortStart>0&&p.Route.DestinationPortEnd>=p.Route.DestinationPortStart)
  }
  return false
