@@ -90,12 +90,16 @@ func NewRouter(
 			"/api/v1/internal/network/dns-controls",
 			dnsRegistryHandler.List,
 		)
+		r.Get("/api/v1/internal/network/domains", dnsRegistryHandler.SnapshotPolicies)
 	}
 
 	r.Route("/api/v1/admin/network", func(r chi.Router) {
         r.Use(requireAuthMiddleware)
         r.Use(paymentsHandler.AccessAdminMiddleware)
         r.Get("/dns-controls", dnsRegistryHandler.AdminNodes)
+		r.Get("/domains", dnsRegistryHandler.AdminPolicies)
+		r.Put("/domains", dnsRegistryHandler.PutPolicy)
+		r.Delete("/domains/{domain}", dnsRegistryHandler.DeletePolicy)
     })
 
 	r.Route("/api/v1/admin/access", func(r chi.Router) {
