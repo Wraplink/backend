@@ -69,7 +69,7 @@ func (h *Handler) PutPolicy(w http.ResponseWriter,r *http.Request){
  p.Domain=strings.ToLower(strings.TrimSpace(p.Domain));p.SpecificIP=strings.TrimSpace(p.SpecificIP)
  if !validPolicy(p) {writeJSONError(w,400,"invalid domain, mode, address, route or connection modes");return}
  var route any
- if p.Route!=nil {route=p.Route}
+ if p.Route!=nil {encoded,err:=json.Marshal(p.Route);if err!=nil {writeJSONError(w,400,"invalid route");return};route=encoded}
  _,err:=h.db.Exec(r.Context(),`INSERT INTO network_domain_policies(domain,mode,specific_ip,route,connection_modes) VALUES($1,$2,NULLIF($3,'')::inet,$4,$5)
  ON CONFLICT(domain) DO UPDATE SET mode=excluded.mode,specific_ip=excluded.specific_ip,route=excluded.route,connection_modes=excluded.connection_modes,updated_at=now()`,p.Domain,p.Mode,p.SpecificIP,route,p.ConnectionModes)
  if err!=nil {writeJSONError(w,500,"cannot save domain policy");return}
