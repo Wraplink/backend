@@ -13,7 +13,7 @@ Backend is authoritative for route IP inventory and assignment. A route consumes
 - Specific IP, SNI round robin and ordinary upstream DNS are separate modes and remain unchanged.
 
 ## Storage
-Migration 000033 creates network_route_agent_ips and network_route_assignments. Unique constraints ensure one assignment per domain and one per IP. The tables are groundwork; API handlers, reconciler, heartbeat, snapshot and web UI must be added before this feature can be deployed.
+Migration 000034 creates network_route_agent_ips and network_route_assignments. Unique constraints ensure one assignment per domain and one per IP. The tables are groundwork; API handlers, reconciler, heartbeat, snapshot and web UI must be added before this feature can be deployed.
 
 ## Security and operations
 - Use authenticated control-plane endpoints for agent registration, snapshot and acknowledgement.
