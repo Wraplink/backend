@@ -3,12 +3,14 @@ package routeinventory
 import (
  "crypto/subtle"
  "encoding/json"
+ "errors"
  "net"
  "net/http"
  "strings"
  "time"
 
  "github.com/jackc/pgx/v5/pgxpool"
+ "github.com/jackc/pgx/v5"
 )
 
 type Handler struct {
@@ -48,7 +50,7 @@ func (h Handler) RegisterInventory(w http.ResponseWriter,r *http.Request) {
   var owner string
   err=tx.QueryRow(r.Context(),"SELECT agent_id FROM network_route_agent_ips WHERE public_ip=$1::inet",address).Scan(&owner)
   if err==nil&&owner!=req.AgentID {http.Error(w,"public IP already registered to another agent",409);return}
-  if err!=nil&&err.Error()!="no rows in result set" {http.Error(w,"inventory lookup failed",500);return}
+  if err!=nil&&!errors.Is(err,pgx.ErrNoRows) {http.Error(w,"inventory lookup failed",500);return}
  }
  // Withdraw stale addresses rather than silently reassigning them.
  if _,err=tx.Exec(r.Context(),"UPDATE network_route_agent_ips SET enabled=false WHERE agent_id=$1",req.AgentID);err!=nil {http.Error(w,"inventory update failed",500);return}
