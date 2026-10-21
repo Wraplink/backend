@@ -65,7 +65,7 @@ func (h *Handler) listPolicies(w http.ResponseWriter,r *http.Request,paginate bo
  var total int64
  if err:=h.db.QueryRow(r.Context(),`SELECT count(*) FROM network_domain_policies WHERE ($1='' OR domain ILIKE '%' || $1 || '%')`,query).Scan(&total);err!=nil {writeJSONError(w,500,"cannot count domain policies");return}
  rows,err:=h.db.Query(r.Context(),`SELECT p.domain,p.mode,COALESCE(host(p.specific_ip),''),p.route,p.connection_modes,
- COALESCE(i.agent_id,''),COALESCE(host(i.public_ip),''),COALESCE(a.state,''),COALESCE(a.generation,0)
+ COALESCE(i.agent_id,''),COALESCE(host(i.public_ip),''),COALESCE(a.state,''),COALESCE(a.generation,0),COALESCE(host(a.destination_ip),''),COALESCE(a.protocol,''),COALESCE(a.destination_port_start,0),COALESCE(a.destination_port_end,0)
  FROM network_domain_policies p
  LEFT JOIN network_route_assignments a ON a.domain=p.domain
  LEFT JOIN network_route_agent_ips i ON i.id=a.agent_ip_id
@@ -76,9 +76,19 @@ func (h *Handler) listPolicies(w http.ResponseWriter,r *http.Request,paginate bo
  for rows.Next(){
   var p DomainPolicy;var raw []byte
   var assignment RouteAssignment
-  if err:=rows.Scan(&p.Domain,&p.Mode,&p.SpecificIP,&raw,&p.ConnectionModes,&assignment.AgentID,&assignment.PublicIP,&assignment.State,&assignment.Generation);err!=nil {writeJSONError(w,500,"cannot read domain policy");return}
+  var assignedDestinationIP,assignedProtocol string
+  var assignedPortStart,assignedPortEnd uint16
+  if err:=rows.Scan(&p.Domain,&p.Mode,&p.SpecificIP,&raw,&p.ConnectionModes,&assignment.AgentID,&assignment.PublicIP,&assignment.State,&assignment.Generation,&assignedDestinationIP,&assignedProtocol,&assignedPortStart,&assignedPortEnd);err!=nil {writeJSONError(w,500,"cannot read domain policy");return}
   if len(raw)>0 {var route RoutePolicy;if err:=json.Unmarshal(raw,&route);err!=nil {writeJSONError(w,500,"invalid stored route");return};p.Route=&route}
-  if p.Mode=="route" && assignment.AgentID!="" && assignment.PublicIP!="" {p.Assignment=&assignment}
+  if p.Mode=="route" && assignment.AgentID!="" && assignment.PublicIP!="" && assignment.Generation>0 && p.Route!=nil {
+   // The route policy may omit destination_ip; the reconciler resolves it independently.
+   // Publish the exact destination and protocol actually assigned to the edge.
+   p.Route.DestinationIP=assignedDestinationIP
+   p.Route.Protocol=assignedProtocol
+   p.Route.DestinationPortStart=assignedPortStart
+   p.Route.DestinationPortEnd=assignedPortEnd
+   p.Assignment=&assignment
+  }
   policies=append(policies,p)
  }
  if rows.Err()!=nil {writeJSONError(w,500,"cannot read domain policies");return}
