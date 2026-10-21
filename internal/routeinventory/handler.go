@@ -16,6 +16,7 @@ import (
 type Handler struct {
 	DB         *pgxpool.Pool
 	ControlKey string
+ OfflineAfter time.Duration
 }
 
 type InventoryRequest struct {
@@ -88,8 +89,14 @@ func (h Handler) RegisterInventory(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "inventory commit failed", 500)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"agentId": req.AgentID, "publicIps": ips, "lastSeenAt": time.Now().UTC()})
+	if h.OfflineAfter > 0 {
+  if err:=Reconcile(r.Context(),h.DB,h.OfflineAfter);err!=nil {
+   http.Error(w,"inventory saved but route reconciliation failed",http.StatusServiceUnavailable)
+   return
+  }
+ }
+ w.Header().Set("Content-Type", "application/json")
+ json.NewEncoder(w).Encode(map[string]any{"agentId": req.AgentID, "publicIps": ips, "lastSeenAt": time.Now().UTC()})
 }
 
 func (h Handler) AdminInventory(w http.ResponseWriter, r *http.Request) {
