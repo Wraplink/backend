@@ -1,6 +1,7 @@
 package dnsdomains
 
 import (
+ "crypto/subtle"
  "encoding/json"
  "errors"
  "io"
@@ -9,7 +10,7 @@ import (
  "github.com/google/uuid"
  "github.com/jackc/pgx/v5/pgconn"
 )
-type Handler struct { Store Store }
+type Handler struct { Store Store; ControlKey string }
 func respond(w http.ResponseWriter,status int,value any){w.Header().Set("Content-Type","application/json");w.WriteHeader(status);_ = json.NewEncoder(w).Encode(value)}
 func (h Handler) List(w http.ResponseWriter,r *http.Request){result,err:=h.Store.List(r.Context());if err!=nil{respond(w,500,map[string]string{"error":"internal error"});return};respond(w,200,result)}
 func (h Handler) Create(w http.ResponseWriter,r *http.Request){
@@ -46,4 +47,17 @@ func (h Handler) Routes(r chi.Router){
  r.Post("/",h.Create)
  r.Put("/{id}",h.Update)
  r.Delete("/{id}",h.Delete)
+}
+
+ // Snapshot exposes managed policies to authenticated control-plane nodes.
+ // It is a separate v2 contract: legacy DNS policy consumers remain unchanged.
+func (h Handler) Snapshot(w http.ResponseWriter,r *http.Request){
+ if h.ControlKey=="" || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Network-Control-Key")),[]byte(h.ControlKey))!=1 {
+  respond(w,http.StatusUnauthorized,map[string]string{"error":"invalid network control key"});return
+ }
+ items,err:=h.Store.List(r.Context())
+ if err!=nil {respond(w,http.StatusInternalServerError,map[string]string{"error":"cannot load managed domains"});return}
+ active:=make([]Domain,0,len(items))
+ for _,item:=range items {if item.Enabled {active=append(active,item)}}
+ respond(w,http.StatusOK,map[string]any{"schemaVersion":2,"domains":active})
 }
