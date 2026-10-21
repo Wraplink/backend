@@ -1,0 +1,21 @@
+name: Format route inventory Go
+on:
+  push:
+    branches: [feature/route-ip-inventory]
+permissions:
+  contents: write
+jobs:
+  gofmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Format allocator
+        run: |
+          gofmt -w internal/routeinventory/
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add internal/routeinventory/
+            git commit -m "style: gofmt route inventory"
+            git push
+          fi
