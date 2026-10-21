@@ -7,7 +7,6 @@ import (
  "fmt"
  "time"
 
- "github.com/jackc/pgx/v5"
  "github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -63,6 +62,3 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
  }
  return tx.Commit(ctx)
 }
-
-// Assert pgx import is used by downstream transaction operations.
-var _ pgx.Tx
