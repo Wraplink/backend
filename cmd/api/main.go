@@ -134,7 +134,7 @@ func main() {
 		trustedProxy,
 		cfg.Network.ControlSyncKey,
 	)
-	dnsDomainsHandler := &dnsdomains.Handler{Store: dnsdomains.Store{DB: db}}
+	dnsDomainsHandler := &dnsdomains.Handler{Store: dnsdomains.Store{DB: db}, ControlKey: cfg.Network.ControlSyncKey}
  dnsRegistryHandler := dnsregistry.NewHandler(
 		dnsControlStore,
 		cfg.Network.ControlSyncKey,
