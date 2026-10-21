@@ -10,6 +10,7 @@ import (
 	"backend/internal/email"
 	"backend/internal/httpserver"
 	"backend/internal/networkaccess"
+ "backend/internal/routeinventory"
 	"backend/internal/networkentitlement"
 	"backend/internal/payments"
 	"backend/internal/plans"
@@ -139,6 +140,7 @@ func main() {
 		cfg.Network.ControlNodeOfflineAfter,
         db,
 	)
+	routeInventoryHandler := routeinventory.Handler{DB:db,ControlKey:cfg.Network.ControlSyncKey}
 	dnsDomainsHandler := &dnsdomains.Handler{Store:dnsdomains.Store{DB:db},ControlKey:cfg.Network.ControlSyncKey}
  loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
 	logoutHandler := auth.NewLogoutHandler(logoutService, cfg.App.Environment == "production")
@@ -188,6 +190,7 @@ func main() {
 		dashboardHandler,
 		entitlementHandler,
 		dnsRegistryHandler,
+        routeInventoryHandler,
         dnsDomainsHandler,
 		registerHandler,
 		loginHandler,
