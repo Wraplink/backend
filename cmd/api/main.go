@@ -106,6 +106,7 @@ func main() {
 		connection,
 		dnsControlStore,
 		cfg.Network.ControlNodeOfflineAfter,
+		db,
 	)
 
 	// Rate limiters.
