@@ -2,7 +2,6 @@ package dnsdomains
 
 import (
  "encoding/json"
- "io"
  "net"
  "net/http"
  "strings"
@@ -40,7 +39,7 @@ func (d DomainInput) Validate() map[string]string {
 }
 func DecodeInput(r *http.Request) (DomainInput,map[string]string,error) {
  var input DomainInput
- decoder:=json.NewDecoder(io.LimitReader(r.Body,1<<20))
+ decoder:=json.NewDecoder(r.Body)
  decoder.DisallowUnknownFields()
  err:=decoder.Decode(&input)
  if err!=nil{return input,nil,err}
