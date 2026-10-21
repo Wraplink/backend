@@ -6,6 +6,7 @@ import (
 	"backend/internal/dashboard"
 	"backend/internal/database"
 	"backend/internal/dnsregistry"
+ "backend/internal/dnsdomains"
 	"backend/internal/email"
 	"backend/internal/httpserver"
 	"backend/internal/networkaccess"
@@ -132,7 +133,8 @@ func main() {
 		trustedProxy,
 		cfg.Network.ControlSyncKey,
 	)
-	dnsRegistryHandler := dnsregistry.NewHandler(
+	dnsDomainsHandler := &dnsdomains.Handler{Store: dnsdomains.Store{DB: db}}
+ dnsRegistryHandler := dnsregistry.NewHandler(
 		dnsControlStore,
 		cfg.Network.ControlSyncKey,
 		cfg.Network.ControlNodeOfflineAfter,
@@ -185,6 +187,7 @@ func main() {
 		dashboardHandler,
 		entitlementHandler,
 		dnsRegistryHandler,
+        dnsDomainsHandler,
 		registerHandler,
 		loginHandler,
 		refreshHandler,
