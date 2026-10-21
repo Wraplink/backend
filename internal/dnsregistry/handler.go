@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type RegisterRequest struct {
@@ -18,17 +20,20 @@ type Handler struct {
 	store        *Store
 	controlKey   string
 	offlineAfter time.Duration
+	db *pgxpool.Pool
 }
 
-func NewHandler(store *Store, controlKey string, offlineAfter time.Duration) *Handler {
+func NewHandler(store *Store, controlKey string, offlineAfter time.Duration, pools ...*pgxpool.Pool) *Handler {
 	if store == nil {
 		panic("dnsregistry: nil store")
 	}
-	return &Handler{
+	h := &Handler{
 		store:        store,
 		controlKey:   strings.TrimSpace(controlKey),
 		offlineAfter: offlineAfter,
 	}
+	if len(pools) > 0 { h.db = pools[0] }
+	return h
 }
 
 func (h *Handler) Enabled() bool {
