@@ -6,6 +6,7 @@ import (
 	"backend/internal/dnsregistry"
  "backend/internal/dnsdomains"
 	"backend/internal/networkaccess"
+ "backend/internal/routeinventory"
 	"backend/internal/networkentitlement"
 	"backend/internal/payments"
 	"backend/internal/plans"
@@ -31,6 +32,7 @@ func NewRouter(
 	dashboardHandler *dashboard.Handler,
 	entitlementHandler *networkentitlement.Handler,
 	dnsRegistryHandler *dnsregistry.Handler,
+ routeInventoryHandler routeinventory.Handler,
  dnsDomainsHandler *dnsdomains.Handler,
 	registerHandler *auth.RegisterHandler,
 	loginHandler *auth.LoginHandler,
@@ -93,6 +95,7 @@ func NewRouter(
 			dnsRegistryHandler.List,
 		)
 		r.Get("/api/v1/internal/network/domains", dnsRegistryHandler.SnapshotPolicies)
+        r.Post("/api/v1/internal/network/route-agent-ips",routeInventoryHandler.RegisterInventory)
  r.Get("/api/v1/internal/network/managed-domains",dnsDomainsHandler.Snapshot)
 	}
 
@@ -105,6 +108,7 @@ func NewRouter(
         r.Use(requireAuthMiddleware)
         r.Use(paymentsHandler.AccessAdminMiddleware)
         r.Get("/dns-controls", dnsRegistryHandler.AdminNodes)
+        r.Get("/route-agent-ips",routeInventoryHandler.AdminInventory)
 		r.Get("/domains", dnsRegistryHandler.AdminPolicies)
 		r.Put("/domains", dnsRegistryHandler.PutPolicy)
 		r.Delete("/domains/{domain}", dnsRegistryHandler.DeletePolicy)
