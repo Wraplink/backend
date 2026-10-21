@@ -7,6 +7,7 @@ import (
  "log/slog"
  "net"
  "net/http"
+ "strconv"
  "strings"
 
  "github.com/go-chi/chi/v5"
@@ -39,9 +40,21 @@ func validPolicy(p DomainPolicy) bool {
  }
  return false
 }
-func (h *Handler) listPolicies(w http.ResponseWriter,r *http.Request) {
+func (h *Handler) listPolicies(w http.ResponseWriter,r *http.Request,paginate bool) {
  if h.db==nil {writeJSONError(w,503,"domain policy database unavailable");return}
- rows,err:=h.db.Query(r.Context(),`SELECT domain,mode,COALESCE(host(specific_ip),''),route,connection_modes FROM network_domain_policies ORDER BY domain`)
+ query:=strings.TrimSpace(r.URL.Query().Get("search"))
+ if !paginate {query=""}
+ page,err:=strconv.Atoi(r.URL.Query().Get("page"))
+ if err!=nil || page<1 {page=1}
+ pageSize,err:=strconv.Atoi(r.URL.Query().Get("pageSize"))
+ if err!=nil || pageSize<1 {pageSize=25}
+ if pageSize>100 {pageSize=100}
+ if !paginate {pageSize=2147483647;page=1}
+ offset:=(int64(page)-1)*int64(pageSize)
+ if offset<0 {writeJSONError(w,400,"invalid page");return}
+ var total int64
+ if err:=h.db.QueryRow(r.Context(),`SELECT count(*) FROM network_domain_policies WHERE ($1='' OR domain ILIKE '%' || $1 || '%')`,query).Scan(&total);err!=nil {writeJSONError(w,500,"cannot count domain policies");return}
+ rows,err:=h.db.Query(r.Context(),`SELECT domain,mode,COALESCE(host(specific_ip),''),route,connection_modes FROM network_domain_policies WHERE ($1='' OR domain ILIKE '%' || $1 || '%') ORDER BY domain LIMIT $2 OFFSET $3`,query,pageSize,offset)
  if err!=nil {writeJSONError(w,500,"cannot list domain policies");return}
  defer rows.Close()
  policies:=make([]DomainPolicy,0)
@@ -54,12 +67,12 @@ func (h *Handler) listPolicies(w http.ResponseWriter,r *http.Request) {
  if rows.Err()!=nil {writeJSONError(w,500,"cannot read domain policies");return}
  var revision int64
  if err:=h.db.QueryRow(r.Context(),"SELECT revision FROM network_domain_policy_revision WHERE singleton=TRUE").Scan(&revision);err!=nil {writeJSONError(w,500,"cannot read policy revision");return}
- writeJSON(w,200,map[string]any{"revision":revision,"domains":policies})
+ writeJSON(w,200,map[string]any{"revision":revision,"domains":policies,"total":total,"page":page,"pageSize":pageSize})
 }
-func (h *Handler) AdminPolicies(w http.ResponseWriter,r *http.Request){h.listPolicies(w,r)}
+func (h *Handler) AdminPolicies(w http.ResponseWriter,r *http.Request){h.listPolicies(w,r,true)}
 func (h *Handler) SnapshotPolicies(w http.ResponseWriter,r *http.Request){
  if h.controlKey==""||subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Network-Control-Key")),[]byte(h.controlKey))!=1 {writeJSONError(w,401,"invalid network control key");return}
- h.listPolicies(w,r)
+ h.listPolicies(w,r,false)
 }
 func (h *Handler) PutPolicy(w http.ResponseWriter,r *http.Request){
  if h.db==nil {writeJSONError(w,503,"domain policy database unavailable");return}
