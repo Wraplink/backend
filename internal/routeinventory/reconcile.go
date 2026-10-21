@@ -4,6 +4,7 @@ import (
  "context"
  "encoding/json"
  "errors"
+ "net"
  "fmt"
  "time"
 
@@ -14,6 +15,33 @@ import (
 // and enabled, recently-seen agent IP inventory. Newly created bindings remain
 // pending until an edge agent acknowledges the current generation.
 func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration) error {
+ // Resolve through independent upstream DNS before acquiring the allocation lock.
+ // Never use the host resolver: it may point at WrapLink's hijacking DNS.
+ resolved:=map[string]string{}
+ policyRows,err:=db.Query(ctx,`SELECT domain,route FROM network_domain_policies WHERE mode='route'`)
+ if err!=nil{return err}
+ type routeTarget struct{domain string; override string}
+ targets:=[]routeTarget{}
+ for policyRows.Next(){
+  var domain string;var raw []byte
+  if err=policyRows.Scan(&domain,&raw);err!=nil{policyRows.Close();return err}
+  var route struct{DestinationIP string `json:"destination_ip"`}
+  if err=json.Unmarshal(raw,&route);err!=nil{policyRows.Close();return err}
+  targets=append(targets,routeTarget{domain,route.DestinationIP})
+ }
+ err=policyRows.Err();policyRows.Close();if err!=nil{return err}
+ resolver:=&net.Resolver{PreferGo:true,Dial:func(ctx context.Context,network,address string)(net.Conn,error){
+  return (&net.Dialer{Timeout:3*time.Second}).DialContext(ctx,"udp","1.1.1.1:53")
+ }}
+ for _,target:=range targets{
+  if target.override!=""{resolved[target.domain]=target.override;continue}
+  lookupCtx,cancel:=context.WithTimeout(ctx,4*time.Second)
+  addresses,lookupErr:=resolver.LookupIP(lookupCtx,"ip4",target.domain)
+  cancel()
+  if lookupErr!=nil{return fmt.Errorf("resolve route destination %s: %w",target.domain,lookupErr)}
+  for _,address:=range addresses {if address.To4()!=nil {resolved[target.domain]=address.To4().String();break}}
+  if resolved[target.domain]==""{return fmt.Errorf("no IPv4 destination for %s",target.domain)}
+ }
  tx,err:=db.Begin(ctx);if err!=nil{return err}
  defer tx.Rollback(ctx)
  if _,err=tx.Exec(ctx,"SELECT pg_advisory_xact_lock(722311)");err!=nil{return err}
@@ -54,7 +82,8 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
    DestinationPortEnd uint16 `json:"destination_port_end"`
   }
   if err=json.Unmarshal(raw,&route);err!=nil{return err}
-  if route.DestinationIP=="" {return errors.New("route missing destination IP")}
+  route.DestinationIP=resolved[a.Domain]
+  if net.ParseIP(route.DestinationIP)==nil||net.ParseIP(route.DestinationIP).To4()==nil{return errors.New("invalid destination IPv4")}
   _,err=tx.Exec(ctx,`INSERT INTO network_route_assignments(domain,agent_ip_id,destination_ip,protocol,destination_port_start,destination_port_end,state,generation)
   SELECT $1,id,$2::inet,$3,NULLIF($4,0),NULLIF($5,0),'pending',1 FROM network_route_agent_ips WHERE agent_id=$6 AND public_ip=$7::inet`,
    a.Domain,route.DestinationIP,route.Protocol,route.DestinationPortStart,route.DestinationPortEnd,a.AgentID,a.PublicIP)
