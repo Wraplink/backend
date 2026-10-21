@@ -6,6 +6,7 @@ import (
 	"backend/internal/dashboard"
 	"backend/internal/database"
 	"backend/internal/dnsregistry"
+ "backend/internal/dnsdomains"
 	"backend/internal/email"
 	"backend/internal/httpserver"
 	"backend/internal/networkaccess"
@@ -106,6 +107,7 @@ func main() {
 		connection,
 		dnsControlStore,
 		cfg.Network.ControlNodeOfflineAfter,
+ db,
 	)
 
 	// Rate limiters.
@@ -137,7 +139,8 @@ func main() {
 		cfg.Network.ControlSyncKey,
 		cfg.Network.ControlNodeOfflineAfter,
 	)
-	loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
+	dnsDomainsHandler := &dnsdomains.Handler{Store:dnsdomains.Store{DB:db},ControlKey:cfg.Network.ControlSyncKey}
+ loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
 	logoutHandler := auth.NewLogoutHandler(logoutService, cfg.App.Environment == "production")
 	resendVerificationHandler := auth.NewResendVerificationHandler(resendVerificationService, resendVerificationEmailLimiter)
 	emailVerificationHandler := auth.NewEmailVerificationHandler(emailVerificationService)
@@ -185,6 +188,7 @@ func main() {
 		dashboardHandler,
 		entitlementHandler,
 		dnsRegistryHandler,
+        dnsDomainsHandler,
 		registerHandler,
 		loginHandler,
 		refreshHandler,
