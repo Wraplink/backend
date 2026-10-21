@@ -4,6 +4,7 @@ import (
 	"backend/internal/auth"
 	"backend/internal/dashboard"
 	"backend/internal/dnsregistry"
+ "backend/internal/dnsdomains"
 	"backend/internal/networkaccess"
 	"backend/internal/networkentitlement"
 	"backend/internal/payments"
@@ -30,6 +31,7 @@ func NewRouter(
 	dashboardHandler *dashboard.Handler,
 	entitlementHandler *networkentitlement.Handler,
 	dnsRegistryHandler *dnsregistry.Handler,
+ dnsDomainsHandler *dnsdomains.Handler,
 	registerHandler *auth.RegisterHandler,
 	loginHandler *auth.LoginHandler,
 	refreshHandler *auth.RefreshHandler,
@@ -102,7 +104,13 @@ func NewRouter(
 		r.Delete("/domains/{domain}", dnsRegistryHandler.DeletePolicy)
     })
 
-	r.Route("/api/v1/admin/access", func(r chi.Router) {
+	r.Route("/api/v1/admin/dns/domains", func(r chi.Router) {
+        r.Use(requireAuthMiddleware)
+        r.Use(paymentsHandler.AccessAdminMiddleware)
+        dnsDomainsHandler.Routes(r)
+    })
+
+ r.Route("/api/v1/admin/access", func(r chi.Router) {
         r.Use(requireAuthMiddleware)
         r.Get("/permissions", paymentsHandler.ListAdminPermissions)
         r.Get("/users", paymentsHandler.AdminUsers)
