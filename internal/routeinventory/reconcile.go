@@ -4,6 +4,7 @@ import (
  "context"
  "encoding/json"
  "errors"
+ "net"
  "fmt"
  "time"
 
@@ -54,7 +55,13 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
    DestinationPortEnd uint16 `json:"destination_port_end"`
   }
   if err=json.Unmarshal(raw,&route);err!=nil{return err}
-  if route.DestinationIP=="" {return errors.New("route missing destination IP")}
+  if route.DestinationIP=="" {
+   addresses,lookupErr:=net.DefaultResolver.LookupIP(ctx,"ip4",a.Domain)
+   if lookupErr!=nil{return fmt.Errorf("resolve route destination %s: %w",a.Domain,lookupErr)}
+   for _,address:=range addresses {if address.To4()!=nil {route.DestinationIP=address.To4().String();break}}
+   if route.DestinationIP=="" {return fmt.Errorf("no IPv4 destination for %s",a.Domain)}
+  }
+  if net.ParseIP(route.DestinationIP)==nil||net.ParseIP(route.DestinationIP).To4()==nil{return errors.New("invalid destination IPv4")}
   _,err=tx.Exec(ctx,`INSERT INTO network_route_assignments(domain,agent_ip_id,destination_ip,protocol,destination_port_start,destination_port_end,state,generation)
   SELECT $1,id,$2::inet,$3,NULLIF($4,0),NULLIF($5,0),'pending',1 FROM network_route_agent_ips WHERE agent_id=$6 AND public_ip=$7::inet`,
    a.Domain,route.DestinationIP,route.Protocol,route.DestinationPortStart,route.DestinationPortEnd,a.AgentID,a.PublicIP)
