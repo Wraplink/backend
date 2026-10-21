@@ -107,7 +107,6 @@ func main() {
 		connection,
 		dnsControlStore,
 		cfg.Network.ControlNodeOfflineAfter,
- db,
 	)
 
 	// Rate limiters.
@@ -138,6 +137,7 @@ func main() {
 		dnsControlStore,
 		cfg.Network.ControlSyncKey,
 		cfg.Network.ControlNodeOfflineAfter,
+        db,
 	)
 	dnsDomainsHandler := &dnsdomains.Handler{Store:dnsdomains.Store{DB:db},ControlKey:cfg.Network.ControlSyncKey}
  loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
