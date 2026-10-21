@@ -4,6 +4,7 @@ import (
  "crypto/subtle"
  "encoding/json"
  "io"
+ "log/slog"
  "net"
  "net/http"
  "strings"
@@ -72,7 +73,7 @@ func (h *Handler) PutPolicy(w http.ResponseWriter,r *http.Request){
  if p.Route!=nil {encoded,err:=json.Marshal(p.Route);if err!=nil {writeJSONError(w,400,"invalid route");return};route=encoded}
  _,err:=h.db.Exec(r.Context(),`INSERT INTO network_domain_policies(domain,mode,specific_ip,route,connection_modes) VALUES($1,$2,NULLIF($3,'')::inet,$4,$5)
  ON CONFLICT(domain) DO UPDATE SET mode=excluded.mode,specific_ip=excluded.specific_ip,route=excluded.route,connection_modes=excluded.connection_modes,updated_at=now()`,p.Domain,p.Mode,p.SpecificIP,route,p.ConnectionModes)
- if err!=nil {writeJSONError(w,500,"cannot save domain policy");return}
+ if err!=nil {slog.Error("failed to save domain policy","domain",p.Domain,"mode",p.Mode,"error",err);writeJSONError(w,500,"cannot save domain policy");return}
  writeJSON(w,200,p)
 }
 func (h *Handler) DeletePolicy(w http.ResponseWriter,r *http.Request){
