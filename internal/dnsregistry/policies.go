@@ -21,6 +21,13 @@ type DomainPolicy struct {
  SpecificIP string `json:"specific_ip,omitempty"`
  Route *RoutePolicy `json:"route,omitempty"`
  ConnectionModes []string `json:"connection_modes,omitempty"`
+ Assignment *RouteAssignment `json:"assignment,omitempty"`
+}
+type RouteAssignment struct {
+ AgentID string `json:"agent_id"`
+ PublicIP string `json:"public_ip"`
+ State string `json:"state"`
+ Generation int64 `json:"generation"`
 }
 type RoutePolicy struct {
  DestinationIP string `json:"destination_ip"`
@@ -57,14 +64,21 @@ func (h *Handler) listPolicies(w http.ResponseWriter,r *http.Request,paginate bo
  if offset<0 {writeJSONError(w,400,"invalid page");return}
  var total int64
  if err:=h.db.QueryRow(r.Context(),`SELECT count(*) FROM network_domain_policies WHERE ($1='' OR domain ILIKE '%' || $1 || '%')`,query).Scan(&total);err!=nil {writeJSONError(w,500,"cannot count domain policies");return}
- rows,err:=h.db.Query(r.Context(),`SELECT domain,mode,COALESCE(host(specific_ip),''),route,connection_modes FROM network_domain_policies WHERE ($1='' OR domain ILIKE '%' || $1 || '%') ORDER BY domain LIMIT $2 OFFSET $3`,query,pageSize,offset)
+ rows,err:=h.db.Query(r.Context(),`SELECT p.domain,p.mode,COALESCE(host(p.specific_ip),''),p.route,p.connection_modes,
+ COALESCE(i.agent_id,''),COALESCE(host(i.public_ip),''),COALESCE(a.state,''),COALESCE(a.generation,0)
+ FROM network_domain_policies p
+ LEFT JOIN network_route_assignments a ON a.domain=p.domain
+ LEFT JOIN network_route_agent_ips i ON i.id=a.agent_ip_id
+ WHERE ($1='' OR p.domain ILIKE '%' || $1 || '%') ORDER BY p.domain LIMIT $2 OFFSET $3`,query,pageSize,offset)
  if err!=nil {writeJSONError(w,500,"cannot list domain policies");return}
  defer rows.Close()
  policies:=make([]DomainPolicy,0)
  for rows.Next(){
   var p DomainPolicy;var raw []byte
-  if err:=rows.Scan(&p.Domain,&p.Mode,&p.SpecificIP,&raw,&p.ConnectionModes);err!=nil {writeJSONError(w,500,"cannot read domain policy");return}
+  var assignment RouteAssignment
+  if err:=rows.Scan(&p.Domain,&p.Mode,&p.SpecificIP,&raw,&p.ConnectionModes,&assignment.AgentID,&assignment.PublicIP,&assignment.State,&assignment.Generation);err!=nil {writeJSONError(w,500,"cannot read domain policy");return}
   if len(raw)>0 {var route RoutePolicy;if err:=json.Unmarshal(raw,&route);err!=nil {writeJSONError(w,500,"invalid stored route");return};p.Route=&route}
+  if p.Mode=="route" && assignment.AgentID!="" && assignment.PublicIP!="" {p.Assignment=&assignment}
   policies=append(policies,p)
  }
  if rows.Err()!=nil {writeJSONError(w,500,"cannot read domain policies");return}
