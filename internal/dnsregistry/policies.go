@@ -8,6 +8,8 @@ import (
  "net"
  "net/http"
  "strconv"
+ "backend/internal/routeinventory"
+ "time"
  "strings"
 
  "github.com/go-chi/chi/v5"
@@ -87,6 +89,7 @@ func (h *Handler) PutPolicy(w http.ResponseWriter,r *http.Request){
  if p.Route!=nil {encoded,err:=json.Marshal(p.Route);if err!=nil {writeJSONError(w,400,"invalid route");return};route=string(encoded)}
  _,err:=h.db.Exec(r.Context(),`INSERT INTO network_domain_policies(domain,mode,specific_ip,route,connection_modes) VALUES($1,$2,NULLIF($3,'')::inet,$4::jsonb,$5::text[])
  ON CONFLICT(domain) DO UPDATE SET mode=excluded.mode,specific_ip=excluded.specific_ip,route=excluded.route,connection_modes=excluded.connection_modes,updated_at=now()`,p.Domain,p.Mode,p.SpecificIP,route,p.ConnectionModes)
+ if err==nil {err=routeinventory.Reconcile(r.Context(),h.db,90*time.Second)}
  if err!=nil {slog.Error("failed to save domain policy","domain",p.Domain,"mode",p.Mode,"error",err);writeJSONError(w,500,"cannot save domain policy");return}
  writeJSON(w,200,p)
 }
@@ -97,5 +100,6 @@ func (h *Handler) DeletePolicy(w http.ResponseWriter,r *http.Request){
  tag,err:=h.db.Exec(r.Context(),"DELETE FROM network_domain_policies WHERE domain=$1",domain)
  if err!=nil {writeJSONError(w,500,"cannot delete domain policy");return}
  if tag.RowsAffected()==0 {writeJSONError(w,404,"domain policy not found");return}
+ if err=routeinventory.Reconcile(r.Context(),h.db,90*time.Second);err!=nil {writeJSONError(w,503,"domain removed but route reconciliation failed");return}
  w.WriteHeader(http.StatusNoContent)
 }
