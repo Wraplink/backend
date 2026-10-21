@@ -84,6 +84,7 @@ func NewRouter(
 	}
 
 	if dnsRegistryHandler.Enabled() {
+        r.Get("/api/v1/internal/network/managed-domains", dnsDomainsHandler.Snapshot)
 		r.Post(
 			"/api/v1/internal/network/dns-controls/register",
 			dnsRegistryHandler.Register,
