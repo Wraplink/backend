@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-1. Apply backend database migrations through `000032_domain_policies.up.sql` using the project's migration workflow.
+1. Apply backend database migrations through `000035_route_assignment_revision.up.sql` using the project's migration workflow.
 2. Set the **same** 32+ character `NETWORK_CONTROL_SYNC_KEY` in backend and DNS Control configuration.
 3. Configure DNS Control `backend.url` and `backend.control_key`, then restart DNS Control. It polls `GET /api/v1/internal/network/domains` periodically.
 4. Log into the website with an access-administrator account and open **Admin → Network**.
@@ -45,9 +45,21 @@ Edit the policy to `192.0.2.56`, save, wait for refresh, and repeat `dig`; the n
 
 - HTTP 401 on snapshot: verify the shared control key.
 - HTTP 403 on Admin UI: access-administrator permission is required.
-- HTTP 500 after deployment: verify migration `000032` has been applied.
+- HTTP 500 after deployment: verify migrations `000032`–`000035` have been applied.
 - DNS REFUSED: check the client's entitlement and DNS access rules.
 - DNS SERVFAIL for hijack/route: check pending leases and Edge Agent readiness; the resolver intentionally does not expose the origin IP.
 - A stale answer: wait for DNS TTL and backend synchronization interval, then query directly with `dig @...` to bypass OS resolver caches.
 
 **Production caveat:** Domain-policy synchronization is currently polling-based. Edge Agent dataplane revocation and shared-SNI/dedicated-route address allocation require additional integration before using managed forwarding policies in production.
+
+## Assignment revision smoke test
+
+After applying migration `000035_route_assignment_revision.up.sql`, read the current revision:
+
+```bash
+psql "$DATABASE_URL" -Atc "SELECT revision FROM network_domain_policy_revision WHERE singleton=TRUE"
+```
+
+Create or modify a Full Route policy and ensure a healthy agent advertises a public IPv4 address. Reconcile the route assignment using the backend's normal workflow, then read the revision again. It must increase when `network_route_assignments` is inserted, updated, or deleted, even if `network_domain_policies` did not change. Verify the authenticated snapshot includes the effective assignment and generation; then verify DNS Control has consumed the new snapshot before expecting an active route DNS answer.
+
+If the route has no valid destination or no available agent IP, the snapshot may contain an unassigned route; DNS Control must not publish a route A record until the matching agent acknowledges its current lease generation. Never interpret a successful snapshot fetch as proof of dataplane readiness.
