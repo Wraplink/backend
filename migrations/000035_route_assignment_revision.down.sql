@@ -1,0 +1,1 @@
+DROP TRIGGER IF EXISTS network_route_assignment_revision_change ON network_route_assignments;
