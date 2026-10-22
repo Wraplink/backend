@@ -2,6 +2,8 @@ package dnsdomains
 
 import (
  "encoding/json"
+ "io"
+ "errors"
  "net"
  "net/http"
  "strings"
@@ -43,6 +45,8 @@ func DecodeInput(r *http.Request) (DomainInput,map[string]string,error) {
  decoder.DisallowUnknownFields()
  err:=decoder.Decode(&input)
  if err!=nil{return input,nil,err}
+ var extra any
+ if err=decoder.Decode(&extra);err!=io.EOF {return input,nil,errors.New("unexpected trailing JSON content")}
  input.Domain=strings.TrimSuffix(strings.ToLower(strings.TrimSpace(input.Domain)),".")
  if input.FallbackMode=="" {input.FallbackMode="DIRECT"}
  return input,input.Validate(),nil
