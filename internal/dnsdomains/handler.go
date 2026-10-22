@@ -4,7 +4,6 @@ import (
  "crypto/subtle"
  "encoding/json"
  "errors"
- "io"
  "net/http"
  "github.com/go-chi/chi/v5"
  "github.com/google/uuid"
@@ -30,8 +29,6 @@ func parse(w http.ResponseWriter,r *http.Request)(DomainInput,bool){
  r.Body=http.MaxBytesReader(w,r.Body,1<<20)
  input,issues,err:=DecodeInput(r)
  if err!=nil{respond(w,400,map[string]string{"error":"invalid JSON"});return input,false}
- var extra any
- if err:=json.NewDecoder(io.LimitReader(r.Body,1)).Decode(&extra);err!=io.EOF{respond(w,400,map[string]string{"error":"unexpected trailing data"});return input,false}
  if len(issues)>0{respond(w,400,map[string]any{"errors":issues});return input,false}
  return input,true
 }
@@ -44,7 +41,9 @@ func databaseError(w http.ResponseWriter,err error){
 // Mount only within the existing authenticated, admin-authorized router group.
 func (h Handler) Routes(r chi.Router){
  r.Get("/",h.List)
+ r.Get("",h.List)
  r.Post("/",h.Create)
+ r.Post("",h.Create)
  r.Put("/{id}",h.Update)
  r.Delete("/{id}",h.Delete)
 }

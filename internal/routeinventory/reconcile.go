@@ -38,9 +38,9 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
   lookupCtx,cancel:=context.WithTimeout(ctx,4*time.Second)
   addresses,lookupErr:=resolver.LookupIP(lookupCtx,"ip4",target.domain)
   cancel()
-  if lookupErr!=nil{return fmt.Errorf("resolve route destination %s: %w",target.domain,lookupErr)}
+  if lookupErr!=nil{continue}
   for _,address:=range addresses {if address.To4()!=nil {resolved[target.domain]=address.To4().String();break}}
-  if resolved[target.domain]==""{return fmt.Errorf("no IPv4 destination for %s",target.domain)}
+  // Leave an unresolved route unassigned without blocking other domains.
  }
  tx,err:=db.Begin(ctx);if err!=nil{return err}
  defer tx.Rollback(ctx)
@@ -48,7 +48,7 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
  rows,err:=tx.Query(ctx,"SELECT domain FROM network_domain_policies WHERE mode='route' ORDER BY domain")
  if err!=nil{return err}
  routes:=make([]string,0)
- for rows.Next(){var d string;if err=rows.Scan(&d);err!=nil{rows.Close();return err};routes=append(routes,d)}
+ for rows.Next(){var d string;if err=rows.Scan(&d);err!=nil{rows.Close();return err};if resolved[d]!=""{routes=append(routes,d)}}
  err=rows.Err();rows.Close();if err!=nil{return err}
  rows,err=tx.Query(ctx,`SELECT agent_id,host(public_ip) FROM network_route_agent_ips WHERE enabled=true AND last_seen_at > now() - $1::interval ORDER BY agent_id,public_ip`,fmt.Sprintf("%f seconds",offlineAfter.Seconds()))
  if err!=nil{return err}
