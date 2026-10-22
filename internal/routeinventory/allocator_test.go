@@ -31,3 +31,19 @@ func TestAllocateNoDuplicateAddress(t *testing.T) {
 		t.Fatalf("duplicate IP assigned: %+v waiting=%v", got, waiting)
 	}
 }
+
+func TestAllocateSkipsUnresolvedRoutesAndReleasesPreviousIP(t *testing.T) {
+	inventory := map[string][]string{"edge-a": {"192.0.2.10", "192.0.2.11"}}
+	previous := []Assignment{
+		{Domain: "unresolved.example", AgentID: "edge-a", PublicIP: "192.0.2.10"},
+	}
+	// The reconciler excludes domains without a resolved destination before
+	// calling Allocate. Their previous IP must become available to other routes.
+	assigned, waiting := Allocate([]string{"ready.example"}, inventory, previous)
+	if len(waiting) != 0 || len(assigned) != 1 {
+		t.Fatalf("expected only the resolvable route: assigned=%+v waiting=%v", assigned, waiting)
+	}
+	if assigned[0].Domain != "ready.example" || assigned[0].PublicIP != "192.0.2.10" {
+		t.Fatalf("released IP should be reusable: %+v", assigned)
+	}
+}
