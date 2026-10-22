@@ -83,10 +83,12 @@ func (h *Handler) listPolicies(w http.ResponseWriter,r *http.Request,paginate bo
   if p.Mode=="route" && assignment.AgentID!="" && assignment.PublicIP!="" && assignment.Generation>0 && p.Route!=nil {
    // The route policy may omit destination_ip; the reconciler resolves it independently.
    // Publish the exact destination and protocol actually assigned to the edge.
-   p.Route.DestinationIP=assignedDestinationIP
-   p.Route.Protocol=assignedProtocol
-   p.Route.DestinationPortStart=assignedPortStart
-   p.Route.DestinationPortEnd=assignedPortEnd
+   if !paginate {
+    p.Route.DestinationIP=assignedDestinationIP
+    p.Route.Protocol=assignedProtocol
+    p.Route.DestinationPortStart=assignedPortStart
+    p.Route.DestinationPortEnd=assignedPortEnd
+   }
    p.Assignment=&assignment
   }
   policies=append(policies,p)
