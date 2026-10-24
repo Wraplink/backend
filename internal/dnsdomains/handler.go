@@ -41,9 +41,7 @@ func databaseError(w http.ResponseWriter,err error){
 // Mount only within the existing authenticated, admin-authorized router group.
 func (h Handler) Routes(r chi.Router){
  r.Get("/",h.List)
- r.Get("",h.List)
  r.Post("/",h.Create)
- r.Post("",h.Create)
  r.Put("/{id}",h.Update)
  r.Delete("/{id}",h.Delete)
 }
