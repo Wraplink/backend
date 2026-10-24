@@ -13,7 +13,7 @@ Backend is authoritative for route IP inventory and assignment. A route consumes
 - Specific IP, SNI round robin and ordinary upstream DNS are separate modes and remain unchanged.
 
 ## Storage
-Migration 000034 creates network_route_agent_ips and network_route_assignments. Unique constraints ensure one assignment per domain and one per IP. The tables are groundwork; API handlers, reconciler, heartbeat, snapshot and web UI must be added before this feature can be deployed.
+Migration `000034` creates `network_route_agent_ips` and `network_route_assignments`. Migration `000035` bumps the DNS policy revision on assignment changes. Unique constraints ensure one assignment per domain and one per IP. Backend route reconciliation, assignment generation updates, and effective assignment snapshots have been implemented. Deployment readiness still requires end-to-end verification of agent acknowledgement, DNS publication, revocation, and failover; see [backend#34](https://github.com/Wraplink/backend/issues/34) and [dns-control#20](https://github.com/Wraplink/dns-control/issues/20).
 
 ## Security and operations
 - Use authenticated control-plane endpoints for agent registration, snapshot and acknowledgement.
@@ -21,3 +21,14 @@ Migration 000034 creates network_route_agent_ips and network_route_assignments. 
 - Configure routing/firewall rules with fail-closed defaults, source authorization and cleanup on revoke.
 - Increment generation on reassignment and reject stale acknowledgements.
 - Make DNS TTL short and expect cache convergence delay after failure.
+
+## Implementation and verification tracker
+
+- Backend domain policy administration and effective route assignment snapshots: implemented; verify against the deployed schema.
+- Route inventory reconciliation and fail-closed behavior for unresolved destinations: implemented; unit regression coverage in [backend PR #31](https://github.com/Wraplink/backend/pull/31).
+- Revision propagation on assignment changes: implemented by migration `000035` in [backend PR #32](https://github.com/Wraplink/backend/pull/32); validate deployment and DNS Control polling under [backend#33](https://github.com/Wraplink/backend/issues/33).
+- Agent-side lease application, acknowledgement, public IP readiness, and revocation: integration validation remains under [edge-agent#13](https://github.com/Wraplink/edge-agent/issues/13).
+- SNI origin resolution safety: tracked separately in [edge-agent#12](https://github.com/Wraplink/edge-agent/issues/12).
+- Repeatable end-to-end DNS tests: [dns-control#20](https://github.com/Wraplink/dns-control/issues/20).
+
+Do not mark a route active solely because it is allocated in the backend. A DNS A record for Full Route must remain unavailable until the matching current-generation agent lease is acknowledged and the dataplane is ready.
