@@ -51,4 +51,4 @@ cors:
     - https://wraplink.ir
     - https://www.wraplink.ir
 server:
-  trusted-proxies: []
+  # Set only actual local reverse-proxy addresses or Nginx peer CIDRs.\n  trusted-proxies: []
