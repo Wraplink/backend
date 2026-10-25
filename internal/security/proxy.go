@@ -1,6 +1,7 @@
 package security
 
 import (
+	"strings"
 	"net"
 	"net/http"
 )
@@ -48,24 +49,27 @@ func (p *TrustedProxy) ClientIP(
 		return ip
 	}
 
-	forwarded := r.Header.Get("X-Forwarded-For")
-
-	if forwarded == "" {
+	// Evaluate the complete chain from the nearest proxy backwards.
+	// A client-controlled leftmost entry must never override an untrusted hop.
+	values := r.Header.Values("X-Forwarded-For")
+	if len(values) == 0 {
 		return ip
 	}
-
-	// X-Forwarded-For format:
-	//
-	// client, proxy1, proxy2
-	//
-	// The left-most address is the original client.
-	forwardedIP := forwardedAddress(forwarded)
-
-	if forwardedIP == nil {
-		return ip
+	chain := strings.Join(values, ",")
+	parts := strings.Split(chain, ",")
+	current := ip
+	for i := len(parts) - 1; i >= 0; i-- {
+		if !p.isTrusted(current) {
+			return current
+		}
+		next := net.ParseIP(strings.TrimSpace(parts[i]))
+		if next == nil {
+			// Fail closed on malformed forwarding information.
+			return nil
+		}
+		current = next
 	}
-
-	return forwardedIP
+	return current
 }
 
 func (p *TrustedProxy) isTrusted(ip net.IP) bool {
@@ -78,45 +82,3 @@ func (p *TrustedProxy) isTrusted(ip net.IP) bool {
 	return false
 }
 
-func forwardedAddress(
-	value string,
-) net.IP {
-	forwarded := splitForwarded(value)
-
-	for _, value := range forwarded {
-		ip := net.ParseIP(value)
-		if ip != nil {
-			return ip
-		}
-	}
-
-	return nil
-}
-
-func splitForwarded(value string) []string {
-	var result []string
-
-	start := 0
-
-	for i := 0; i <= len(value); i++ {
-		if i == len(value) || value[i] == ',' {
-			part := value[start:i]
-
-			for len(part) > 0 && part[0] == ' ' {
-				part = part[1:]
-			}
-
-			for len(part) > 0 && part[len(part)-1] == ' ' {
-				part = part[:len(part)-1]
-			}
-
-			if part != "" {
-				result = append(result, part)
-			}
-
-			start = i + 1
-		}
-	}
-
-	return result
-}
