@@ -53,7 +53,16 @@ func validPolicy(p DomainPolicy) bool {
 func (h *Handler) listPolicies(w http.ResponseWriter,r *http.Request,paginate bool) {
  if h.db==nil {writeJSONError(w,503,"domain policy database unavailable");return}
  query:=strings.TrimSpace(r.URL.Query().Get("search"))
- if !paginate {query=""}
+ modeFilter:=strings.TrimSpace(r.URL.Query().Get("mode"))
+ if !paginate {query="";modeFilter=""}
+ if modeFilter!="" {
+  switch modeFilter {
+  case "normal","hijack","route","specific_ip","block":
+  default:
+   writeJSONError(w,http.StatusBadRequest,"invalid resolution mode filter")
+   return
+  }
+ }
  page,err:=strconv.Atoi(r.URL.Query().Get("page"))
  if err!=nil || page<1 {page=1}
  pageSize,err:=strconv.Atoi(r.URL.Query().Get("pageSize"))
@@ -63,13 +72,13 @@ func (h *Handler) listPolicies(w http.ResponseWriter,r *http.Request,paginate bo
  offset:=(int64(page)-1)*int64(pageSize)
  if offset<0 {writeJSONError(w,400,"invalid page");return}
  var total int64
- if err:=h.db.QueryRow(r.Context(),`SELECT count(*) FROM network_domain_policies WHERE ($1='' OR domain ILIKE '%' || $1 || '%')`,query).Scan(&total);err!=nil {writeJSONError(w,500,"cannot count domain policies");return}
+ if err:=h.db.QueryRow(r.Context(),`SELECT count(*) FROM network_domain_policies WHERE ($1='' OR domain ILIKE '%' || $1 || '%') AND ($2='' OR mode=$2)`,query,modeFilter).Scan(&total);err!=nil {writeJSONError(w,500,"cannot count domain policies");return}
  rows,err:=h.db.Query(r.Context(),`SELECT p.domain,p.mode,COALESCE(host(p.specific_ip),''),p.route,p.connection_modes,
  COALESCE(i.agent_id,''),COALESCE(host(i.public_ip),''),COALESCE(a.state,''),COALESCE(a.generation,0),COALESCE(host(a.destination_ip),''),COALESCE(a.protocol,''),COALESCE(a.destination_port_start,0),COALESCE(a.destination_port_end,0)
  FROM network_domain_policies p
  LEFT JOIN network_route_assignments a ON a.domain=p.domain
  LEFT JOIN network_route_agent_ips i ON i.id=a.agent_ip_id
- WHERE ($1='' OR p.domain ILIKE '%' || $1 || '%') ORDER BY p.domain LIMIT $2 OFFSET $3`,query,pageSize,offset)
+ WHERE ($1='' OR p.domain ILIKE '%' || $1 || '%') AND ($4='' OR p.mode=$4) ORDER BY p.domain LIMIT $2 OFFSET $3`,query,pageSize,offset,modeFilter)
  if err!=nil {writeJSONError(w,500,"cannot list domain policies");return}
  defer rows.Close()
  policies:=make([]DomainPolicy,0)
