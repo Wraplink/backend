@@ -40,7 +40,7 @@ func validPolicy(p DomainPolicy) bool {
  for _,label:=range strings.Split(p.Domain,".") {if len(label)==0||len(label)>63 {return false};for _,r:=range label {if !((r>='a'&&r<='z')||(r>='0'&&r<='9')||r=='-') {return false}};if label[0]=='-'||label[len(label)-1]=='-' {return false}}
  for _,m:=range p.ConnectionModes {if m!="smart"&&m!="gaming"&&m!="streaming" {return false}}
  switch p.Mode {
- case "normal","hijack":return p.SpecificIP==""&&p.Route==nil
+ case "normal","hijack","block":return p.SpecificIP==""&&p.Route==nil
  case "specific_ip":return net.ParseIP(p.SpecificIP)!=nil&&p.Route==nil
  case "route":
   if p.Route==nil||p.SpecificIP!="" {return false}
