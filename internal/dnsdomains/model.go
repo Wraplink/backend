@@ -14,6 +14,7 @@ const (
  SNIHijack Mode = "SNI_HIJACK"
  FullRoute Mode = "FULL_ROUTE"
  Direct Mode = "DIRECT"
+ Block Mode = "BLOCK"
 )
 type DomainInput struct {
  Domain string `json:"domain"`
@@ -33,7 +34,7 @@ func (d DomainInput) Validate() map[string]string {
    for _,r := range label {if !(r>='a'&&r<='z'||r>='0'&&r<='9'||r=='-'){errors["domain"]="invalid DNS label";break}}
   }
  }
- switch d.Mode {case SNIHijack,FullRoute,Direct: default: errors["mode"]="unsupported resolution mode"}
+ switch d.Mode {case SNIHijack,FullRoute,Direct,Block: default: errors["mode"]="unsupported resolution mode"}
  if d.OverrideIP!=nil && net.ParseIP(*d.OverrideIP)==nil {errors["overrideIp"]="invalid IP address"}
  if d.FallbackMode!="" && d.FallbackMode!="DIRECT" && d.FallbackMode!="REFUSE" {errors["fallbackMode"]="unsupported fallback"}
  if d.Priority<0 {errors["priority"]="must not be negative"}
