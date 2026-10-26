@@ -5,12 +5,27 @@ import (
  "encoding/json"
  "errors"
  "net"
+ "os"
+ "strings"
  "fmt"
  "log/slog"
  "time"
 
  "github.com/jackc/pgx/v5/pgxpool"
 )
+
+// routeActivationTTL controls how long an acknowledged route can remain active
+// without another successful DNS Control report. Defaults to 90 seconds.
+func routeActivationTTL() time.Duration {
+ raw := strings.TrimSpace(os.Getenv("WRAPLINK_ROUTE_ACTIVATION_TTL"))
+ if raw == "" { return 90 * time.Second }
+ ttl, err := time.ParseDuration(raw)
+ if err != nil || ttl < 30*time.Second {
+  slog.Warn("invalid WRAPLINK_ROUTE_ACTIVATION_TTL; using 90s", "value", raw)
+  return 90 * time.Second
+ }
+ return ttl
+}
 
 // Reconcile atomically plans route bindings from the current enabled policies
 // and enabled, recently-seen agent IP inventory. Newly created bindings remain
@@ -55,9 +70,9 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
  if _,err=tx.Exec(ctx,`UPDATE network_route_assignments a SET state='pending', updated_at=now()
    FROM network_route_agent_ips i
    WHERE a.agent_ip_id=i.id AND a.state='active'
-     AND (a.updated_at < now() - interval '90 seconds'
+     AND (a.updated_at < now() - $2::interval
        OR i.enabled=false OR i.last_seen_at IS NULL
-       OR i.last_seen_at <= now() - $1::interval)`,fmt.Sprintf("%f seconds",offlineAfter.Seconds()));err!=nil{return err}
+       OR i.last_seen_at <= now() - $1::interval)`,fmt.Sprintf("%f seconds",offlineAfter.Seconds()),fmt.Sprintf("%f seconds",routeActivationTTL().Seconds()));err!=nil{return err}
  rows,err:=tx.Query(ctx,"SELECT domain FROM network_domain_policies WHERE mode='route' ORDER BY domain")
  if err!=nil{return err}
  routes:=make([]string,0)
