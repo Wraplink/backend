@@ -60,6 +60,8 @@ type PaymentsConfig struct {
 type NetworkConfig struct {
 	UsageIngestKey          string             `yaml:"usage-ingest-key"`
 	ControlSyncKey          string             `yaml:"control-sync-key"`
+	DNSControlURL           string             `yaml:"dns-control-url"`
+	DNSControlToken         string             `yaml:"dns-control-token"`
 	ControlNodeOfflineAfter time.Duration      `yaml:"control-node-offline-after"`
 	DNSServers              []string           `yaml:"dns-servers"`
 	Proxy                   NetworkProxyConfig `yaml:"proxy"`
@@ -154,6 +156,12 @@ func validate(cfg Config) error {
 	controlSyncKey := strings.TrimSpace(cfg.Network.ControlSyncKey)
 	if controlSyncKey != "" && len(controlSyncKey) < 32 {
 		return errors.New("network.control-sync-key must contain at least 32 characters when configured")
+	}
+	if (cfg.Network.DNSControlURL == "") != (cfg.Network.DNSControlToken == "") {
+		return errors.New("network.dns-control-url and network.dns-control-token must be configured together")
+	}
+	if cfg.Network.DNSControlURL != "" && !strings.HasPrefix(cfg.Network.DNSControlURL, "http://") && !strings.HasPrefix(cfg.Network.DNSControlURL, "https://") {
+		return errors.New("network.dns-control-url must use http or https")
 	}
 	if cfg.Network.ControlNodeOfflineAfter <= 0 {
 		return errors.New("network.control-node-offline-after must be greater than zero")

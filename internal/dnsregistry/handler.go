@@ -21,6 +21,8 @@ type Handler struct {
 	controlKey   string
 	offlineAfter time.Duration
 	db *pgxpool.Pool
+ dnsControlURL string
+ dnsControlToken string
 }
 
 func NewHandler(store *Store, controlKey string, offlineAfter time.Duration, pools ...*pgxpool.Pool) *Handler {
@@ -108,4 +110,10 @@ func (h *Handler) AdminNodes(w http.ResponseWriter,r *http.Request) {
   })
  }
  writeJSON(w,http.StatusOK,map[string]any{"nodes":result})
+}
+
+// SetRouteDNSControl configures the private DNS Control origin lookup for policy reconciliation.
+func (h *Handler) SetRouteDNSControl(url, token string) {
+ h.dnsControlURL = url
+ h.dnsControlToken = token
 }
