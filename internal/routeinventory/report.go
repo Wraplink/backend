@@ -57,7 +57,7 @@ func (h Handler) ReportAssignment(w http.ResponseWriter, r *http.Request) {
 		WHERE a.agent_ip_id=i.id AND a.domain=$1 AND i.agent_id=$2
 		  AND i.public_ip=$3::inet AND a.generation=$4
 		  AND ($5 <> 'active' OR (i.enabled=true AND i.last_seen_at > now() - $6::interval))
-		  AND (a.state<>$5 OR a.updated_at IS NULL)`,
+		  AND ($5='active' OR a.state<>$5 OR a.updated_at IS NULL)`,
 		report.Domain, report.AgentID, ip.To4().String(), report.Generation, state, fmt.Sprintf("%f seconds", offlineAfter.Seconds()))
 	if err != nil {
 		http.Error(w, "assignment update failed", http.StatusInternalServerError)
