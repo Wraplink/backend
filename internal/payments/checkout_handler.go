@@ -61,6 +61,7 @@ func (h *Handler) DiscountQuote(w http.ResponseWriter,r *http.Request) {
 }
 
 func (h *Handler) SubmitCardReceipt(w http.ResponseWriter,r *http.Request) {
+ if !paymentCardEnabled(r,h){writeJSONError(w,409,"card payments are disabled");return}
  userID,ok:=requestcontext.UserID(r.Context());if !ok {writeJSONError(w,401,"authentication required");return}
  id,err:=uuid.Parse(chi.URLParam(r,"subscriptionID"));if err!=nil {writeJSONError(w,400,"invalid subscription");return}
  r.Body=http.MaxBytesReader(w,r.Body,6<<20)
