@@ -67,6 +67,7 @@ func NewRouter(
 	})
 
 	r.Get("/api/v1/payment-cards", paymentsHandler.ListPaymentCards)
+	r.Get("/api/v1/payment-methods", paymentsHandler.ListPaymentMethods)
 	r.Get("/api/v1/plans", plansHandler.List)
 	r.Get("/api/v1/plans/{code}", plansHandler.Get)
 
@@ -130,6 +131,7 @@ func NewRouter(
         r.Post("/discounts", paymentsHandler.AdminCreateDiscount)
         r.Post("/discounts/{discountID}/disable", paymentsHandler.AdminDisableDiscount)
         r.Get("/cards", paymentsHandler.AdminListPaymentCards)
+        r.Put("/methods/{method}", paymentsHandler.AdminSetPaymentMethod)
         r.Post("/cards", paymentsHandler.AdminCreatePaymentCard)
         r.Patch("/cards/{cardID}", paymentsHandler.AdminSetPaymentCardActive)
         r.Get("/receipts", paymentsHandler.PendingReceipts)

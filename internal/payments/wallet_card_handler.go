@@ -12,6 +12,8 @@ import (
  "github.com/jackc/pgx/v5"
 )
 func(h *DepositHandler) SubmitCardReceipt(w http.ResponseWriter,r *http.Request){
+ var cardEnabled bool
+ if h.service.repository.db.QueryRow(r.Context(),"SELECT enabled FROM payment_method_settings WHERE method='card'").Scan(&cardEnabled)!=nil||!cardEnabled{writeJSONError(w,409,"card payments are disabled");return}
  userID,ok:=authenticatedUserID(w,r);if !ok{return}
  r.Body=http.MaxBytesReader(w,r.Body,6<<20)
  if r.ParseMultipartForm(6<<20)!=nil{writeJSONError(w,400,"invalid upload");return}

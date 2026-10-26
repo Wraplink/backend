@@ -10,6 +10,7 @@ import (
 )
 
 func (h *Handler) SubmitGroupedCardReceipt(w http.ResponseWriter,r *http.Request) {
+ if !paymentCardEnabled(r,h){writeJSONError(w,409,"card payments are disabled");return}
  userID,ok:=requestcontext.UserID(r.Context());if !ok{writeJSONError(w,401,"authentication required");return}
  r.Body=http.MaxBytesReader(w,r.Body,6<<20)
  if r.ParseMultipartForm(6<<20)!=nil{writeJSONError(w,400,"invalid upload");return}
