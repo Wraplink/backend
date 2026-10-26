@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// AssignmentReport is sent by DNS Control only after an edge agent reports
-// successful provisioning of the exact assigned public IPv4 and generation.
+// AssignmentReport is sent by DNS Control when an edge lease activates or
+// deactivates. Identity and generation must match the current assignment.
 type AssignmentReport struct {
 	Domain     string `json:"domain"`
 	AgentID    string `json:"agent_id"`
@@ -41,11 +41,10 @@ func (h Handler) ReportAssignment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid assignment identity", http.StatusBadRequest)
 		return
 	}
-	if !report.Active {
-		http.Error(w, "only successful provisioning may activate an assignment", http.StatusBadRequest)
-		return
+	state := "pending"
+	if report.Active {
+		state = "active"
 	}
-	state := "active"
 	tag, err := h.DB.Exec(r.Context(), `UPDATE network_route_assignments a SET
 		state=$5, updated_at=now()
 		FROM network_route_agent_ips i
