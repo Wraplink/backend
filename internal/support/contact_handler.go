@@ -4,6 +4,7 @@ import (
  "encoding/json"
  "net/http"
  "net/mail"
+ "strconv"
  "strings"
 )
 
@@ -24,7 +25,15 @@ func(h *Handler) PublicContact(w http.ResponseWriter,r *http.Request){
 
 func(h *Handler) AdminContactMessages(w http.ResponseWriter,r *http.Request){
  if _,ok:=h.admin(w,r);!ok{return}
- rows,err:=h.DB.Query(r.Context(),"SELECT id,name,email,subject,message,created_at FROM contact_messages ORDER BY created_at DESC LIMIT 100")
+ q:=strings.TrimSpace(r.URL.Query().Get("search"))
+ if len(q)>200{fail(w,400,"search too long");return}
+ page:=1;limit:=20
+ if v:=r.URL.Query().Get("page");v!=""{n,e:=strconv.Atoi(v);if e!=nil||n<1||n>1000000{fail(w,400,"invalid page");return};page=n}
+ if v:=r.URL.Query().Get("limit");v!=""{n,e:=strconv.Atoi(v);if e!=nil||n<1||n>100{fail(w,400,"invalid limit");return};limit=n}
+ var total int64
+ filter:="WHERE ($1::text='' OR name ILIKE '%'||$1||'%' OR email ILIKE '%'||$1||'%' OR subject ILIKE '%'||$1||'%' OR message ILIKE '%'||$1||'%')"
+ if err:=h.DB.QueryRow(r.Context(),"SELECT count(*) FROM contact_messages "+filter,q).Scan(&total);err!=nil{fail(w,500,"could not count contact messages");return}
+ rows,err:=h.DB.Query(r.Context(),"SELECT id,name,email,subject,message,created_at FROM contact_messages "+filter+" ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3",q,limit,(page-1)*limit)
  if err!=nil{fail(w,500,"could not load contact messages");return}
  defer rows.Close()
  items:=make([]map[string]any,0)
@@ -33,5 +42,5 @@ func(h *Handler) AdminContactMessages(w http.ResponseWriter,r *http.Request){
   items=append(items,map[string]any{"id":id,"name":name,"email":email,"subject":subject,"message":message,"createdAt":created})
  }
  if rows.Err()!=nil{fail(w,500,"could not read messages");return}
- respond(w,200,map[string]any{"messages":items})
+ respond(w,200,map[string]any{"messages":items,"total":total,"page":page,"limit":limit})
 }
