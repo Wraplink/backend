@@ -136,6 +136,6 @@ func (h *Handler) DeletePolicy(w http.ResponseWriter,r *http.Request){
  tag,err:=h.db.Exec(r.Context(),"DELETE FROM network_domain_policies WHERE domain=$1",domain)
  if err!=nil {writeJSONError(w,500,"cannot delete domain policy");return}
  if tag.RowsAffected()==0 {writeJSONError(w,404,"domain policy not found");return}
- if err=routeinventory.Reconcile(r.Context(),h.db,90*time.Second);err!=nil {writeJSONError(w,503,"domain removed but route reconciliation failed");return}
+ if err=routeinventory.Reconcile(r.Context(),h.db,90*time.Second,h.dnsControlURL,h.dnsControlToken);err!=nil {writeJSONError(w,503,"domain removed but route reconciliation failed");return}
  w.WriteHeader(http.StatusNoContent)
 }
