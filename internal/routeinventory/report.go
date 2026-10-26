@@ -41,10 +41,11 @@ func (h Handler) ReportAssignment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid assignment identity", http.StatusBadRequest)
 		return
 	}
-	state := "pending"
-	if report.Active {
-		state = "active"
+	if !report.Active {
+		http.Error(w, "only successful provisioning may activate an assignment", http.StatusBadRequest)
+		return
 	}
+	state := "active"
 	tag, err := h.DB.Exec(r.Context(), `UPDATE network_route_assignments a SET
 		state=$5, updated_at=now()
 		FROM network_route_agent_ips i
