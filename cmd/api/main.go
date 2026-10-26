@@ -164,6 +164,7 @@ func main() {
 		cfg.Network.ControlNodeOfflineAfter,
         db,
 	)
+	dnsRegistryHandler.SetRouteDNSControl(cfg.Network.DNSControlURL, cfg.Network.DNSControlToken)
 	routeInventoryHandler := routeinventory.Handler{DB:db,ControlKey:cfg.Network.ControlSyncKey,OfflineAfter:cfg.Network.ControlNodeOfflineAfter,DNSControlURL:cfg.Network.DNSControlURL,DNSControlToken:cfg.Network.DNSControlToken}
 	dnsDomainsHandler := &dnsdomains.Handler{Store:dnsdomains.Store{DB:db},ControlKey:cfg.Network.ControlSyncKey}
  loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
