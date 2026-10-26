@@ -50,6 +50,30 @@ func main() {
 	}
 	defer db.Close()
 
+	// Retry route allocation independently of agent heartbeats. A transient
+	// upstream DNS failure must not leave an otherwise healthy route waiting
+	// indefinitely until another inventory registration occurs.
+	go func() {
+		reconcile := func() {
+			runCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			defer cancel()
+			if err := routeinventory.Reconcile(runCtx, db, cfg.Network.ControlNodeOfflineAfter); err != nil {
+				logger.Warn("route reconciliation failed", "error", err)
+			}
+		}
+		reconcile() // recover existing unassigned policies after backend restart
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				reconcile()
+			}
+		}
+	}()
+
 	cors := security.NewCORS(cfg.CORS.AllowedOrigins)
 	trustedProxy, err := security.NewTrustedProxy(cfg.Server.TrustedProxies)
 	if err != nil {

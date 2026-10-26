@@ -6,6 +6,7 @@ import (
  "errors"
  "net"
  "fmt"
+ "log/slog"
  "time"
 
  "github.com/jackc/pgx/v5/pgxpool"
@@ -30,18 +31,21 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
   targets=append(targets,routeTarget{domain,route.DestinationIP})
  }
  err=policyRows.Err();policyRows.Close();if err!=nil{return err}
- resolver:=&net.Resolver{PreferGo:true,Dial:func(ctx context.Context,network,address string)(net.Conn,error){
-  return (&net.Dialer{Timeout:3*time.Second}).DialContext(ctx,"udp","1.1.1.1:53")
- }}
  for _,target:=range targets{
-  if target.override!=""{resolved[target.domain]=target.override;continue}
-  lookupCtx,cancel:=context.WithTimeout(ctx,4*time.Second)
-  addresses,lookupErr:=resolver.LookupIP(lookupCtx,"ip4",target.domain)
-  cancel()
-  if lookupErr!=nil{continue}
-  for _,address:=range addresses {if address.To4()!=nil {resolved[target.domain]=address.To4().String();break}}
-  // Leave an unresolved route unassigned without blocking other domains.
+  if target.override!=""{
+   ip:=net.ParseIP(target.override)
+   if ip!=nil&&ip.To4()!=nil {resolved[target.domain]=ip.To4().String()}
+   continue
+  }
+  address,lookupErr:=resolveOriginalIPv4(ctx,target.domain)
+  if lookupErr!=nil{
+   // Do not publish an incorrect destination. Retry on the next cycle.
+   slog.Warn("route destination DNS lookup failed","domain",target.domain,"error",lookupErr)
+   continue
+  }
+  resolved[target.domain]=address
  }
+
  tx,err:=db.Begin(ctx);if err!=nil{return err}
  defer tx.Rollback(ctx)
  if _,err=tx.Exec(ctx,"SELECT pg_advisory_xact_lock(722311)");err!=nil{return err}
