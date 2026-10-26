@@ -57,7 +57,7 @@ func main() {
 		reconcile := func() {
 			runCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 			defer cancel()
-			if err := routeinventory.Reconcile(runCtx, db, cfg.Network.ControlNodeOfflineAfter); err != nil {
+			if err := routeinventory.Reconcile(runCtx, db, cfg.Network.ControlNodeOfflineAfter, cfg.Network.DNSControlURL, cfg.Network.DNSControlToken); err != nil {
 				logger.Warn("route reconciliation failed", "error", err)
 			}
 		}
@@ -164,7 +164,7 @@ func main() {
 		cfg.Network.ControlNodeOfflineAfter,
         db,
 	)
-	routeInventoryHandler := routeinventory.Handler{DB:db,ControlKey:cfg.Network.ControlSyncKey,OfflineAfter:cfg.Network.ControlNodeOfflineAfter}
+	routeInventoryHandler := routeinventory.Handler{DB:db,ControlKey:cfg.Network.ControlSyncKey,OfflineAfter:cfg.Network.ControlNodeOfflineAfter,DNSControlURL:cfg.Network.DNSControlURL,DNSControlToken:cfg.Network.DNSControlToken}
 	dnsDomainsHandler := &dnsdomains.Handler{Store:dnsdomains.Store{DB:db},ControlKey:cfg.Network.ControlSyncKey}
  loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
 	logoutHandler := auth.NewLogoutHandler(logoutService, cfg.App.Environment == "production")
