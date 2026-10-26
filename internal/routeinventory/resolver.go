@@ -9,19 +9,18 @@ import (
  "io"
  "net"
  "net/http"
- "os"
- "strings"
+  "strings"
  "time"
 )
 
 // resolveOriginalIPv4 asks DNS Control to resolve the original A record.
 // Backend deployments behind a firewall never contact public DNS directly.
 // DNS Control's origin endpoint bypasses WrapLink's managed DNS policies.
-func resolveOriginalIPv4(ctx context.Context, domain string) (string, error) {
- baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("WRAPLINK_DNS_CONTROL_URL")), "/")
- token := strings.TrimSpace(os.Getenv("WRAPLINK_DNS_CONTROL_TOKEN"))
+func resolveOriginalIPv4(ctx context.Context, domain, configuredURL, configuredToken string) (string, error) {
+ baseURL := strings.TrimRight(strings.TrimSpace(configuredURL), "/")
+ token := strings.TrimSpace(configuredToken)
  if baseURL == "" || token == "" {
-  return "", errors.New("WRAPLINK_DNS_CONTROL_URL and WRAPLINK_DNS_CONTROL_TOKEN are required for automatic route DNS")
+  return "", errors.New("network.dns-control-url and network.dns-control-token are required for automatic route DNS")
  }
  payload, _ := json.Marshal(map[string]string{"domain":domain})
  req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/v1/dns/origin-ipv4", bytes.NewReader(payload))
