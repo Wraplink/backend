@@ -17,6 +17,8 @@ type Handler struct {
 	DB         *pgxpool.Pool
 	ControlKey string
  OfflineAfter time.Duration
+ DNSControlURL string
+ DNSControlToken string
 }
 
 type InventoryRequest struct {
@@ -90,7 +92,7 @@ func (h Handler) RegisterInventory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.OfflineAfter > 0 {
-  if err:=Reconcile(r.Context(),h.DB,h.OfflineAfter);err!=nil {
+  if err:=Reconcile(r.Context(),h.DB,h.OfflineAfter,h.DNSControlURL,h.DNSControlToken);err!=nil {
    http.Error(w,"inventory saved but route reconciliation failed",http.StatusServiceUnavailable)
    return
   }
