@@ -66,6 +66,7 @@ func NewRouter(
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
+	r.With(registrationRateLimitMiddleware).Post("/api/v1/contact", supportHandler.PublicContact)
 	r.Get("/api/v1/payment-cards", paymentsHandler.ListPaymentCards)
 	r.Get("/api/v1/payment-methods", paymentsHandler.ListPaymentMethods)
 	r.Get("/api/v1/plans", plansHandler.List)
@@ -125,6 +126,7 @@ func NewRouter(
         r.Put("/users/{userID}/permissions/{permission}", paymentsHandler.UpdateAdminPermission)
     })
 
+	r.With(requireAuthMiddleware).Get("/api/v1/admin/contact-messages", supportHandler.AdminContactMessages)
 	r.Route("/api/v1/admin/payment-reviews", func(r chi.Router) {
         r.Use(requireAuthMiddleware)
         r.Get("/discounts", paymentsHandler.AdminListDiscounts)
