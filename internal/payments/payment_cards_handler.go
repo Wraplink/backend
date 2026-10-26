@@ -22,7 +22,16 @@ func (h *Handler) ListPaymentCards(w http.ResponseWriter,r *http.Request) {
  cards:=make([]paymentCard,0)
  for rows.Next(){var card paymentCard;if err=rows.Scan(&card.ID,&card.CardNumber,&card.CardholderName,&card.BankName,&card.Active);err!=nil {writeJSONError(w,500,"could not load cards");return};cards=append(cards,card)}
  if rows.Err()!=nil {writeJSONError(w,500,"could not load cards");return}
- writeJSON(w,200,map[string]any{"cards":cards})
+ // A database sequence rotates assignments across all backend instances.
+ // nextval is atomic; active cards are ordered deterministically.
+ var selectedCardID *uuid.UUID
+ if len(cards)>0 {
+  var rotation int64
+  if err:=h.service.repository.db.QueryRow(r.Context(),"SELECT nextval('payment_card_round_robin_seq')").Scan(&rotation);err!=nil {writeJSONError(w,500,"could not select payment card");return}
+  id:=cards[(rotation-1)%int64(len(cards))].ID
+  selectedCardID=&id
+ }
+ writeJSON(w,200,map[string]any{"cards":cards,"selectedCardId":selectedCardID})
 }
 
 func (h *Handler) AdminListPaymentCards(w http.ResponseWriter,r *http.Request) {
