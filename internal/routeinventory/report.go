@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"time"
 	"strings"
+	"time"
 )
 
 // AssignmentReport is sent by DNS Control when an edge lease activates or
