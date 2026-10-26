@@ -13,6 +13,8 @@ import (
 )
 
 type MeServiceInterface interface {
+ GetAppearance(ctx context.Context,id uuid.UUID,theme *string) error
+ SetAppearance(ctx context.Context,id uuid.UUID,theme string) error
 	Get(
 		ctx context.Context,
 		id uuid.UUID,
