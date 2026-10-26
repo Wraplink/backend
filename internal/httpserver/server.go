@@ -179,6 +179,8 @@ func NewRouter(
 
 		r.Get("/", meHandler.Get)
 		r.Patch("/", meHandler.Update)
+        r.Get("/appearance",meHandler.GetAppearance)
+        r.Put("/appearance",meHandler.SetAppearance)
 		r.Post("/password", passwordChangeHandler.Change)
 
 		r.Get("/sessions", sessionManagementHandler.List)

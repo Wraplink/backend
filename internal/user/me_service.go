@@ -43,3 +43,6 @@ func (s *MeService) Update(
 		id,
 	)
 }
+
+func (s *MeService) GetAppearance(ctx context.Context,id uuid.UUID,theme *string) error {return s.repository.GetAppearance(ctx,id,theme)}
+func (s *MeService) SetAppearance(ctx context.Context,id uuid.UUID,theme string) error {return s.repository.SetAppearance(ctx,id,theme)}
