@@ -17,6 +17,7 @@ type paymentCard struct {
 }
 
 func (h *Handler) ListPaymentCards(w http.ResponseWriter,r *http.Request) {
+ if !paymentCardEnabled(r,h){writeJSON(w,200,map[string]any{"cards":[]paymentCard{},"selectedCardId":nil});return}
  rows,err:=h.service.repository.db.Query(r.Context(),"SELECT id,card_number,cardholder_name,bank_name,active FROM payment_cards WHERE active=true ORDER BY created_at,id")
  if err!=nil {writeJSONError(w,500,"could not load payment cards");return};defer rows.Close()
  cards:=make([]paymentCard,0)
