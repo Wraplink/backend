@@ -30,7 +30,7 @@ func routeActivationTTL() time.Duration {
 // Reconcile atomically plans route bindings from the current enabled policies
 // and enabled, recently-seen agent IP inventory. Newly created bindings remain
 // pending until an edge agent acknowledges the current generation.
-func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration) error {
+func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration, dnsControlURL, dnsControlToken string) error {
  // Resolve through independent upstream DNS before acquiring the allocation lock.
  // Never use the host resolver: it may point at WrapLink's hijacking DNS.
  resolved:=map[string]string{}
@@ -52,7 +52,7 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
    if ip!=nil&&ip.To4()!=nil {resolved[target.domain]=ip.To4().String()}
    continue
   }
-  address,lookupErr:=resolveOriginalIPv4(ctx,target.domain)
+  address,lookupErr:=resolveOriginalIPv4(ctx,target.domain,dnsControlURL,dnsControlToken)
   if lookupErr!=nil{
    // Do not publish an incorrect destination. Retry on the next cycle.
    slog.Warn("route destination DNS lookup failed","domain",target.domain,"error",lookupErr)
