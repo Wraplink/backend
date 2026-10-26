@@ -49,6 +49,15 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
  tx,err:=db.Begin(ctx);if err!=nil{return err}
  defer tx.Rollback(ctx)
  if _,err=tx.Exec(ctx,"SELECT pg_advisory_xact_lock(722311)");err!=nil{return err}
+ // Route activations are soft-state. If DNS Control restarts or stops
+ // reporting, expire its old acknowledgment even when inventory is fresh.
+ // Healthy DNS Control refreshes updated_at every 10 seconds.
+ if _,err=tx.Exec(ctx,`UPDATE network_route_assignments a SET state='pending', updated_at=now()
+   FROM network_route_agent_ips i
+   WHERE a.agent_ip_id=i.id AND a.state='active'
+     AND (a.updated_at < now() - interval '90 seconds'
+       OR i.enabled=false OR i.last_seen_at IS NULL
+       OR i.last_seen_at <= now() - $1::interval)`,fmt.Sprintf("%f seconds",offlineAfter.Seconds()));err!=nil{return err}
  rows,err:=tx.Query(ctx,"SELECT domain FROM network_domain_policies WHERE mode='route' ORDER BY domain")
  if err!=nil{return err}
  routes:=make([]string,0)
