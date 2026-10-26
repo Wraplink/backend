@@ -36,8 +36,8 @@ network:
   control-sync-key: ${NETWORK_CONTROL_SYNC_KEY}
   # Backend uses DNS Control HTTP API for original Full Route DNS lookups.
   # Use a private reachable URL. No direct public DNS access is required.
-  dns-control-url: ${DNS_CONTROL_URL}
-  dns-control-token: ${DNS_CONTROL_TOKEN}
+  dns-control-url: ${DNS_CONTROL_API_URL}
+  dns-control-token: ${DNS_CONTROL_API_TOKEN}
   # Registered dns-control nodes older than this are excluded from DNS selection.
   control-node-offline-after: 45s
 
