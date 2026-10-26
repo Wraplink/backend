@@ -3,9 +3,11 @@ package routeinventory
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // AssignmentReport is sent by DNS Control when an edge lease activates or
@@ -45,13 +47,18 @@ func (h Handler) ReportAssignment(w http.ResponseWriter, r *http.Request) {
 	if report.Active {
 		state = "active"
 	}
+	offlineAfter := h.OfflineAfter
+	if offlineAfter <= 0 {
+		offlineAfter = 2 * time.Minute
+	}
 	tag, err := h.DB.Exec(r.Context(), `UPDATE network_route_assignments a SET
 		state=$5, updated_at=now()
 		FROM network_route_agent_ips i
 		WHERE a.agent_ip_id=i.id AND a.domain=$1 AND i.agent_id=$2
 		  AND i.public_ip=$3::inet AND a.generation=$4
+		  AND ($5 <> 'active' OR (i.enabled=true AND i.last_seen_at > now() - $6::interval))
 		  AND (a.state<>$5 OR a.updated_at IS NULL)`,
-		report.Domain, report.AgentID, ip.To4().String(), report.Generation, state)
+		report.Domain, report.AgentID, ip.To4().String(), report.Generation, state, fmt.Sprintf("%f seconds", offlineAfter.Seconds()))
 	if err != nil {
 		http.Error(w, "assignment update failed", http.StatusInternalServerError)
 		return
@@ -61,8 +68,9 @@ func (h Handler) ReportAssignment(w http.ResponseWriter, r *http.Request) {
 		var current string
 		err := h.DB.QueryRow(r.Context(), `SELECT a.state FROM network_route_assignments a
 			JOIN network_route_agent_ips i ON i.id=a.agent_ip_id
-			WHERE a.domain=$1 AND i.agent_id=$2 AND i.public_ip=$3::inet AND a.generation=$4`,
-			report.Domain, report.AgentID, ip.To4().String(), report.Generation).Scan(&current)
+			WHERE a.domain=$1 AND i.agent_id=$2 AND i.public_ip=$3::inet AND a.generation=$4
+			  AND ($5 <> 'active' OR (i.enabled=true AND i.last_seen_at > now() - $6::interval))`,
+			report.Domain, report.AgentID, ip.To4().String(), report.Generation, state, fmt.Sprintf("%f seconds", offlineAfter.Seconds())).Scan(&current)
 		if err != nil || current != state {
 			http.Error(w, "stale or unknown assignment", http.StatusConflict)
 			return
