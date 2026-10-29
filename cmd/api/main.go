@@ -21,6 +21,7 @@ import (
 	"backend/internal/user"
 	"context"
 	"errors"
+	"flag"
 	"log/slog"
 	"net/http"
 	"os"
@@ -34,7 +35,10 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	cfg, err := config.Load("config.yml")
+	configFile := flag.String("config", "config.yml", "path to configuration file")
+	flag.Parse()
+
+	cfg, err := config.Load(*configFile)
 	if err != nil {
 		logger.Error("failed to load configuration", "error", err)
 		os.Exit(1)
