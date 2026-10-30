@@ -17,6 +17,29 @@ func (r *Repository) ApplyEdgeUsageReport(ctx context.Context, edge EdgeUsageRep
 	if err != nil { return nil, fmt.Errorf("begin edge usage transaction: %w", err) }
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Replay must be resolved before IP attribution: the IP may have been
+	// reassigned since the original report was accepted.
+	var previous UsageReport
+	var previousUser uuid.UUID
+	err = tx.QueryRow(ctx, `
+		SELECT subscription_id, user_id, source, upload_bytes, download_bytes, reported_at
+		FROM traffic_usage_reports WHERE report_id = $1`, report.ReportID).Scan(
+		&previous.SubscriptionID, &previousUser, &previous.Source,
+		&previous.UploadBytes, &previous.DownloadBytes, &previous.ReportedAt)
+	if err == nil {
+		if previous.Source != report.Source || previous.UploadBytes != report.UploadBytes ||
+			previous.DownloadBytes != report.DownloadBytes || !previous.ReportedAt.Equal(report.ReportedAt) {
+			return nil, ErrReportConflict
+		}
+		state, err := lockSubscription(ctx, tx, previous.SubscriptionID)
+		if err != nil { return nil, err }
+		if state.UserID != previousUser { return nil, ErrReportConflict }
+		response := usageReportResult(report.ReportID, state, false, time.Now())
+		if err := tx.Commit(ctx); err != nil { return nil, fmt.Errorf("commit replay: %w", err) }
+		return response, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) { return nil, fmt.Errorf("look up edge report: %w", err) }
+
 	// Serialize concurrent reports for the same IP. Entitlement writers must
 	// also use this lock to eliminate assignment races.
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", edge.ClientIP); err != nil {
