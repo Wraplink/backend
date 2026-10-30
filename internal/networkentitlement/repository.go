@@ -68,11 +68,9 @@ func (r *Repository) Activate(
 		return nil, err
 	}
 
-	if _, err := tx.Exec(ctx, "UPDATE network_entitlements SET status = 'revoked', revoked_at = now(), updated_at = now() WHERE status = 'active' AND last_activity_at < now() - INTERVAL '30 minutes'"); err != nil {
-        return nil, fmt.Errorf("expire idle network access: %w", err)
-    }
+	// Idle expiration must run separately; revoking unrelated IPs here breaks lock ordering.
 
-    existing, err := currentEntitlementForUpdate(
+	existing, err := currentEntitlementForUpdate(
 		ctx,
 		tx,
 		userID,
