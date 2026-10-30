@@ -62,6 +62,7 @@ func (r *Repository) ApplyEdgeUsageReport(ctx context.Context, edge EdgeUsageRep
 		WHERE client_ip = $1::inet
 		  AND activated_at <= $2
 		  AND (revoked_at IS NULL OR revoked_at >= $3)
+		  AND status IN ('active', 'revoked')
 		LIMIT 2`, edge.ClientIP, edge.StartedAt, edge.EndedAt)
 	if err != nil { return nil, fmt.Errorf("resolve edge entitlement: %w", err) }
 	var subscriptionID uuid.UUID
