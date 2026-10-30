@@ -17,18 +17,29 @@ func (r *Repository) ApplyEdgeUsageReport(ctx context.Context, edge EdgeUsageRep
 	if err != nil { return nil, fmt.Errorf("begin edge usage transaction: %w", err) }
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Replay must be resolved before IP attribution: the IP may have been
-	// reassigned since the original report was accepted.
+	// Lock the report identity so competing deliveries cannot race.
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 1))", report.ReportID); err != nil {
+		return nil, fmt.Errorf("lock report identity: %w", err)
+	}
 	var previous UsageReport
 	var previousUser uuid.UUID
+	var oldAgent, oldSequence, oldIP string
+	var oldStart, oldEnd time.Time
 	err = tx.QueryRow(ctx, `
-		SELECT subscription_id, user_id, source, upload_bytes, download_bytes, reported_at
-		FROM traffic_usage_reports WHERE report_id = $1`, report.ReportID).Scan(
+		SELECT u.subscription_id, u.user_id, u.source, u.upload_bytes,
+		       u.download_bytes, u.reported_at, i.agent_id, i.sequence_text,
+		       host(i.client_ip), i.started_at, i.ended_at
+		FROM traffic_usage_reports u
+		JOIN edge_usage_report_identity i ON i.report_id = u.report_id
+		WHERE u.report_id = $1`, report.ReportID).Scan(
 		&previous.SubscriptionID, &previousUser, &previous.Source,
-		&previous.UploadBytes, &previous.DownloadBytes, &previous.ReportedAt)
+		&previous.UploadBytes, &previous.DownloadBytes, &previous.ReportedAt,
+		&oldAgent, &oldSequence, &oldIP, &oldStart, &oldEnd)
 	if err == nil {
 		if previous.Source != report.Source || previous.UploadBytes != report.UploadBytes ||
-			previous.DownloadBytes != report.DownloadBytes || !previous.ReportedAt.Equal(report.ReportedAt) {
+			previous.DownloadBytes != report.DownloadBytes || !previous.ReportedAt.Equal(report.ReportedAt) ||
+			oldAgent != edge.AgentID || oldSequence != fmt.Sprint(edge.Sequence) ||
+			oldIP != edge.ClientIP || !oldStart.Equal(edge.StartedAt) || !oldEnd.Equal(edge.EndedAt) {
 			return nil, ErrReportConflict
 		}
 		state, err := lockSubscription(ctx, tx, previous.SubscriptionID)
@@ -78,6 +89,14 @@ func (r *Repository) ApplyEdgeUsageReport(ctx context.Context, edge EdgeUsageRep
 		report.ReportID, subscriptionID, state.UserID, report.Source,
 		report.UploadBytes, report.DownloadBytes, report.ReportedAt)
 	if err != nil { return nil, fmt.Errorf("insert edge report: %w", err) }
+	if tag.RowsAffected() == 1 {
+		if _, err := tx.Exec(ctx, `INSERT INTO edge_usage_report_identity
+			(report_id, agent_id, sequence_text, client_ip, started_at, ended_at)
+			VALUES ($1,$2,$3,$4::inet,$5,$6)`, report.ReportID, edge.AgentID,
+			fmt.Sprint(edge.Sequence), edge.ClientIP, edge.StartedAt, edge.EndedAt); err != nil {
+			return nil, fmt.Errorf("persist edge report identity: %w", err)
+		}
+	}
 	applied := tag.RowsAffected() == 1
 	if !applied {
 		matches, err := usageReportMatches(ctx, tx, report)
