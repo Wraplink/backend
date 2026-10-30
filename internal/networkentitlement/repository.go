@@ -77,6 +77,9 @@ func (r *Repository) Activate(
 	}
 
 	clientIPText := clientIP.To4().String()
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", clientIPText); err != nil {
+		return nil, fmt.Errorf("lock client IP for entitlement activation: %w", err)
+	}
 	if existing != nil &&
 		existing.SubscriptionID == subscription.ID &&
 		existing.ClientIP == clientIPText {
