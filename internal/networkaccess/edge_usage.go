@@ -24,7 +24,7 @@ type EdgeUsageReport struct {
 }
 
 func (r EdgeUsageReport) Validate(now time.Time) error {
-	if strings.TrimSpace(r.AgentID) == "" || len(r.AgentID) > 80 || r.Sequence == 0 {
+	if strings.TrimSpace(r.AgentID) == "" || strings.TrimSpace(r.AgentID) != r.AgentID || len(r.AgentID) > 80 || r.Sequence == 0 {
 		return ErrInvalidEdgeUsage
 	}
 	ip := net.ParseIP(r.ClientIP)
