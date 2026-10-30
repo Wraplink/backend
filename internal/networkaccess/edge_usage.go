@@ -38,7 +38,8 @@ func (r EdgeUsageReport) Validate(now time.Time) error {
 	}
 	if r.StartedAt.IsZero() || r.EndedAt.IsZero() || r.StartedAt.After(r.EndedAt) ||
 		r.EndedAt.After(now.Add(10*time.Minute)) ||
-		r.StartedAt.Before(now.Add(-24*time.Hour)) {
+		r.StartedAt.Before(now.Add(-24*time.Hour)) ||
+		r.EndedAt.Sub(r.StartedAt) > 24*time.Hour {
 		return ErrInvalidEdgeUsage
 	}
 	return nil
