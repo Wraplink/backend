@@ -99,9 +99,9 @@ func (r *Repository) ApplyEdgeUsageReport(ctx context.Context, edge EdgeUsageRep
 	}
 	applied := tag.RowsAffected() == 1
 	if !applied {
-		matches, err := usageReportMatches(ctx, tx, report)
-		if err != nil { return nil, err }
-		if !matches { return nil, ErrReportConflict }
+		// An existing report without matching immutable identity must never
+		// be treated as a valid edge replay.
+		return nil, ErrReportConflict
 	} else {
 		total := report.UploadBytes + report.DownloadBytes
 		err = tx.QueryRow(ctx, `
