@@ -115,9 +115,10 @@ func (r *Repository) ApplyEdgeUsageReport(ctx context.Context, edge EdgeUsageRep
 		if _, err := tx.Exec(ctx, `
 			UPDATE network_entitlements
 			SET last_activity_at = GREATEST(last_activity_at, $2), updated_at = now()
-			WHERE subscription_id = $1 AND status = 'active'
+			WHERE subscription_id = $1 AND client_ip = $3::inet
+			AND status = 'active' AND activated_at <= $2
 			AND last_activity_at >= now() - INTERVAL '30 minutes'`,
-			subscriptionID, report.ReportedAt); err != nil {
+			subscriptionID, report.ReportedAt, edge.ClientIP); err != nil {
 			return nil, fmt.Errorf("record edge activity: %w", err)
 		}
 	}
