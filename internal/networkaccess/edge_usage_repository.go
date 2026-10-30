@@ -17,8 +17,8 @@ func (r *Repository) ApplyEdgeUsageReport(ctx context.Context, edge EdgeUsageRep
 	if err != nil { return nil, fmt.Errorf("begin edge usage transaction: %w", err) }
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Lock the client IP across concurrent reports and entitlement changes
-	// that participate in the same advisory-lock protocol.
+	// Serialize concurrent reports for the same IP. Entitlement writers must
+	// also use this lock to eliminate assignment races.
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", edge.ClientIP); err != nil {
 		return nil, fmt.Errorf("lock edge client: %w", err)
 	}
@@ -41,6 +41,7 @@ func (r *Repository) ApplyEdgeUsageReport(ctx context.Context, edge EdgeUsageRep
 	if err != nil { return nil, err }
 	if count != 1 { return nil, ErrSubscriptionNotFound }
 	report.SubscriptionID = subscriptionID
+	if err := validateReport(report); err != nil { return nil, err }
 
 	state, err := lockSubscription(ctx, tx, subscriptionID)
 	if err != nil { return nil, err }
