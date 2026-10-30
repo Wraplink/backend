@@ -19,6 +19,9 @@ func TestEdgeUsageValidation(t *testing.T) {
 	if err := report.Validate(now); err != nil {
 		t.Fatal(err)
 	}
+	report.ClientIP = "invalid"
+	if err := report.Validate(now); err == nil { t.Fatal("expected invalid IP") }
+	report.ClientIP = "198.51.100.10"
 	report.Sequence = 0
 	if err := report.Validate(now); err == nil {
 		t.Fatal("expected invalid sequence")
