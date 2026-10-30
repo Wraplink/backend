@@ -237,26 +237,35 @@ func (r *Repository) Current(
 	return &result, nil
 }
 
-func (r *Repository) Deactivate(
-	ctx context.Context,
-	userID uuid.UUID,
-) error {
-	result, err := r.db.Exec(
-		ctx,
-		`UPDATE network_entitlements
-		 SET status = 'revoked',
-		     revoked_at = now(),
-		     updated_at = now()
-		 WHERE user_id = $1
-		   AND status = 'active'`,
-		userID,
-	)
-	if err != nil {
-		return fmt.Errorf("deactivate network entitlement: %w", err)
+func (r *Repository) Deactivate(ctx context.Context, userID uuid.UUID) error {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil { return fmt.Errorf("begin entitlement deactivation: %w", err) }
+	defer func() { _ = tx.Rollback(ctx) }()
+	// Lock each active IP before revocation so usage attribution cannot
+	// race the transition to a different owner.
+	rows, err := tx.Query(ctx, `SELECT host(client_ip) FROM network_entitlements
+		WHERE user_id = $1 AND status = 'active' ORDER BY client_ip`, userID)
+	if err != nil { return fmt.Errorf("find entitlement IPs: %w", err) }
+	var ips []string
+	for rows.Next() {
+		var ip string
+		if err := rows.Scan(&ip); err != nil { rows.Close(); return err }
+		ips = append(ips, ip)
 	}
-	if result.RowsAffected() == 0 {
-		return ErrEntitlementNotFound
+	err = rows.Err()
+	rows.Close()
+	if err != nil { return err }
+	for _, ip := range ips {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", ip); err != nil {
+			return fmt.Errorf("lock deactivated IP: %w", err)
+		}
 	}
+	result, err := tx.Exec(ctx, `UPDATE network_entitlements
+		SET status = 'revoked', revoked_at = now(), updated_at = now()
+		WHERE user_id = $1 AND status = 'active'`, userID)
+	if err != nil { return fmt.Errorf("deactivate network entitlement: %w", err) }
+	if result.RowsAffected() == 0 { return ErrEntitlementNotFound }
+	if err := tx.Commit(ctx); err != nil { return fmt.Errorf("commit entitlement deactivation: %w", err) }
 	return nil
 }
 
