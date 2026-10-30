@@ -54,6 +54,11 @@ func (r *Repository) Activate(
 		_ = tx.Rollback(ctx)
 	}()
 
+	// Acquire the IP lock before subscription row locks to match usage ingestion.
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", clientIP.To4().String()); err != nil {
+		return nil, fmt.Errorf("lock client IP for entitlement activation: %w", err)
+	}
+
 	subscription, err := lockUsableSubscription(
 		ctx,
 		tx,
@@ -77,9 +82,6 @@ func (r *Repository) Activate(
 	}
 
 	clientIPText := clientIP.To4().String()
-	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", clientIPText); err != nil {
-		return nil, fmt.Errorf("lock client IP for entitlement activation: %w", err)
-	}
 	if existing != nil &&
 		existing.SubscriptionID == subscription.ID &&
 		existing.ClientIP == clientIPText {
