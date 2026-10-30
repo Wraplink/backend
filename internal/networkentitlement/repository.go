@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -54,9 +55,19 @@ func (r *Repository) Activate(
 		_ = tx.Rollback(ctx)
 	}()
 
-	// Acquire the IP lock before subscription row locks to match usage ingestion.
-	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", clientIP.To4().String()); err != nil {
-		return nil, fmt.Errorf("lock client IP for entitlement activation: %w", err)
+	// Lock both the requested IP and any existing IP before taking
+	// subscription row locks. Sorting avoids reversed-lock deadlocks.
+	var previousIP string
+	err = tx.QueryRow(ctx, `SELECT host(client_ip) FROM network_entitlements
+		WHERE user_id = $1 AND status = 'active' LIMIT 1`, userID).Scan(&previousIP)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) { return nil, fmt.Errorf("lookup prior IP: %w", err) }
+	ips := []string{clientIP.To4().String()}
+	if previousIP != "" && previousIP != ips[0] { ips = append(ips, previousIP) }
+	sort.Strings(ips)
+	for _, ip := range ips {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", ip); err != nil {
+			return nil, fmt.Errorf("lock entitlement IP: %w", err)
+		}
 	}
 
 	subscription, err := lockUsableSubscription(
