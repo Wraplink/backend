@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+ "strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -96,7 +97,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	emailSender := email.NewLogSender(logger, cfg.App.FrontendURL)
+	var emailSender email.Sender
+ if strings.TrimSpace(os.Getenv("SMTP_HOST")) != "" {
+  port := 587
+  if raw:=os.Getenv("SMTP_PORT");raw!="" {
+   parsed,err:=strconv.Atoi(raw)
+   if err!=nil {logger.Error("invalid SMTP_PORT");os.Exit(1)}
+   port=parsed
+  }
+  sender,err:=email.NewSMTPSender(email.SMTPConfig{
+   Host:os.Getenv("SMTP_HOST"),Port:port,
+   Username:os.Getenv("SMTP_USERNAME"),Password:os.Getenv("SMTP_PASSWORD"),
+   From:os.Getenv("SMTP_FROM"),FrontendURL:cfg.App.FrontendURL,
+  })
+  if err!=nil {logger.Error("invalid SMTP configuration","error",err);os.Exit(1)}
+  emailSender=sender
+ } else if strings.EqualFold(cfg.App.Environment,"production") {
+  logger.Error("SMTP_HOST must be configured in production; refusing to log email verification tokens")
+  os.Exit(1)
+ } else {
+  emailSender=email.NewLogSender(logger,cfg.App.FrontendURL)
+ }
 
 	// Repositories.
 	plansRepository := plans.NewRepository(db)
@@ -184,7 +205,7 @@ func main() {
 	dnsDomainsHandler := &dnsdomains.Handler{Store:dnsdomains.Store{DB:db},ControlKey:cfg.Network.ControlSyncKey}
  loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
 	logoutHandler := auth.NewLogoutHandler(logoutService, cfg.App.Environment == "production")
-	resendVerificationHandler := auth.NewResendVerificationHandler(resendVerificationService, resendVerificationEmailLimiter)
+	resendVerificationHandler := auth.NewResendVerificationHandler(resendVerificationService, resendVerificationEmailLimiter, emailSender)
 	emailVerificationHandler := auth.NewEmailVerificationHandler(emailVerificationService)
 	registerHandler := auth.NewRegisterHandler(registrationService)
 	refreshHandler := auth.NewRefreshHandler(refreshService, cfg.App.Environment == "production")
