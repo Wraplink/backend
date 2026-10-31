@@ -37,9 +37,9 @@ func (r *Repository) ApplyEdgeUsageReport(ctx context.Context, edge EdgeUsageRep
 		&oldAgent, &oldSequence, &oldIP, &oldStart, &oldEnd)
 	if err == nil {
 		if previous.Source != report.Source || previous.UploadBytes != report.UploadBytes ||
-			previous.DownloadBytes != report.DownloadBytes || !previous.ReportedAt.Equal(report.ReportedAt) ||
+			previous.DownloadBytes != report.DownloadBytes || !previous.ReportedAt.Equal(report.ReportedAt.Truncate(time.Microsecond)) ||
 			oldAgent != edge.AgentID || oldSequence != fmt.Sprint(edge.Sequence) ||
-			oldIP != edge.ClientIP || !oldStart.Equal(edge.StartedAt) || !oldEnd.Equal(edge.EndedAt) {
+			oldIP != edge.ClientIP || !oldStart.Equal(edge.StartedAt.Truncate(time.Microsecond)) || !oldEnd.Equal(edge.EndedAt.Truncate(time.Microsecond)) {
 			return nil, ErrReportConflict
 		}
 		state, err := lockSubscription(ctx, tx, previous.SubscriptionID)
