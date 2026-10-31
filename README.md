@@ -1,3 +1,18 @@
+## Bootstrap administrator
+
+Set both `WRAPLINK_BOOTSTRAP_ADMIN_EMAIL` and `WRAPLINK_BOOTSTRAP_ADMIN_PASSWORD` in the backend container environment before first startup. The password must be at least 16 characters. Do not commit these secrets to Git.
+
+At startup, the backend creates the administrator when the email does not exist and grants the existing `access_admins`, `payment_review_admins`, and `discount_admins` privileges. If the email already belongs to a non-administrator account, startup fails rather than promoting it.
+
+For an existing administrator with the configured email, changing the environment password and **recreating the backend container** updates the Argon2id password hash and revokes existing sessions. Unchanged passwords do not trigger a rewrite. The configured environment password remains authoritative on each restart.
+
+```sh
+docker compose -f compose.yml -f compose.prod.yml up -d --build --force-recreate backend
+docker compose -f compose.yml -f compose.prod.yml logs --tail=100 backend
+```
+
+Production deployments must also set `security.secure-cookies: true` in the active configuration. Environment variables in `.env` are not automatically passed into containers unless referenced by Compose `environment:` or `env_file:`.
+
 ## Required startup data
 After PostgreSQL is connected, the backend runs an idempotent reference-data bootstrap before starting the HTTP server.
 
