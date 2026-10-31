@@ -1,0 +1,49 @@
+name: Administrator bootstrap PostgreSQL integration
+
+on:
+  pull_request:
+    paths:
+      - 'internal/bootstrap/**'
+      - 'internal/config/**'
+      - 'migrations/**'
+      - '.github/workflows/bootstrap-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: wraplink_test
+          POSTGRES_PASSWORD: wraplink_test_password
+          POSTGRES_DB: wraplink_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wraplink_test -d wraplink_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      WRAPLINK_TEST_DATABASE_URL: postgres://wraplink_test:wraplink_test_password@localhost:5432/wraplink_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install golang-migrate
+        run: |
+          curl -fsSL https://github.com/golang-migrate/migrate/releases/download/v4.18.3/migrate.linux-amd64.tar.gz -o /tmp/migrate.tar.gz
+          tar -xzf /tmp/migrate.tar.gz -C /tmp migrate
+          sudo install /tmp/migrate /usr/local/bin/migrate
+      - name: Apply database migrations
+        run: migrate -path migrations -database "$WRAPLINK_TEST_DATABASE_URL" up
+      - name: Run administrator bootstrap integration test
+        run: go test ./internal/bootstrap -run '^TestBootstrapAdminPostgresIntegration$' -count=1 -v
