@@ -29,7 +29,7 @@ func TestEdgeUsageConcurrentDuplicateDeliveryPostgres(t *testing.T) {
  _, err = pool.Exec(ctx, `INSERT INTO users
  (id,failed_login_attempts,last_login_ip,email,full_name)
  VALUES ($1,$2,$3::inet,$4,'Usage integration fixture')`,
- userID, -attempt, "198.51.100.92", userID.String()+"@example.invalid")
+ userID, attempt, "198.51.100.92", userID.String()+"@example.invalid")
  if err != nil { t.Fatal(err) }
  defer func(){ _,_ = pool.Exec(context.Background(),"DELETE FROM users WHERE id=$1",userID) }()
  _,err=pool.Exec(ctx,`INSERT INTO plans
