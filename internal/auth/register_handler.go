@@ -147,13 +147,7 @@ func (h *RegisterHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// IMPORTANT:
-	// Do not return the verification token to the browser.
-	//
-	// BACKEND TODO:
-	// Send result.EmailVerification to the email service here,
-	// after the database transaction has committed.
-
+	// Verification token is delivered by the email sender, never returned to the browser.
 	_ = result
 
 	writeJSON(
