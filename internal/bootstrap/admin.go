@@ -54,6 +54,7 @@ func EnsureDefaultAdmin(ctx context.Context, db *pgxpool.Pool, logger *slog.Logg
   var allowed bool
   if err=tx.QueryRow(ctx,"SELECT EXISTS(SELECT 1 FROM access_admins WHERE user_id=$1)",id).Scan(&allowed);err!=nil{return err}
   if !allowed{return errors.New("bootstrap admin email belongs to an existing non-admin user; refusing privilege escalation")}
+  // Keep existing administrator grants intact; do not grant additional roles on restart.
   var oldHash string
   if err=tx.QueryRow(ctx,"SELECT password_hash FROM user_credentials WHERE user_id=$1 FOR UPDATE",id).Scan(&oldHash);err!=nil{return err}
   if !password.Verify(secret,oldHash) {
