@@ -13,7 +13,7 @@ import (
 // ApplyEdgeUsageReport serializes attribution with subscription accounting.
 // Historical entitlement intervals are checked before any charge is applied.
 func (r *Repository) ApplyEdgeUsageReport(ctx context.Context, edge EdgeUsageReport, report UsageReport) (*UsageReportResult, error) {
-	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil { return nil, fmt.Errorf("begin edge usage transaction: %w", err) }
 	defer func() { _ = tx.Rollback(ctx) }()
 
