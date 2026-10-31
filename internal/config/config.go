@@ -110,8 +110,8 @@ func validate(cfg Config) error {
 	if (cfg.Security.BootstrapAdminEmail == "") != (cfg.Security.BootstrapAdminPassword == "") {
 		return errors.New("bootstrap administrator email and password must be configured together")
 	}
-	if cfg.Security.BootstrapAdminEmail != "" && (!strings.Contains(cfg.Security.BootstrapAdminEmail, "@") || len(cfg.Security.BootstrapAdminPassword) < 12) {
-		return errors.New("bootstrap administrator requires a valid email and password of at least 12 characters")
+	if cfg.Security.BootstrapAdminEmail != "" && (!strings.Contains(cfg.Security.BootstrapAdminEmail, "@") || len(cfg.Security.BootstrapAdminPassword) < 16) {
+		return errors.New("bootstrap administrator requires a valid email and password of at least 16 characters")
 	}
 
 	if strings.TrimSpace(cfg.App.FrontendURL) == "" {
