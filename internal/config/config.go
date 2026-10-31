@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/mail"
 	"os"
 	"strings"
 	"time"
@@ -50,6 +51,8 @@ type SecurityConfig struct {
 	AccessTokenTTL      time.Duration `yaml:"access-token-ttl"`
 	RefreshTokenTTL     time.Duration `yaml:"refresh-token-ttl"`
 	SecureCookies       bool          `yaml:"secure-cookies"`
+	BootstrapAdminEmail string `yaml:"-"`
+	BootstrapAdminPassword string `yaml:"-"`
 	RefreshCookieDomain string        `yaml:"refresh-cookie-domain"`
 }
 
@@ -93,6 +96,8 @@ func Load(path string) (Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return Config{}, fmt.Errorf("parse config file: %w", err)
 	}
+	cfg.Security.BootstrapAdminEmail = strings.ToLower(strings.TrimSpace(os.Getenv("WRAPLINK_BOOTSTRAP_ADMIN_EMAIL")))
+	cfg.Security.BootstrapAdminPassword = os.Getenv("WRAPLINK_BOOTSTRAP_ADMIN_PASSWORD")
 	if cfg.Network.ControlNodeOfflineAfter == 0 {
 		cfg.Network.ControlNodeOfflineAfter = 45 * time.Second
 	}
@@ -103,6 +108,19 @@ func Load(path string) (Config, error) {
 }
 
 func validate(cfg Config) error {
+	if (cfg.Security.BootstrapAdminEmail == "") != (cfg.Security.BootstrapAdminPassword == "") {
+		return errors.New("bootstrap administrator email and password must be configured together")
+	}
+	if cfg.Security.BootstrapAdminEmail != "" {
+        parsed, err := mail.ParseAddress(cfg.Security.BootstrapAdminEmail)
+        if err != nil || parsed.Address != cfg.Security.BootstrapAdminEmail || len(cfg.Security.BootstrapAdminEmail) > 254 {
+            return errors.New("bootstrap administrator requires a valid email")
+        }
+        if len(cfg.Security.BootstrapAdminPassword) < 16 || len(cfg.Security.BootstrapAdminPassword) > 1024 {
+            return errors.New("bootstrap administrator password must be 16-1024 characters")
+        }
+    }
+
 	if strings.TrimSpace(cfg.App.FrontendURL) == "" {
 		return errors.New("app.frontend-url is required")
 	}
