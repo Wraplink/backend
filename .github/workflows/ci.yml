@@ -41,7 +41,7 @@ jobs:
           cache: true
 
       - name: Install migration runner
-        run: go install github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.3
+        run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.3
 
       - name: Apply PostgreSQL migrations
         run: $(go env GOPATH)/bin/migrate -path migrations -database "$TEST_DATABASE_URL" up
