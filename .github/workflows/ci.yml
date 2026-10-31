@@ -12,7 +12,23 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: wraplink_test
+          POSTGRES_PASSWORD: wraplink_test
+          POSTGRES_DB: wraplink_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wraplink_test -d wraplink_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://wraplink_test:wraplink_test@localhost:5432/wraplink_test?sslmode=disable
 
     steps:
       - name: Checkout
@@ -23,6 +39,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Install migration runner
+        run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.3
+
+      - name: Apply PostgreSQL migrations
+        run: $(go env GOPATH)/bin/migrate -path migrations -database "$TEST_DATABASE_URL" up
 
       - name: Test before formatting audit
         run: go test ./...

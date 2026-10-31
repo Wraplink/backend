@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -54,6 +55,21 @@ func (r *Repository) Activate(
 		_ = tx.Rollback(ctx)
 	}()
 
+	// Lock both the requested IP and any existing IP before taking
+	// subscription row locks. Sorting avoids reversed-lock deadlocks.
+	var previousIP string
+	err = tx.QueryRow(ctx, `SELECT host(client_ip) FROM network_entitlements
+		WHERE user_id = $1 AND status = 'active' LIMIT 1`, userID).Scan(&previousIP)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) { return nil, fmt.Errorf("lookup prior IP: %w", err) }
+	ips := []string{clientIP.To4().String()}
+	if previousIP != "" && previousIP != ips[0] { ips = append(ips, previousIP) }
+	sort.Strings(ips)
+	for _, ip := range ips {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", ip); err != nil {
+			return nil, fmt.Errorf("lock entitlement IP: %w", err)
+		}
+	}
+
 	subscription, err := lockUsableSubscription(
 		ctx,
 		tx,
@@ -63,11 +79,9 @@ func (r *Repository) Activate(
 		return nil, err
 	}
 
-	if _, err := tx.Exec(ctx, "UPDATE network_entitlements SET status = 'revoked', revoked_at = now(), updated_at = now() WHERE status = 'active' AND last_activity_at < now() - INTERVAL '30 minutes'"); err != nil {
-        return nil, fmt.Errorf("expire idle network access: %w", err)
-    }
+	// Idle expiration must run separately; revoking unrelated IPs here breaks lock ordering.
 
-    existing, err := currentEntitlementForUpdate(
+	existing, err := currentEntitlementForUpdate(
 		ctx,
 		tx,
 		userID,
@@ -232,26 +246,35 @@ func (r *Repository) Current(
 	return &result, nil
 }
 
-func (r *Repository) Deactivate(
-	ctx context.Context,
-	userID uuid.UUID,
-) error {
-	result, err := r.db.Exec(
-		ctx,
-		`UPDATE network_entitlements
-		 SET status = 'revoked',
-		     revoked_at = now(),
-		     updated_at = now()
-		 WHERE user_id = $1
-		   AND status = 'active'`,
-		userID,
-	)
-	if err != nil {
-		return fmt.Errorf("deactivate network entitlement: %w", err)
+func (r *Repository) Deactivate(ctx context.Context, userID uuid.UUID) error {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil { return fmt.Errorf("begin entitlement deactivation: %w", err) }
+	defer func() { _ = tx.Rollback(ctx) }()
+	// Lock each active IP before revocation so usage attribution cannot
+	// race the transition to a different owner.
+	rows, err := tx.Query(ctx, `SELECT host(client_ip) FROM network_entitlements
+		WHERE user_id = $1 AND status = 'active' ORDER BY client_ip`, userID)
+	if err != nil { return fmt.Errorf("find entitlement IPs: %w", err) }
+	var ips []string
+	for rows.Next() {
+		var ip string
+		if err := rows.Scan(&ip); err != nil { rows.Close(); return err }
+		ips = append(ips, ip)
 	}
-	if result.RowsAffected() == 0 {
-		return ErrEntitlementNotFound
+	err = rows.Err()
+	rows.Close()
+	if err != nil { return err }
+	for _, ip := range ips {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", ip); err != nil {
+			return fmt.Errorf("lock deactivated IP: %w", err)
+		}
 	}
+	result, err := tx.Exec(ctx, `UPDATE network_entitlements
+		SET status = 'revoked', revoked_at = now(), updated_at = now()
+		WHERE user_id = $1 AND status = 'active'`, userID)
+	if err != nil { return fmt.Errorf("deactivate network entitlement: %w", err) }
+	if result.RowsAffected() == 0 { return ErrEntitlementNotFound }
+	if err := tx.Commit(ctx); err != nil { return fmt.Errorf("commit entitlement deactivation: %w", err) }
 	return nil
 }
 

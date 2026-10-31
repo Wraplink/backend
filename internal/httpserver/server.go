@@ -78,6 +78,7 @@ func NewRouter(
 
 	if networkHandler.UsageIngestEnabled() {
 		r.Post("/api/v1/internal/usage/reports", networkHandler.IngestUsage)
+		r.Post("/api/v1/internal/network/usage", networkHandler.IngestEdgeUsage)
 	}
 
 	if entitlementHandler.SnapshotEnabled() {
