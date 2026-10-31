@@ -49,4 +49,14 @@ func TestBootstrapAdminPostgresIntegration(t *testing.T) {
   (SELECT count(*) FROM payment_review_admins WHERE user_id=$1)+
   (SELECT count(*) FROM discount_admins WHERE user_id=$1)`,id).Scan(&grants);err!=nil {t.Fatal(err)}
  if grants!=3 {t.Fatalf("expected three administrator grants; got %d",grants)}
+ // A colliding ordinary account must not gain privileges.
+ ordinaryEmail:="ordinary-"+time.Now().UTC().Format("20060102150405.000000000")+"@example.invalid"
+ var ordinaryID string
+ if err:=db.QueryRow(ctx,"INSERT INTO users(email,full_name,account_status,email_verified) VALUES($1,'Bootstrap Collision Test','active',true) RETURNING id::text",ordinaryEmail).Scan(&ordinaryID);err!=nil {t.Fatal(err)}
+ defer func(){_,_=db.Exec(context.Background(),"DELETE FROM users WHERE id=$1",ordinaryID)}()
+ t.Setenv("WRAPLINK_BOOTSTRAP_ADMIN_EMAIL",ordinaryEmail)
+ if err:=EnsureDefaultAdmin(ctx,db,nil);err==nil {t.Fatal("existing ordinary account was not rejected")}
+ var elevated bool
+ if err:=db.QueryRow(ctx,"SELECT EXISTS(SELECT 1 FROM access_admins WHERE user_id=$1)",ordinaryID).Scan(&elevated);err!=nil {t.Fatal(err)}
+ if elevated {t.Fatal("ordinary account was unexpectedly granted administrator privileges")}
 }
