@@ -25,13 +25,13 @@ func (s *Service) IngestEdgeUsage(ctx context.Context, edge EdgeUsageReport) (*U
 	// PostgreSQL can abort a SERIALIZABLE transaction when concurrent
 	// deliveries or entitlement changes race. Retry the entire transaction,
 	// never a partially applied ledger mutation.
-	for attempt := 0; attempt < 4; attempt++ {
+	for attempt := 0; attempt < 8; attempt++ {
 		result, err := s.repository.ApplyEdgeUsageReport(ctx, edge, report)
 		if err == nil {
 			return result, nil
 		}
 		var pgErr *pgconn.PgError
-		if !errors.As(err, &pgErr) || (pgErr.Code != "40001" && pgErr.Code != "40P01") || attempt == 3 {
+		if !errors.As(err, &pgErr) || (pgErr.Code != "40001" && pgErr.Code != "40P01") || attempt == 7 {
 			return nil, err
 		}
 		timer := time.NewTimer(time.Duration(attempt+1) * 25 * time.Millisecond)
