@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/mail"
 	"os"
 	"strings"
 	"time"
@@ -110,9 +111,15 @@ func validate(cfg Config) error {
 	if (cfg.Security.BootstrapAdminEmail == "") != (cfg.Security.BootstrapAdminPassword == "") {
 		return errors.New("bootstrap administrator email and password must be configured together")
 	}
-	if cfg.Security.BootstrapAdminEmail != "" && (!strings.Contains(cfg.Security.BootstrapAdminEmail, "@") || len(cfg.Security.BootstrapAdminPassword) < 16) {
-		return errors.New("bootstrap administrator requires a valid email and password of at least 16 characters")
-	}
+	if cfg.Security.BootstrapAdminEmail != "" {
+        parsed, err := mail.ParseAddress(cfg.Security.BootstrapAdminEmail)
+        if err != nil || parsed.Address != cfg.Security.BootstrapAdminEmail || len(cfg.Security.BootstrapAdminEmail) > 254 {
+            return errors.New("bootstrap administrator requires a valid email")
+        }
+        if len(cfg.Security.BootstrapAdminPassword) < 16 || len(cfg.Security.BootstrapAdminPassword) > 1024 {
+            return errors.New("bootstrap administrator password must be 16-1024 characters")
+        }
+    }
 
 	if strings.TrimSpace(cfg.App.FrontendURL) == "" {
 		return errors.New("app.frontend-url is required")
