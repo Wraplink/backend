@@ -26,9 +26,7 @@ func EnsureDefaultAdmin(ctx context.Context, db *pgxpool.Pool, logger *slog.Logg
  parsed,err:=mail.ParseAddress(email)
  if err!=nil || parsed.Address!=email || len(email)>254 {return errors.New("invalid bootstrap admin email")}
  if len(secret)<16 || len(secret)>1024 {return errors.New("bootstrap admin password must be 16-1024 characters")}
- hash,err:=password.Hash(secret)
- if err!=nil{return fmt.Errorf("hash bootstrap password: %w",err)}
- tx,err:=db.Begin(ctx)
+  tx,err:=db.Begin(ctx)
  if err!=nil{return err}
  defer tx.Rollback(ctx)
  // Serializes multiple app instances attempting the same bootstrap.
@@ -40,6 +38,8 @@ func EnsureDefaultAdmin(ctx context.Context, db *pgxpool.Pool, logger *slog.Logg
   err=tx.QueryRow(ctx,`INSERT INTO users(email,full_name,account_status,email_verified)
    VALUES($1,'WrapLink Administrator','active',true) RETURNING id`,email).Scan(&id)
   if err!=nil{return fmt.Errorf("create bootstrap admin: %w",err)}
+  hash,hashErr:=password.Hash(secret)
+  if hashErr!=nil{return fmt.Errorf("hash bootstrap password: %w",hashErr)}
   if _,err=tx.Exec(ctx,"INSERT INTO user_credentials(user_id,password_hash) VALUES($1,$2)",id,hash);err!=nil{return err}
   for _,table:=range []string{"access_admins","payment_review_admins","discount_admins"} {
    if _,err=tx.Exec(ctx,"INSERT INTO "+table+"(user_id) VALUES($1)",id);err!=nil{return err}
@@ -54,6 +54,17 @@ func EnsureDefaultAdmin(ctx context.Context, db *pgxpool.Pool, logger *slog.Logg
   var allowed bool
   if err=tx.QueryRow(ctx,"SELECT EXISTS(SELECT 1 FROM access_admins WHERE user_id=$1)",id).Scan(&allowed);err!=nil{return err}
   if !allowed{return errors.New("bootstrap admin email belongs to an existing non-admin user; refusing privilege escalation")}
+  var storedHash string
+  if err=tx.QueryRow(ctx,"SELECT password_hash FROM user_credentials WHERE user_id=$1 FOR UPDATE",id).Scan(&storedHash);err!=nil{return fmt.Errorf("load bootstrap administrator credential: %w",err)}
+  if !password.Verify(secret,storedHash) {
+   newHash,hashErr:=password.Hash(secret)
+   if hashErr!=nil{return fmt.Errorf("hash bootstrap password: %w",hashErr)}
+   if _,err=tx.Exec(ctx,"UPDATE user_credentials SET password_hash=$1 WHERE user_id=$2",newHash,id);err!=nil{return fmt.Errorf("rotate bootstrap administrator password: %w",err)}
+   if err=tx.Commit(ctx);err!=nil{return err}
+   logger.Info("bootstrap administrator password synchronized","email",email)
+   return nil
+  }
+  if err=tx.Commit(ctx);err!=nil{return err}
   logger.Info("bootstrap administrator already exists","email",email)
   return nil
  }
