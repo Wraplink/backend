@@ -2,6 +2,7 @@ package main
 
 import (
 	"backend/internal/auth"
+	"backend/internal/bootstrap"
 	"backend/internal/config"
 	"backend/internal/dashboard"
 	"backend/internal/database"
@@ -53,6 +54,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+
+	if err := bootstrap.EnsureRequiredData(ctx, db, logger); err != nil {
+		logger.Error("failed to bootstrap required data", "error", err)
+		os.Exit(1)
+	}
 
 	// Retry route allocation independently of agent heartbeats. A transient
 	// upstream DNS failure must not leave an otherwise healthy route waiting
