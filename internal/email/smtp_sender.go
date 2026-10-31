@@ -7,6 +7,7 @@ import (
  "fmt"
  "net"
  "net/mail"
+ "mime"
  "net/smtp"
  "net/url"
  "strconv"
@@ -76,7 +77,7 @@ func (s *SMTPSender) send(ctx context.Context,to,subject,body string) error {
  if err:=client.Rcpt(recipient.Address);err!=nil{return err}
  writer,err:=client.Data();if err!=nil{return err}
  // Encode UTF-8 subjects according to RFC 2047; never allow header injection.
- subject=mail.QEncoding.Encode("utf-8",strings.NewReplacer("\r","","\n","").Replace(subject))
+ subject=mime.QEncoding.Encode("utf-8",strings.NewReplacer("\r","","\n","").Replace(subject))
  msg:="From: "+from.String()+"\r\nTo: "+recipient.String()+"\r\nSubject: "+subject+"\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"+strings.ReplaceAll(strings.ReplaceAll(body,"\r\n","\n"),"\n","\r\n")
  if _,err:=writer.Write([]byte(msg));err!=nil{_ = writer.Close();return err}
  if err:=writer.Close();err!=nil{return err}
