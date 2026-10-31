@@ -263,7 +263,7 @@ func (s *RegistrationService) Register(
 			To:       emailAddress,
 			FullName: fullName,
 			Token:    verificationToken,
-			Locale:   "en",
+			Locale:   req.Locale,
 		},
 	); err != nil {
 		return nil, fmt.Errorf("send verification email: %w", err)

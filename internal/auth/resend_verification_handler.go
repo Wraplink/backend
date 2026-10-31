@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"backend/internal/security"
+ "backend/internal/email"
 )
 
 type resendVerificationHTTPRequest struct {
@@ -16,15 +17,18 @@ type resendVerificationHTTPRequest struct {
 type ResendVerificationHandler struct {
 	service      *ResendVerificationService
 	emailLimiter *security.RateLimiter
+ sender email.Sender
 }
 
 func NewResendVerificationHandler(
 	service *ResendVerificationService,
 	emailLimiter *security.RateLimiter,
+ sender email.Sender,
 ) *ResendVerificationHandler {
 	return &ResendVerificationHandler{
 		service:      service,
 		emailLimiter: emailLimiter,
+ sender: sender,
 	}
 }
 
@@ -118,19 +122,10 @@ func (h *ResendVerificationHandler) Resend(
 		}
 	}
 
-	/*
-		BACKEND TODO:
-		Send verification email.
-
-		The raw token exists only in result.Token and must never
-		be persisted or logged.
-
-		Example URL:
-
-		https://wraplink.ir/auth/verify-email?token=<result.Token>
-	*/
-
-	_ = result
+ if err := h.sender.SendVerificationEmail(r.Context(),email.VerificationEmail{To:result.Email,Token:result.Token,Locale:"fa"});err!=nil {
+  writeJSONError(w,http.StatusInternalServerError,"unable to send verification email; please retry later")
+  return
+ }
 
 	writeJSON(
 		w,
