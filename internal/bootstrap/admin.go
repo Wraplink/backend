@@ -22,6 +22,7 @@ func EnsureDefaultAdmin(ctx context.Context, db *pgxpool.Pool, logger *slog.Logg
  email:=strings.ToLower(strings.TrimSpace(os.Getenv("WRAPLINK_BOOTSTRAP_ADMIN_EMAIL")))
  secret:=os.Getenv("WRAPLINK_BOOTSTRAP_ADMIN_PASSWORD")
  if email=="" && secret=="" {return nil}
+ if db==nil {return errors.New("bootstrap admin requires a database connection")}
  if email=="" || secret=="" {return errors.New("bootstrap admin requires both email and password")}
  parsed,err:=mail.ParseAddress(email)
  if err!=nil || parsed.Address!=email || len(email)>254 {return errors.New("invalid bootstrap admin email")}
@@ -45,7 +46,7 @@ func EnsureDefaultAdmin(ctx context.Context, db *pgxpool.Pool, logger *slog.Logg
    if _,err=tx.Exec(ctx,"INSERT INTO "+table+"(user_id) VALUES($1)",id);err!=nil{return err}
   }
   if err=tx.Commit(ctx);err!=nil{return err}
-  logger.Info("initial administrator created","email",email)
+  logger.Info("initial administrator created")
   return nil
  case err!=nil:
   return err
@@ -62,7 +63,7 @@ func EnsureDefaultAdmin(ctx context.Context, db *pgxpool.Pool, logger *slog.Logg
    if _,err=tx.Exec(ctx,"UPDATE users SET failed_login_attempts=0,locked_until=NULL,updated_at=now() WHERE id=$1",id);err!=nil{return err}
   }
   if err=tx.Commit(ctx);err!=nil{return err}
-  logger.Info("bootstrap administrator reconciliation completed","email",email)
+  logger.Info("bootstrap administrator reconciliation completed")
   return nil
  }
 }
