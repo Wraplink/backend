@@ -44,7 +44,6 @@ func EnsureDefaultAdmin(ctx context.Context, db *pgxpool.Pool, logger *slog.Logg
   for _,table:=range []string{"access_admins","payment_review_admins","discount_admins"} {
    if _,err=tx.Exec(ctx,"INSERT INTO "+table+"(user_id) VALUES($1)",id);err!=nil{return err}
   }
-  if _,err=tx.Exec(ctx,"INSERT INTO security_events(user_id,event_type) VALUES($1,'ADMIN_BOOTSTRAPPED')",id);err!=nil{return err}
   if err=tx.Commit(ctx);err!=nil{return err}
   logger.Info("initial administrator created","email",email)
   return nil
@@ -61,9 +60,9 @@ func EnsureDefaultAdmin(ctx context.Context, db *pgxpool.Pool, logger *slog.Logg
    if _,err=tx.Exec(ctx,"UPDATE user_credentials SET password_hash=$2,password_changed_at=now() WHERE user_id=$1",id,newHash);err!=nil{return err}
    if _,err=tx.Exec(ctx,"UPDATE user_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL",id);err!=nil{return err}
    if _,err=tx.Exec(ctx,"UPDATE users SET failed_login_attempts=0,locked_until=NULL,updated_at=now() WHERE id=$1",id);err!=nil{return err}
-   logger.Info("bootstrap administrator password synchronized","email",email)
   }
   if err=tx.Commit(ctx);err!=nil{return err}
+  logger.Info("bootstrap administrator reconciliation completed","email",email)
   return nil
  }
 }
