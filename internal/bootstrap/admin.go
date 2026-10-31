@@ -22,11 +22,11 @@ func EnsureDefaultAdmin(ctx context.Context, db *pgxpool.Pool, logger *slog.Logg
  email:=strings.ToLower(strings.TrimSpace(os.Getenv("WRAPLINK_BOOTSTRAP_ADMIN_EMAIL")))
  secret:=os.Getenv("WRAPLINK_BOOTSTRAP_ADMIN_PASSWORD")
  if email=="" && secret=="" {return nil}
- if db==nil {return errors.New("bootstrap admin requires a database connection")}
  if email=="" || secret=="" {return errors.New("bootstrap admin requires both email and password")}
  parsed,err:=mail.ParseAddress(email)
  if err!=nil || parsed.Address!=email || len(email)>254 {return errors.New("invalid bootstrap admin email")}
  if len(secret)<16 || len(secret)>1024 {return errors.New("bootstrap admin password must be 16-1024 characters")}
+ if db==nil {return errors.New("bootstrap admin requires a database connection")}
  tx,err:=db.Begin(ctx)
  if err!=nil{return err}
  defer tx.Rollback(ctx)
