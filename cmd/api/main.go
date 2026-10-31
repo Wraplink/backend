@@ -55,6 +55,11 @@ func main() {
 	}
 	defer db.Close()
 
+	if err := bootstrap.EnsureDefaultAdmin(ctx, db, logger); err != nil {
+		logger.Error("failed to bootstrap administrator", "error", err)
+		os.Exit(1)
+	}
+
 	if err := bootstrap.EnsureRequiredData(ctx, db, logger); err != nil {
 		logger.Error("failed to bootstrap required data", "error", err)
 		os.Exit(1)
