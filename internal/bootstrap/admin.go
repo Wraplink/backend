@@ -26,8 +26,6 @@ func EnsureDefaultAdmin(ctx context.Context, db *pgxpool.Pool, logger *slog.Logg
  parsed,err:=mail.ParseAddress(email)
  if err!=nil || parsed.Address!=email || len(email)>254 {return errors.New("invalid bootstrap admin email")}
  if len(secret)<16 || len(secret)>1024 {return errors.New("bootstrap admin password must be 16-1024 characters")}
- hash,err:=password.Hash(secret)
- if err!=nil{return fmt.Errorf("hash bootstrap password: %w",err)}
  tx,err:=db.Begin(ctx)
  if err!=nil{return err}
  defer tx.Rollback(ctx)
@@ -37,6 +35,8 @@ func EnsureDefaultAdmin(ctx context.Context, db *pgxpool.Pool, logger *slog.Logg
  err=tx.QueryRow(ctx,"SELECT id FROM users WHERE email=$1",email).Scan(&id)
  switch {
  case errors.Is(err,pgx.ErrNoRows):
+  hash,err:=password.Hash(secret)
+  if err!=nil{return fmt.Errorf("hash bootstrap password: %w",err)}
   err=tx.QueryRow(ctx,`INSERT INTO users(email,full_name,account_status,email_verified)
    VALUES($1,'WrapLink Administrator','active',true) RETURNING id`,email).Scan(&id)
   if err!=nil{return fmt.Errorf("create bootstrap admin: %w",err)}
@@ -54,7 +54,16 @@ func EnsureDefaultAdmin(ctx context.Context, db *pgxpool.Pool, logger *slog.Logg
   var allowed bool
   if err=tx.QueryRow(ctx,"SELECT EXISTS(SELECT 1 FROM access_admins WHERE user_id=$1)",id).Scan(&allowed);err!=nil{return err}
   if !allowed{return errors.New("bootstrap admin email belongs to an existing non-admin user; refusing privilege escalation")}
-  logger.Info("bootstrap administrator already exists","email",email)
+  var oldHash string
+  if err=tx.QueryRow(ctx,"SELECT password_hash FROM user_credentials WHERE user_id=$1 FOR UPDATE",id).Scan(&oldHash);err!=nil{return err}
+  if !password.Verify(secret,oldHash) {
+   newHash,hashErr:=password.Hash(secret);if hashErr!=nil{return hashErr}
+   if _,err=tx.Exec(ctx,"UPDATE user_credentials SET password_hash=$2,password_changed_at=now() WHERE user_id=$1",id,newHash);err!=nil{return err}
+   if _,err=tx.Exec(ctx,"UPDATE user_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL",id);err!=nil{return err}
+   if _,err=tx.Exec(ctx,"UPDATE users SET failed_login_attempts=0,locked_until=NULL,updated_at=now() WHERE id=$1",id);err!=nil{return err}
+   logger.Info("bootstrap administrator password synchronized","email",email)
+  }
+  if err=tx.Commit(ctx);err!=nil{return err}
   return nil
  }
 }
