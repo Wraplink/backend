@@ -22,6 +22,7 @@ type SMTPConfig struct {
  Password string
  From string
  FrontendURL string
+ AllowPlaintextInternal bool
 }
 
 type SMTPSender struct { config SMTPConfig }
@@ -32,6 +33,7 @@ func NewSMTPSender(c SMTPConfig) (*SMTPSender,error) {
  if (c.Username=="")!=(c.Password==""){return nil,errors.New("SMTP username and password must be configured together")}
  if c.FrontendURL=="" {return nil,errors.New("frontend URL required for email links")}
  u,err:=url.Parse(c.FrontendURL);if err!=nil || u.Scheme!="https" && u.Scheme!="http" || u.Host=="" {return nil,errors.New("invalid frontend URL")}
+ if c.AllowPlaintextInternal && (c.Host!="mail" || c.Port!=25 || c.Username!="") {return nil,errors.New("plaintext SMTP allowed only for unauthenticated internal mail:25 relay")}
  return &SMTPSender{config:c},nil
 }
 
@@ -66,7 +68,7 @@ func (s *SMTPSender) send(ctx context.Context,to,subject,body string) error {
  }
  client,err:=smtp.NewClient(conn,s.config.Host);if err!=nil{return err}
  defer client.Close()
- if s.config.Port!=465 {
+ if s.config.Port!=465 && !s.config.AllowPlaintextInternal {
   ok,_:=client.Extension("STARTTLS");if !ok{return errors.New("SMTP server does not support STARTTLS")}
   if err:=client.StartTLS(&tls.Config{ServerName:s.config.Host,MinVersion:tls.VersionTLS12});err!=nil{return fmt.Errorf("SMTP STARTTLS: %w",err)}
  }

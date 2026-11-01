@@ -109,6 +109,7 @@ func main() {
    Host:os.Getenv("SMTP_HOST"),Port:port,
    Username:os.Getenv("SMTP_USERNAME"),Password:os.Getenv("SMTP_PASSWORD"),
    From:os.Getenv("SMTP_FROM"),FrontendURL:cfg.App.FrontendURL,
+   AllowPlaintextInternal: os.Getenv("SMTP_ALLOW_PLAINTEXT_INTERNAL")=="true",
   })
   if err!=nil {logger.Error("invalid SMTP configuration","error",err);os.Exit(1)}
   emailSender=sender
