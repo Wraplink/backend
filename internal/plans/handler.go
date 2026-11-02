@@ -2,6 +2,7 @@ package plans
 
 import (
 	"encoding/json"
+ "errors"
  "regexp"
  "time"
 	"log/slog"
@@ -89,18 +90,27 @@ func (h *Handler) AdminList(w http.ResponseWriter,r *http.Request){
  if err!=nil{h.logger.Error("list admin plans failed","error",err);writeJSONError(w,500,"could not list plans");return}
  writeJSON(w,200,map[string]any{"plans":items})
 }
+func validateAdminPlan(p *AdminPlanInput) error {
+ p.Code = strings.ToLower(strings.TrimSpace(p.Code))
+ p.Name = strings.TrimSpace(p.Name)
+ p.Currency = strings.ToUpper(strings.TrimSpace(p.Currency))
+ if !validPlanCode.MatchString(p.Code) || len(p.Name)==0 || len(p.Name)>200 || len(p.Description)>4000 || p.PriceMinor<0 || p.DurationDays<1 || p.DurationDays>3650 || p.DataLimitBytes<0 || p.SortOrder<0 || len(p.Currency)!=3 {
+  return errors.New("invalid plan fields")
+ }
+ for _, ch := range p.Currency { if ch<'A' || ch>'Z' { return errors.New("invalid currency") } }
+ if p.PublishAt!=nil {
+  t:=p.PublishAt.UTC()
+  if t.Before(time.Date(2000,1,1,0,0,0,0,time.UTC)) { return errors.New("invalid publication date") }
+  p.PublishAt=&t
+ }
+ return nil
+}
+
 func (h *Handler) AdminSave(w http.ResponseWriter,r *http.Request){
  r.Body=http.MaxBytesReader(w,r.Body,64<<10)
  var p AdminPlanInput
  if err:=json.NewDecoder(r.Body).Decode(&p);err!=nil{writeJSONError(w,400,"invalid JSON");return}
- p.Code=strings.ToLower(strings.TrimSpace(p.Code))
- p.Name=strings.TrimSpace(p.Name)
- p.Currency=strings.ToUpper(strings.TrimSpace(p.Currency))
- if !validPlanCode.MatchString(p.Code)||len(p.Name)==0||len(p.Name)>200||len(p.Description)>4000||p.PriceMinor<0||p.DurationDays<1||p.DurationDays>3650||p.DataLimitBytes<0||p.SortOrder<0||len(p.Currency)!=3{
- writeJSONError(w,400,"invalid plan fields");return
- }
- for _,c:=range p.Currency{if c<'A'||c>'Z'{writeJSONError(w,400,"invalid currency");return}}
- if p.PublishAt!=nil{t:=p.PublishAt.UTC();if t.Before(time.Date(2000,1,1,0,0,0,0,time.UTC)){writeJSONError(w,400,"invalid publication date");return};p.PublishAt=&t}
+ if err:=validateAdminPlan(&p);err!=nil{writeJSONError(w,400,err.Error());return}
  if err:=h.repository.SaveAdmin(r.Context(),p);err!=nil{h.logger.Error("save admin plan failed","error",err);writeJSONError(w,500,"could not save plan");return}
  writeJSON(w,200,map[string]any{"saved":true})
 }
