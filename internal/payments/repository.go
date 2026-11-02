@@ -277,6 +277,9 @@ func (r *Repository) PaySubscriptionWithWallet(
 	if subscriptionStatus != "pending_payment" {
 		return nil, ErrSubscriptionNotPending
 	}
+	if err := requirePayablePlan(ctx, tx, subscriptionID); err != nil {
+		return nil, err
+	}
 
 	var receiptSubmitted bool
 	if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM card_transfer_receipts WHERE subscription_id=$1)", subscriptionID).Scan(&receiptSubmitted); err != nil {
