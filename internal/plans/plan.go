@@ -108,6 +108,7 @@ func (r *Repository) GetActiveByCode(
 		FROM plans
 		WHERE code = $1
 		  AND active = TRUE
+          AND (publish_at IS NULL OR publish_at <= now())
 	`
 
 	var plan Plan
