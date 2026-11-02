@@ -154,6 +154,8 @@ func (h *Handler) PaySubscriptionWithWallet(
 			writeJSONError(w, http.StatusBadRequest, "Idempotency-Key header is required and must be at most 100 characters")
 		case errors.Is(err, ErrSubscriptionNotFound):
 			writeJSONError(w, http.StatusNotFound, "subscription not found")
+		case errors.Is(err, ErrPlanUnavailable):
+			writeJSONError(w, http.StatusConflict, "plan is disabled or unpublished")
 		case errors.Is(err, ErrSubscriptionNotPending):
 			writeJSONError(w, http.StatusConflict, "subscription is not pending payment")
 		case errors.Is(err, ErrActiveSubscriptionExists):
