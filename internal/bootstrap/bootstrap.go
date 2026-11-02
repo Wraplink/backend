@@ -71,7 +71,9 @@ func EnsureRequiredData(
 		logger = slog.Default()
 	}
 
-	tx, err := db.Begin(ctx)
+	// Schema upgrade is idempotent for existing installations.
+ if _,err:=db.Exec(ctx,`ALTER TABLE plans ADD COLUMN IF NOT EXISTS publish_at TIMESTAMPTZ`);err!=nil{return fmt.Errorf("bootstrap: plan publication schema: %w",err)}
+ tx, err := db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("bootstrap: begin transaction: %w", err)
 	}
