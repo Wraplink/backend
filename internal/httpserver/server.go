@@ -71,6 +71,7 @@ func NewRouter(
 	r.Get("/api/v1/payment-methods", paymentsHandler.ListPaymentMethods)
 	r.Get("/api/v1/plans", plansHandler.List)
 	r.Get("/api/v1/plans/{code}", plansHandler.Get)
+ r.Route("/api/v1/admin/plans",func(r chi.Router){r.Use(requireAuthMiddleware);r.Use(paymentsHandler.AccessAdminMiddleware);r.Get("/",plansHandler.AdminList);r.Put("/",plansHandler.AdminSave)})
 
 	if depositHandler.DevelopmentSettlementEnabled() {
 		r.Post("/api/v1/dev/deposits/{depositID}/settle", depositHandler.SettleDevelopment)
