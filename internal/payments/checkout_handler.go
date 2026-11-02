@@ -75,6 +75,7 @@ func (h *Handler) SubmitCardReceipt(w http.ResponseWriter,r *http.Request) {
  var price int64;var currency string
  err=tx.QueryRow(r.Context(),"SELECT price_minor,currency FROM user_subscriptions WHERE id=$1 AND user_id=$2 AND status='pending_payment' FOR UPDATE",id,userID).Scan(&price,&currency)
  if err!=nil {writeJSONError(w,409,"subscription is not pending");return}
+ if err=requirePayablePlan(r.Context(),tx,id);err!=nil {writeJSONError(w,409,"plan is disabled or unpublished");return}
  cardID,err:=uuid.Parse(strings.TrimSpace(r.FormValue("paymentCardId")))
  if err!=nil {writeJSONError(w,400,"select a valid payment card");return}
  var cardActive bool

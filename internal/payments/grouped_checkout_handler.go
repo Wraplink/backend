@@ -34,6 +34,7 @@ func (h *Handler) SubmitGroupedCardReceipt(w http.ResponseWriter,r *http.Request
   var amount int64;var cur string
   err=tx.QueryRow(r.Context(),`SELECT price_minor,currency FROM user_subscriptions WHERE id=$1 AND user_id=$2 AND status='pending_payment' FOR UPDATE`,id,userID).Scan(&amount,&cur)
   if err!=nil{writeJSONError(w,409,"one or more orders are not pending");return}
+  if requirePayablePlan(r.Context(),tx,id)!=nil{writeJSONError(w,409,"one or more plans are disabled or unpublished");return}
   var hasReceipt bool
   if tx.QueryRow(r.Context(),"SELECT EXISTS(SELECT 1 FROM card_transfer_receipts WHERE subscription_id=$1)",id).Scan(&hasReceipt)!=nil||hasReceipt{writeJSONError(w,409,"one or more orders already have receipts");return}
   if currency!=""&&currency!=cur{writeJSONError(w,400,"mixed currencies are not supported");return}

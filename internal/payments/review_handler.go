@@ -114,6 +114,7 @@ func (h *Handler) ReviewReceipt(w http.ResponseWriter,r *http.Request){
   var groupCount int
   if tx.QueryRow(r.Context(),"SELECT count(*) FROM card_transfer_receipts WHERE payment_group_id=$1",*groupID).Scan(&groupCount)!=nil||groupCount!=len(entries){writeJSONError(w,409,"group changed; refresh");return}
   if body.Decision=="approved" {
+   for _,v:=range entries{if requirePayablePlan(r.Context(),tx,v.sub)!=nil{writeJSONError(w,409,"one or more plans are disabled or unpublished");return}}
    if _,e=tx.Exec(r.Context(),"SELECT promote_user_subscription($1)",user);e!=nil{writeJSONError(w,500,"queue reconciliation failed");return}
   }
   for _,v:=range entries{
@@ -138,6 +139,7 @@ func (h *Handler) ReviewReceipt(w http.ResponseWriter,r *http.Request){
   return
  }
  if body.Decision=="approved" {
+  if requirePayablePlan(r.Context(),tx,sub)!=nil{writeJSONError(w,409,"plan is disabled or unpublished");return}
   // Serialize approvals for different subscriptions belonging to the same user.
   // This lock prevents two reviewers from simultaneously activating two plans.
   var lockedUser uuid.UUID
