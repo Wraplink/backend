@@ -49,7 +49,10 @@ func (r *Repository) ListActive(ctx context.Context) ([]Plan, error) {
 			currency,
 			duration_days,
 			data_limit_bytes,
-			created_at
+			created_at,
+			active,
+			publish_at,
+			sort_order
 		FROM plans
 		WHERE active = TRUE AND (publish_at IS NULL OR publish_at <= now())
 		ORDER BY sort_order, price_minor, code
@@ -76,6 +79,9 @@ func (r *Repository) ListActive(ctx context.Context) ([]Plan, error) {
 			&plan.DurationDays,
 			&plan.DataLimitBytes,
 			&plan.CreatedAt,
+			&plan.Active,
+			&plan.PublishAt,
+			&plan.SortOrder,
 		); err != nil {
 			return nil, fmt.Errorf("scan plan: %w", err)
 		}
@@ -104,7 +110,10 @@ func (r *Repository) GetActiveByCode(
 			currency,
 			duration_days,
 			data_limit_bytes,
-			created_at
+			created_at,
+			active,
+			publish_at,
+			sort_order
 		FROM plans
 		WHERE code = $1
 		  AND active = TRUE
@@ -123,6 +132,9 @@ func (r *Repository) GetActiveByCode(
 		&plan.DurationDays,
 		&plan.DataLimitBytes,
 		&plan.CreatedAt,
+		&plan.Active,
+		&plan.PublishAt,
+		&plan.SortOrder,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
