@@ -46,6 +46,7 @@ func NewRouter(
 	sessionManagementHandler *auth.SessionManagementHandler,
 	revokeOthersHandler *auth.RevokeOthersHandler,
 	registrationRateLimitMiddleware func(http.Handler) http.Handler,
+    captchaMiddleware func(http.Handler) http.Handler,
 	resendVerificationRateLimitMiddleware func(http.Handler) http.Handler,
 	requireAuthMiddleware func(http.Handler) http.Handler,
 	passwordResetRateLimitMiddleware func(http.Handler) http.Handler,
@@ -66,7 +67,7 @@ func NewRouter(
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	r.With(registrationRateLimitMiddleware).Post("/api/v1/contact", supportHandler.PublicContact)
+	r.With(registrationRateLimitMiddleware, captchaMiddleware).Post("/api/v1/contact", supportHandler.PublicContact)
 	r.Get("/api/v1/payment-cards", paymentsHandler.ListPaymentCards)
 	r.Get("/api/v1/payment-methods", paymentsHandler.ListPaymentMethods)
 	r.Get("/api/v1/plans", plansHandler.List)
@@ -169,13 +170,13 @@ func NewRouter(
   r.Patch("/tickets/{ticketID}/status",supportHandler.MyStatus)
  })
  r.Route("/api/v1/auth", func(r chi.Router) {
-		r.With(registrationRateLimitMiddleware).Post("/register", registerHandler.Register)
+		r.With(registrationRateLimitMiddleware, captchaMiddleware).Post("/register", registerHandler.Register)
 		r.Post("/login", loginHandler.Login)
 		r.Post("/verify-email", emailVerificationHandler.Verify)
-		r.With(resendVerificationRateLimitMiddleware).Post("/resend-verification", resendVerificationHandler.Resend)
+		r.With(resendVerificationRateLimitMiddleware, captchaMiddleware).Post("/resend-verification", resendVerificationHandler.Resend)
 		r.Post("/refresh", refreshHandler.Refresh)
 		r.With(requireAuthMiddleware).Post("/logout", logoutHandler.Logout)
-		r.With(passwordResetRateLimitMiddleware).Post("/password-reset/request", passwordResetHandler.Request)
+		r.With(passwordResetRateLimitMiddleware, captchaMiddleware).Post("/password-reset/request", passwordResetHandler.Request)
 		r.Post("/password-reset/confirm", passwordResetHandler.Confirm)
 	})
 
