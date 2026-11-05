@@ -1,7 +1,6 @@
 package security
 
 import (
-    "context"
     "encoding/json"
     "net/http"
     "net/url"
@@ -56,6 +55,3 @@ func TurnstileMiddleware(trustedProxy *TrustedProxy) func(http.Handler) http.Han
         })
     }
 }
-
-// Compile-time guard: middleware must accept requests with contexts.
-var _ context.Context
