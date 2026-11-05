@@ -266,6 +266,7 @@ func main() {
 		sessionManagementHandler,
 		revokeOthersHandler,
 		registrationRateLimitMiddleware,
+        security.TurnstileMiddleware(trustedProxy),
 		resendVerificationRateLimitMiddleware,
 		requireAuthMiddleware,
 		passwordResetRateLimitMiddleware,
