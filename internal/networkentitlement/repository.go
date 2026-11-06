@@ -185,7 +185,7 @@ func (r *Repository) Current(
 				WHEN s.status = 'active'
 				 AND s.starts_at <= now()
 				 AND s.expires_at > now()
-				 AND s.used_bytes < s.data_limit_bytes
+				 AND (s.data_limit_bytes = 0 OR s.used_bytes < s.data_limit_bytes)
                  AND e.last_activity_at >= now() - INTERVAL '30 minutes'
 				THEN 'active'
 				ELSE 'inactive'
@@ -194,7 +194,7 @@ func (r *Repository) Current(
 			COALESCE(m.mode, 'smart'),
 			s.data_limit_bytes,
 			s.used_bytes,
-			GREATEST(s.data_limit_bytes - s.used_bytes, 0),
+			CASE WHEN s.data_limit_bytes = 0 THEN 0 ELSE GREATEST(s.data_limit_bytes - s.used_bytes, 0) END,
 			s.starts_at,
 			s.expires_at,
 			e.activated_at
@@ -289,7 +289,7 @@ func (r *Repository) SetMode(ctx context.Context, userID uuid.UUID, mode Connect
 func (r *Repository) Snapshot(
 	ctx context.Context,
 ) ([]SnapshotItem, error) {
-	if _, err := r.db.Exec(ctx, "SELECT promote_user_subscription(id) FROM users WHERE EXISTS (SELECT 1 FROM user_subscriptions WHERE user_id=users.id AND status='active' AND (expires_at<=now() OR used_bytes>=data_limit_bytes))"); err != nil {return nil, fmt.Errorf("reconcile network snapshot: %w",err)}
+	if _, err := r.db.Exec(ctx, "SELECT promote_user_subscription(id) FROM users WHERE EXISTS (SELECT 1 FROM user_subscriptions WHERE user_id=users.id AND status='active' AND (expires_at<=now() OR (data_limit_bytes > 0 AND used_bytes>=data_limit_bytes)))"); err != nil {return nil, fmt.Errorf("reconcile network snapshot: %w",err)}
 	const query = `
 		SELECT
 			e.id,
@@ -300,7 +300,7 @@ func (r *Repository) Snapshot(
 			COALESCE(m.mode, 'smart'),
 			s.data_limit_bytes,
 			s.used_bytes,
-			GREATEST(s.data_limit_bytes - s.used_bytes, 0),
+			CASE WHEN s.data_limit_bytes = 0 THEN 0 ELSE GREATEST(s.data_limit_bytes - s.used_bytes, 0) END,
 			s.expires_at
 		FROM network_entitlements e
 		JOIN user_subscriptions s ON s.id = e.subscription_id
@@ -309,7 +309,7 @@ func (r *Repository) Snapshot(
 		  AND s.status = 'active'
 		  AND s.starts_at <= now()
 		  AND s.expires_at > now()
-		  AND s.used_bytes < s.data_limit_bytes
+		  AND (s.data_limit_bytes = 0 OR s.used_bytes < s.data_limit_bytes)
           AND e.last_activity_at >= now() - INTERVAL '30 minutes'
 		ORDER BY e.client_ip, e.id
 	`
@@ -364,7 +364,7 @@ func lockUsableSubscription(
 		  AND status = 'active'
 		  AND starts_at <= now()
 		  AND expires_at > now()
-		  AND used_bytes < data_limit_bytes
+		  AND (data_limit_bytes = 0 OR used_bytes < data_limit_bytes)
 		ORDER BY starts_at DESC
 		LIMIT 1
 		FOR UPDATE
@@ -455,7 +455,7 @@ func ensureClientIPAvailable(
 }
 
 func remainingBytes(limit, used int64) int64 {
-	remaining := limit - used
+	if limit == 0 { return 0 } // Unlimited has no finite remaining quota.\n\tremaining := limit - used
 	if remaining < 0 {
 		return 0
 	}
