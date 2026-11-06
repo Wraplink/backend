@@ -81,7 +81,7 @@ func(h *Handler) Create(w http.ResponseWriter,r *http.Request){
  if e==nil{_,e=tx.Exec(r.Context(),"INSERT INTO support_messages(ticket_id,sender_id,sender_role,message) VALUES($1,$2,'user',$3)",ticketID,id,b.Message)}
  if e==nil {
   payload,_:=json.Marshal(map[string]string{"text":"New support ticket #"+strconv.FormatInt(number,10)+" · priority: "+b.Priority+" · category: "+b.Category})
-  _,e=tx.Exec(r.Context(),"INSERT INTO slack_outbox(event_key,event_type,string(payload)) VALUES($1,'support.ticket.created',$2)", "ticket:"+ticketID.String(),string(payload))
+  _,e=tx.Exec(r.Context(),"INSERT INTO slack_outbox(event_key,event_type,payload) VALUES($1,'support.ticket.created',$2)", "ticket:"+ticketID.String(),string(payload))
  }
  if e!=nil{fail(w,500,"could not create ticket");return}
  if tx.Commit(r.Context())!=nil{fail(w,500,"could not save ticket");return}
