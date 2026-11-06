@@ -44,7 +44,7 @@ func (h *AlertHandler) Ingest(w http.ResponseWriter,r *http.Request) {
  bucket:=time.Now().UTC().Unix()/300
  key:=a.Service+":"+a.Severity+":"+a.Fingerprint+":"+strings.TrimSpace(a.Environment)+":"+time.Unix(bucket*300,0).UTC().Format(time.RFC3339)
  payload,_:=json.Marshal(map[string]string{"text":"WrapLink "+a.Severity+" · "+a.Service+" ["+a.Environment+"] · "+a.Code+": "+a.Summary})
- _,err:=h.DB.Exec(r.Context(),`INSERT INTO slack_outbox(event_key,event_type,string(payload)) VALUES($1,'runtime.alert',$2) ON CONFLICT(event_key) DO NOTHING`,key,string(payload))
+ _,err:=h.DB.Exec(r.Context(),`INSERT INTO slack_outbox(event_key,event_type,payload) VALUES($1,'runtime.alert',$2) ON CONFLICT(event_key) DO NOTHING`,key,string(payload))
  if err!=nil{http.Error(w,"alert queue unavailable",503);return}
  w.Header().Set("Content-Type","application/json")
  w.WriteHeader(http.StatusAccepted)
