@@ -169,7 +169,7 @@ func (r *Repository) ListAdmin(ctx context.Context) ([]Plan,error) {
  rows,err:=r.db.Query(ctx,`SELECT id,code,name,description,price_minor,currency,duration_days,data_limit_bytes,created_at,active,publish_at,sort_order,is_popular FROM plans ORDER BY sort_order,code`)
  if err!=nil{return nil,err};defer rows.Close()
  items:=make([]Plan,0)
- for rows.Next(){var p Plan;if err:=rows.Scan(&p.ID,&p.Code,&p.Name,&p.Description,&p.PriceMinor,&p.Currency,&p.DurationDays,&p.DataLimitBytes,&p.CreatedAt,&p.Active,&p.PublishAt,&p.SortOrder);err!=nil{return nil,err};items=append(items,p)}
+ for rows.Next(){var p Plan;if err:=rows.Scan(&p.ID,&p.Code,&p.Name,&p.Description,&p.PriceMinor,&p.Currency,&p.DurationDays,&p.DataLimitBytes,&p.CreatedAt,&p.Active,&p.PublishAt,&p.SortOrder,&p.IsPopular);err!=nil{return nil,err};items=append(items,p)}
  return items,rows.Err()
 }
 func (r *Repository) SaveAdmin(ctx context.Context, p AdminPlanInput) error {
