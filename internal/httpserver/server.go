@@ -13,6 +13,7 @@ import (
 	"backend/internal/security"
 	"backend/internal/subscriptions"
  "backend/internal/support"
+ "backend/internal/slackreport"
  "backend/internal/notifications"
 	"backend/internal/user"
 	"log/slog"
@@ -24,6 +25,7 @@ import (
 func NewRouter(
 	plansHandler *plans.Handler,
  supportHandler *support.Handler,
+ alertHandler *slackreport.AlertHandler,
  notificationsHandler *notifications.Handler,
 	subscriptionsHandler *subscriptions.Handler,
 	paymentsHandler *payments.Handler,
@@ -61,7 +63,8 @@ func NewRouter(
 	r.Use(cors.Middleware)
 	r.Use(security.SecurityHeaders)
 
-	r.Get("/health/live", func(w http.ResponseWriter, _ *http.Request) {
+	if alertHandler.Enabled() {r.Post("/api/v1/internal/alerts",alertHandler.Ingest)}
+ r.Get("/health/live", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))

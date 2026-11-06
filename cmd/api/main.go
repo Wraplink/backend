@@ -18,6 +18,7 @@ import (
 	"backend/internal/security"
 	"backend/internal/subscriptions"
  "backend/internal/support"
+ "backend/internal/slackreport"
  "backend/internal/notifications"
 	"backend/internal/user"
 	"context"
@@ -55,6 +56,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+ go slackreport.Run(ctx, db, logger)
 
 	if err := bootstrap.EnsureDefaultAdmin(ctx, db, logger); err != nil {
 		logger.Error("failed to bootstrap administrator", "error", err)
@@ -244,6 +246,7 @@ func main() {
 	router := httpserver.NewRouter(
 		plansHandler,
         supportHandler,
+        slackreport.NewAlertHandler(db),
         notificationsHandler,
 		subscriptionsHandler,
 		paymentsHandler,
