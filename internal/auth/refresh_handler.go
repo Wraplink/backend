@@ -98,7 +98,10 @@ func (h *RefreshHandler) Refresh(
 		return
 	}
 
-	setRefreshCookie(w, result.RefreshToken, result.RefreshTokenExpiry, h.secureCookie)
+	rememberCookie, rememberErr := r.Cookie(rememberDeviceCookieName)
+	remember := rememberErr == nil && rememberCookie.Value == "1"
+	setRefreshCookieWithPersistence(w, result.RefreshToken, result.RefreshTokenExpiry, h.secureCookie, remember)
+	if remember { setRememberDeviceCookie(w, true, result.RefreshTokenExpiry, h.secureCookie) }
 
 	writeJSON(
 		w,

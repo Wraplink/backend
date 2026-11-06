@@ -31,6 +31,7 @@ func clearRefreshCookie(
 	w http.ResponseWriter,
 	secure bool,
 ) {
+	setRememberDeviceCookie(w, false, time.Time{}, secure)
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshCookieName,
 		Value:    "",
@@ -51,4 +52,35 @@ func maxAgeFromExpiry(expiresAt time.Time) int {
 	}
 
 	return seconds
+}
+
+const rememberDeviceCookieName = "wraplink_remember_device"
+
+// A session cookie is used unless the user explicitly opted into persistence.
+func setRefreshCookieWithPersistence(w http.ResponseWriter, value string, expiresAt time.Time, secure, persistent bool) {
+	cookie := &http.Cookie{
+		Name: refreshCookieName, Value: value, Path: refreshCookiePath,
+		HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode,
+	}
+	if persistent {
+		cookie.Expires = expiresAt
+		cookie.MaxAge = maxAgeFromExpiry(expiresAt)
+	}
+	http.SetCookie(w, cookie)
+}
+
+func setRememberDeviceCookie(w http.ResponseWriter, remember bool, expiresAt time.Time, secure bool) {
+	cookie := &http.Cookie{
+		Name: rememberDeviceCookieName, Path: refreshCookiePath,
+		HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode,
+	}
+	if remember {
+		cookie.Value = "1"
+		cookie.Expires = expiresAt
+		cookie.MaxAge = maxAgeFromExpiry(expiresAt)
+	} else {
+		cookie.MaxAge = -1
+		cookie.Expires = time.Unix(1, 0)
+	}
+	http.SetCookie(w, cookie)
 }
