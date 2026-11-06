@@ -24,3 +24,12 @@ Configure the **backend service environment** with `WRAPLINK_SLACK_WEBHOOK_URL` 
 Messages contain only ticket number, priority, category, or contact reference. They exclude email, message bodies, customer names, and user identifiers.
 
 **Limitations:** Delivery is at-least-once, so a crash after Slack accepts an event but before DB acknowledgment can produce duplicates. Pending events retry with backoff. A permanently invalid webhook requires operator intervention. Runtime errors from DNS Control, Edge Agent and Backend are not yet collected by this dispatcher.
+
+## Runtime alert ingestion
+Set `WRAPLINK_ALERT_INGEST_KEY` to a strong shared secret in the backend and each authorized service. When configured, backend exposes `POST /api/v1/internal/alerts`, requiring `X-Wraplink-Alert-Key`. Only use this endpoint over trusted internal networks; restrict it at the reverse proxy and firewall. Alerts are deduplicated by service, severity, fingerprint, environment and five-minute bucket.
+
+Payload example:
+```json
+{"service":"dns-control","severity":"error","code":"domain_policy_sync_failed","fingerprint":"domain_policy_sync_failed","summary":"Backend domain policy sync failed","environment":"production"}
+```
+No raw errors or stack traces should be submitted. Alert delivery to Slack requires the backend's `WRAPLINK_SLACK_WEBHOOK_URL` and migration 000043.
