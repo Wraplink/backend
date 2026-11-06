@@ -455,7 +455,7 @@ func ensureClientIPAvailable(
 }
 
 func remainingBytes(limit, used int64) int64 {
-	if limit == 0 { return 0 } // Unlimited has no finite remaining quota.\n\tremaining := limit - used
+	if limit == 0 {\n\t\treturn 0 // Unlimited has no finite remaining quota.\n\t}\n\tremaining := limit - used
 	if remaining < 0 {
 		return 0
 	}
