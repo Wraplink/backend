@@ -23,7 +23,7 @@ func(h *Handler) PublicContact(w http.ResponseWriter,r *http.Request){
  err=tx.QueryRow(r.Context(),"INSERT INTO contact_messages(name,email,subject,message) VALUES($1,$2,$3,$4) RETURNING id",b.Name,b.Email,b.Subject,b.Message).Scan(&messageID)
  if err==nil {
   payload,_:=json.Marshal(map[string]string{"text":"New WrapLink contact message · reference: "+messageID})
-  _,err=tx.Exec(r.Context(),"INSERT INTO slack_outbox(event_key,event_type,payload) VALUES($1,'contact.created',$2)","contact:"+messageID,payload)
+  _,err=tx.Exec(r.Context(),"INSERT INTO slack_outbox(event_key,event_type,string(payload)) VALUES($1,'contact.created',$2)","contact:"+messageID,string(payload))
  }
  if err==nil {err=tx.Commit(r.Context())}
  if err!=nil{fail(w,500,"could not save message");return}
