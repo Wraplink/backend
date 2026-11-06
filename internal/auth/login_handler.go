@@ -13,6 +13,7 @@ import (
 type loginHTTPRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	RememberDevice bool `json:"rememberDevice"`
 }
 
 type LoginHandler struct {
@@ -139,7 +140,8 @@ func (h *LoginHandler) Login(
 		- Browser receives it only through HttpOnly cookie.
 		- Database stores only SHA-256 hash.
 	*/
-	setRefreshCookie(w, result.RefreshToken, result.RefreshUntil, h.secureCookie)
+	setRefreshCookieWithPersistence(w, result.RefreshToken, result.RefreshUntil, h.secureCookie, request.RememberDevice)
+	setRememberDeviceCookie(w, request.RememberDevice, result.RefreshUntil, h.secureCookie)
 
 	writeJSON(
 		w,
