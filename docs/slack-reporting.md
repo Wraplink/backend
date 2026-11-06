@@ -14,3 +14,13 @@ The workflow does not execute code from untrusted pull requests and does not inc
 This workflow reports **GitHub activity only**. It does not capture runtime errors, application logs, DNS failures, nftables failures, or support tickets submitted through the website.
 
 For application-level reporting, emit structured events to a backend-owned alert dispatcher, persist notifications in an outbox, redact sensitive information, deduplicate by fingerprint, retry delivery with bounded backoff, and preserve user-submitted tickets even if Slack is unavailable. Keep the Slack webhook on the server only. Report ticket IDs, categories, severity and admin links; do not send ticket body or personal details by default.
+
+
+## Application notifications (backend)
+The backend additionally writes `support.ticket.created` and `contact.created` events to `slack_outbox` within the same database transaction as the user submission. A background worker dispatches events to Slack. The original support ticket or contact message remains available if Slack delivery fails after the database transaction commits.
+
+Configure the **backend service environment** with `WRAPLINK_SLACK_WEBHOOK_URL` (separately from the GitHub Actions secret). Run migration `000043_slack_outbox` before deploying the updated backend. The webhook must never be prefixed with `NEXT_PUBLIC_` or exposed to the web frontend.
+
+Messages contain only ticket number, priority, category, or contact reference. They exclude email, message bodies, customer names, and user identifiers.
+
+**Limitations:** Delivery is at-least-once, so a crash after Slack accepts an event but before DB acknowledgment can produce duplicates. Pending events retry with backoff. A permanently invalid webhook requires operator intervention. Runtime errors from DNS Control, Edge Agent and Backend are not yet collected by this dispatcher.
