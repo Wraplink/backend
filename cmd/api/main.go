@@ -246,6 +246,7 @@ func main() {
 	router := httpserver.NewRouter(
 		plansHandler,
         supportHandler,
+        slackreport.NewAlertHandler(db),
         notificationsHandler,
 		subscriptionsHandler,
 		paymentsHandler,
