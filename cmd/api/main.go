@@ -68,6 +68,28 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Remove abandoned, unverified registrations in small transactions.
+    // Fail closed if unexpected foreign keys prevent deletion; never cascade.
+    go func() {
+        ticker := time.NewTicker(time.Hour)
+        defer ticker.Stop()
+        for {
+            select {
+            case <-ctx.Done():
+                return
+            case <-ticker.C:
+                cleanupCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+                count, err := auth.CleanupPendingRegistrations(cleanupCtx, db, 7*24*time.Hour)
+                cancel()
+                if err != nil {
+                    logger.Warn("pending registration cleanup failed", "error", err)
+                } else if count > 0 {
+                    logger.Info("expired pending registrations removed", "count", count)
+                }
+            }
+        }
+    }()
+
 	// Retry route allocation independently of agent heartbeats. A transient
 	// upstream DNS failure must not leave an otherwise healthy route waiting
 	// indefinitely until another inventory registration occurs.
@@ -174,7 +196,8 @@ func main() {
 	)
 
 	// Rate limiters.
-	registrationRateLimiter := security.NewRateLimiter(5, time.Minute)
+	registrationRateLimiter := security.NewRateLimiter(5, 15*time.Minute)
+	registrationGlobalLimiter := security.NewRateLimiter(100, time.Hour)
 	resendVerificationEmailLimiter := security.NewRateLimiter(3, time.Hour)
 	resendVerificationRateLimiter := security.NewRateLimiter(3, 15*time.Minute)
 	passwordResetRateLimiter := security.NewRateLimiter(5, time.Minute)
@@ -218,13 +241,18 @@ func main() {
 	sessionManagementHandler := auth.NewSessionManagementHandler(sessionManagementService)
 	revokeOthersHandler := auth.NewRevokeOthersHandler(revokeOthersService)
 
-	registrationRateLimitMiddleware := registrationRateLimiter.Middleware(func(r *http.Request) string {
+	registrationIPMiddleware := registrationRateLimiter.Middleware(func(r *http.Request) string {
 		ip := trustedProxy.ClientIP(r)
 		if ip == nil {
 			return "unknown"
 		}
 		return ip.String()
 	})
+	registrationRateLimitMiddleware := func(next http.Handler) http.Handler {
+        return registrationGlobalLimiter.Middleware(func(*http.Request) string { return "global" })(
+            registrationIPMiddleware(next),
+        )
+    }
 	resendVerificationRateLimitMiddleware := resendVerificationRateLimiter.Middleware(func(r *http.Request) string {
 		ip := trustedProxy.ClientIP(r)
 		if ip == nil {
