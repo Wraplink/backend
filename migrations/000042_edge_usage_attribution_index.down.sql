@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_network_entitlements_usage_attribution;
