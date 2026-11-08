@@ -85,6 +85,7 @@ func (h *Handler) AgentSnapshot(w http.ResponseWriter,r *http.Request) {
   agents=append(agents,a)
  }
  if rows.Err()!=nil {writeJSONError(w,500,"snapshot unavailable");return}
+ rows.Close()
  // Recheck revision after reading to avoid returning a mixed page.
  var current int64
  if err:=h.db.QueryRow(r.Context(),`SELECT GREATEST(COALESCE(MAX(revision),0),1) FROM network_agent_health`).Scan(&current);err!=nil || current!=revision {
