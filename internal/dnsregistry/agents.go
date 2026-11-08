@@ -4,7 +4,6 @@ import (
  "crypto/subtle"
  "encoding/json"
  "net/http"
- "strconv"
  "strings"
  "time"
 )
@@ -95,5 +94,3 @@ func (h *Handler) AgentSnapshot(w http.ResponseWriter,r *http.Request) {
  if next!="" {response["next_cursor"]=next}
  writeJSON(w,200,response)
 }
-
-var _ = strconv.Itoa
