@@ -1,7 +1,7 @@
 app:
   name: wraplink-api
-  environment: development
-  frontend-url: http://localhost:3000
+  environment: ${APP_ENV}
+  frontend-url: ${FRONTEND_URL}
 
 http:
   host: 0.0.0.0
@@ -22,8 +22,8 @@ security:
   jwt-secret: ${JWT_SECRET}
   access-token-ttl: 15m
   refresh-token-ttl: 720h
-  secure-cookies: false
-  refresh-cookie-domain: ""
+  secure-cookies: ${SECURE_COOKIES}
+  refresh-cookie-domain: "${COOKIE_DOMAIN}"
 #  refresh-cookie-domain: ".wraplink.ir"
 
 payments:
@@ -51,8 +51,6 @@ network:
 
 cors:
   allowed-origins:
-    - http://localhost:3000
-    - https://wraplink.ir
-    - https://www.wraplink.ir
+    - ${FRONTEND_URL}
 server:
   # Set only actual local reverse-proxy addresses or Nginx peer CIDRs.\n  trusted-proxies: []
