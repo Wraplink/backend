@@ -1,0 +1,88 @@
+package starterpolicy
+
+import (
+ "context"
+ "errors"
+ "fmt"
+ "time"
+
+ "github.com/google/uuid"
+ "github.com/jackc/pgx/v5"
+ "github.com/jackc/pgx/v5/pgxpool"
+)
+
+// ActivationStore promotes a reserved starter claim and creates the
+// corresponding active subscription in the same database transaction.
+type ActivationStore struct { DB *pgxpool.Pool }
+
+type ActivatedTrial struct {
+ ClaimID uuid.UUID `json:"claimId"`
+ SubscriptionID uuid.UUID `json:"subscriptionId"`
+ StartsAt time.Time `json:"startsAt"`
+ ExpiresAt time.Time `json:"expiresAt"`
+}
+
+var ErrActiveSubscription = errors.New("another subscription is already active")
+
+func (s ActivationStore) Activate(ctx context.Context, userID, claimID uuid.UUID) (ActivatedTrial,error) {
+ if s.DB==nil || userID==uuid.Nil || claimID==uuid.Nil {return ActivatedTrial{},ErrNotEligible}
+ tx,err:=s.DB.BeginTx(ctx,pgx.TxOptions{})
+ if err!=nil{return ActivatedTrial{},err}
+ defer tx.Rollback(ctx)
+ // The user row is a common serialization point for concurrent trial
+ // activations and avoids races between different claims of this user.
+ var exists uuid.UUID
+ if err=tx.QueryRow(ctx,`SELECT id FROM users WHERE id=$1 FOR UPDATE`,userID).Scan(&exists);err!=nil{return ActivatedTrial{},err}
+
+ var state string
+ var deadline time.Time
+ var planID uuid.UUID
+ var policyID *uuid.UUID
+ var oldSubscription *uuid.UUID
+ err=tx.QueryRow(ctx,`SELECT state,reservation_expires_at,plan_id,starter_policy_id,subscription_id
+ FROM free_plan_claims WHERE id=$1 AND user_id=$2 AND source='starter' FOR UPDATE`,claimID,userID).
+ Scan(&state,&deadline,&planID,&policyID,&oldSubscription)
+ if errors.Is(err,pgx.ErrNoRows){return ActivatedTrial{},ErrNotEligible}
+ if err!=nil{return ActivatedTrial{},err}
+ if state=="active" && oldSubscription!=nil {
+  var result ActivatedTrial
+  err=tx.QueryRow(ctx,`SELECT id,starts_at,expires_at FROM user_subscriptions
+  WHERE id=$1 AND user_id=$2 AND status='active'`,*oldSubscription,userID).
+  Scan(&result.SubscriptionID,&result.StartsAt,&result.ExpiresAt)
+  if err!=nil{return ActivatedTrial{},err}
+  result.ClaimID=claimID
+  if err=tx.Commit(ctx);err!=nil{return ActivatedTrial{},err}
+  return result,nil
+ }
+ if state!="reserved" || policyID==nil {return ActivatedTrial{},ErrAlreadyActivated}
+ var durationSeconds int64
+ err=tx.QueryRow(ctx,`SELECT trial_duration_seconds FROM starter_plan_policies WHERE id=$1`,*policyID).Scan(&durationSeconds)
+ if err!=nil{return ActivatedTrial{},err}
+ now:=time.Now().UTC()
+ window,err:=Window(now,deadline,time.Duration(durationSeconds)*time.Second,state)
+ if err!=nil{return ActivatedTrial{},err}
+ var active bool
+ err=tx.QueryRow(ctx,`SELECT EXISTS(SELECT 1 FROM user_subscriptions
+ WHERE user_id=$1 AND status='active' AND starts_at <= now() AND expires_at > now())`,userID).Scan(&active)
+ if err!=nil{return ActivatedTrial{},err}
+ if active{return ActivatedTrial{},ErrActiveSubscription}
+
+ result:=ActivatedTrial{ClaimID:claimID,StartsAt:window.StartsAt,ExpiresAt:window.ExpiresAt}
+ err=tx.QueryRow(ctx,`INSERT INTO user_subscriptions
+ (user_id,plan_id,plan_code,plan_name,price_minor,currency,duration_days,data_limit_bytes,
+ status,starts_at,expires_at,activated_at)
+ SELECT $1,p.id,p.code,p.name,p.price_minor,p.currency,p.duration_days,p.data_limit_bytes,
+ 'active',$3,$4,$3
+ FROM plans p WHERE p.id=$2 AND p.price_minor=0 AND p.active
+ AND p.archived_at IS NULL AND (p.publish_at IS NULL OR p.publish_at <= now())
+ RETURNING id`,userID,planID,window.StartsAt,window.ExpiresAt).Scan(&result.SubscriptionID)
+ if errors.Is(err,pgx.ErrNoRows){return ActivatedTrial{},ErrNotEligible}
+ if err!=nil{return ActivatedTrial{},fmt.Errorf("create trial subscription: %w",err)}
+ tag,err:=tx.Exec(ctx,`UPDATE free_plan_claims
+ SET state='active',activated_at=$3,subscription_id=$4
+ WHERE id=$1 AND user_id=$2 AND state='reserved'`,claimID,userID,window.StartsAt,result.SubscriptionID)
+ if err!=nil{return ActivatedTrial{},err}
+ if tag.RowsAffected()!=1{return ActivatedTrial{},ErrAlreadyActivated}
+ if err=tx.Commit(ctx);err!=nil{return ActivatedTrial{},err}
+ return result,nil
+}
