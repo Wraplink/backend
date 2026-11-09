@@ -92,7 +92,7 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
  keep:=map[string]Assignment{}
  for _,a:=range next {keep[a.Domain]=a}
  for _,a:=range previous {
-  desired,ok:=keep[a.Domain]
+  _,ok:=keep[a.Domain]
   if ok {continue}
   if _,err=tx.Exec(ctx,"DELETE FROM network_route_assignments WHERE domain=$1",a.Domain);err!=nil{return err}
  }
