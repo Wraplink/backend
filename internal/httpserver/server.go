@@ -128,6 +128,15 @@ func NewRouter(
 		r.Delete("/domains/{domain}", dnsRegistryHandler.DeletePolicy)
     })
 
+    r.Route("/api/v1/admin/starter-policies",func(r chi.Router){
+        r.Use(requireAuthMiddleware)
+        r.Use(paymentsHandler.AccessAdminMiddleware)
+        admin:=subscriptionsHandler.AdminStarterPolicies()
+        r.Get("/",admin.List)
+        r.Post("/",admin.Create)
+        r.Patch("/{policyID}",admin.SetEnabled)
+    })
+
 	r.Route("/api/v1/admin/access", func(r chi.Router) {
         r.Use(requireAuthMiddleware)
         r.Get("/permissions", paymentsHandler.ListAdminPermissions)
