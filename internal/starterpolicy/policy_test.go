@@ -29,4 +29,5 @@ func TestSelect(t *testing.T) {
 func TestInvalidPolicy(t *testing.T) {
  if Validate(Policy{ID:"p",PlanID:"x",Trigger:AfterVerification})==nil {t.Fatal("missing TTL accepted")}
  if Validate(Policy{ID:"p",PlanID:"x",Trigger:"bad",ReservationTTL:time.Hour})==nil {t.Fatal("bad trigger accepted")}
+ if Validate(Policy{ID:"p",PlanID:"x",Trigger:"registration",ReservationTTL:time.Hour})==nil {t.Fatal("pre-verification registration trigger accepted")}
 }
