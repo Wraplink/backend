@@ -14,7 +14,6 @@ type Trigger string
 const (
  AfterVerification Trigger = "email_verified"
  FirstLogin Trigger = "first_login"
- OnRegistration Trigger = "registration"
 )
 
 type Policy struct {
@@ -40,7 +39,7 @@ var ErrInvalidPolicy = errors.New("invalid starter policy")
 func Validate(p Policy) error {
  if strings.TrimSpace(p.ID)=="" || strings.TrimSpace(p.PlanID)=="" || p.ReservationTTL<=0 { return ErrInvalidPolicy }
  switch p.Trigger {
- case AfterVerification, FirstLogin, OnRegistration:
+ case AfterVerification, FirstLogin:
  default: return ErrInvalidPolicy
  }
  return nil
