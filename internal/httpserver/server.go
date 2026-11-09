@@ -103,6 +103,9 @@ func NewRouter(
 			dnsRegistryHandler.List,
 		)
 		r.Get("/api/v1/internal/network/domains", dnsRegistryHandler.SnapshotPolicies)
+        r.Post("/api/v1/internal/network/agents/register", dnsRegistryHandler.RegisterAgent)
+        r.Post("/api/v1/internal/network/agents/heartbeat", dnsRegistryHandler.HeartbeatAgent)
+        r.Get("/api/v1/internal/network/agents/snapshot", dnsRegistryHandler.AgentSnapshot)
         r.Post("/api/v1/internal/network/route-agent-ips",routeInventoryHandler.RegisterInventory)
         r.Post("/api/v1/internal/network/route-assignments/report",routeInventoryHandler.ReportAssignment)
  r.Get("/api/v1/internal/network/managed-domains",dnsDomainsHandler.Snapshot)
