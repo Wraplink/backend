@@ -212,6 +212,7 @@ func NewRouter(
 		r.Post("/sessions/revoke-others", revokeOthersHandler.Revoke)
 
 		r.Post("/subscriptions", subscriptionsHandler.CreatePending)
+        r.Post("/free-plans/claim", subscriptionsHandler.ClaimMarketFree)
         r.Get("/starter-claims", subscriptionsHandler.MyStarterClaims)
         r.Post("/starter-claims/{claimID}/activate", subscriptionsHandler.ActivateStarter)
 		r.Get("/subscriptions", subscriptionsHandler.List)
