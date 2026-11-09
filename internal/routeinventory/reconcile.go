@@ -93,7 +93,7 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
  for _,a:=range next {keep[a.Domain]=a}
  for _,a:=range previous {
   desired,ok:=keep[a.Domain]
-  if ok&&desired.AgentID==a.AgentID&&desired.PublicIP==a.PublicIP {continue}
+  if ok {continue}
   if _,err=tx.Exec(ctx,"DELETE FROM network_route_assignments WHERE domain=$1",a.Domain);err!=nil{return err}
  }
  for _,a:=range next {
@@ -123,6 +123,24 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
        OR destination_port_start IS DISTINCT FROM NULLIF($4,0)
        OR destination_port_end IS DISTINCT FROM NULLIF($5,0))`,
     a.Domain,route.DestinationIP,route.Protocol,route.DestinationPortStart,route.DestinationPortEnd)
+   if err!=nil{return err}
+   continue
+  }
+  // Reassign an existing domain in-place. Deleting and reinserting would
+  // reset generation to 1, allowing a delayed ACK from an old owner to
+  // accidentally match a later assignment (ABA).
+  var oldBinding bool
+  for _, old := range previous {
+   if old.Domain == a.Domain {oldBinding=true;break}
+  }
+  if oldBinding {
+   _,err=tx.Exec(ctx,`UPDATE network_route_assignments SET
+     agent_ip_id=(SELECT id FROM network_route_agent_ips WHERE agent_id=$6 AND public_ip=$7::inet),
+     destination_ip=$2::inet,protocol=$3,
+     destination_port_start=NULLIF($4,0),destination_port_end=NULLIF($5,0),
+     state='pending',generation=generation+1,updated_at=now()
+     WHERE domain=$1`,
+    a.Domain,route.DestinationIP,route.Protocol,route.DestinationPortStart,route.DestinationPortEnd,a.AgentID,a.PublicIP)
    if err!=nil{return err}
    continue
   }
