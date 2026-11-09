@@ -114,3 +114,12 @@ func (h *Handler) AdminSave(w http.ResponseWriter,r *http.Request){
  if err:=h.repository.SaveAdmin(r.Context(),p);err!=nil{h.logger.Error("save admin plan failed","error",err);writeJSONError(w,500,"could not save plan");return}
  writeJSON(w,200,map[string]any{"saved":true})
 }
+
+func (h *Handler) AdminRetire(w http.ResponseWriter,r *http.Request){
+ code:=strings.ToLower(strings.TrimSpace(chi.URLParam(r,"code")))
+ if !validPlanCode.MatchString(code){writeJSONError(w,400,"invalid plan code");return}
+ outcome,err:=h.repository.RetireAdmin(r.Context(),code)
+ if err!=nil{h.logger.Error("retire plan failed","error",err);writeJSONError(w,500,"could not retire plan");return}
+ if outcome=="not_found"{writeJSONError(w,404,"plan not found");return}
+ writeJSON(w,200,map[string]string{"outcome":outcome})
+}
