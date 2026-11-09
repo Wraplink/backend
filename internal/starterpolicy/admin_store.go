@@ -13,15 +13,15 @@ import (
 // HTTP authentication and authorization must be enforced by the existing
 // backend admin middleware before calling these methods.
 type AdminPolicy struct {
- ID uuid.UUID
- PlanID uuid.UUID
- Enabled bool
- Priority int
- Region string
- AssignmentTrigger Trigger
- ActivationTrigger string
- ReservationTTL time.Duration
- TrialDuration time.Duration
+ ID uuid.UUID `json:"id"`
+ PlanID uuid.UUID `json:"planId"`
+ Enabled bool `json:"enabled"`
+ Priority int `json:"priority"`
+ Region string `json:"region"`
+ AssignmentTrigger Trigger `json:"assignmentTrigger"`
+ ActivationTrigger string `json:"activationTrigger"`
+ ReservationTTL time.Duration `json:"-"`
+ TrialDuration time.Duration `json:"-"`
 }
 
 type PolicyStore struct { DB *pgxpool.Pool }
