@@ -67,7 +67,7 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
  // Route activations are soft-state. If DNS Control restarts or stops
  // reporting, expire its old acknowledgment even when inventory is fresh.
  // Healthy DNS Control refreshes updated_at every 10 seconds.
- if _,err=tx.Exec(ctx,`UPDATE network_route_assignments a SET state='pending', updated_at=now()
+ if _,err=tx.Exec(ctx,`UPDATE network_route_assignments a SET state='pending', generation=generation+1, updated_at=now()
    FROM network_route_agent_ips i
    WHERE a.agent_ip_id=i.id AND a.state='active'
      AND (a.updated_at < now() - $2::interval
@@ -117,7 +117,7 @@ func Reconcile(ctx context.Context, db *pgxpool.Pool, offlineAfter time.Duration
    _,err=tx.Exec(ctx,`UPDATE network_route_assignments SET
      destination_ip=$2::inet, protocol=$3,
      destination_port_start=NULLIF($4,0), destination_port_end=NULLIF($5,0),
-     state='pending', generation=generation+1
+     state='pending', generation=generation+1, updated_at=now()
      WHERE domain=$1 AND (destination_ip IS DISTINCT FROM $2::inet
        OR protocol IS DISTINCT FROM $3
        OR destination_port_start IS DISTINCT FROM NULLIF($4,0)
