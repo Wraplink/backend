@@ -191,3 +191,28 @@ func (h *Handler) MyStarterClaims(w http.ResponseWriter,r *http.Request) {
 func (h *Handler) AdminStarterPolicies() starterpolicy.AdminHandler {
  return starterpolicy.AdminHandler{Store:starterpolicy.PolicyStore{DB:h.service.repository.DB()}}
 }
+
+
+// ClaimMarketFree activates an eligible free plan without basket or payment.
+func (h *Handler) ClaimMarketFree(w http.ResponseWriter,r *http.Request){
+ userID,ok:=requestcontext.UserID(r.Context())
+ if !ok{writeJSONError(w,http.StatusUnauthorized,"authentication required");return}
+ var body struct{PlanCode string `json:"planCode"`}
+ dec:=json.NewDecoder(http.MaxBytesReader(w,r.Body,4096))
+ dec.DisallowUnknownFields()
+ if err:=dec.Decode(&body);err!=nil{writeJSONError(w,400,"invalid request");return}
+ var extra any
+ if err:=dec.Decode(&extra);!errors.Is(err,io.EOF){writeJSONError(w,400,"invalid request");return}
+ result,err:=(starterpolicy.MarketFreeStore{DB:h.service.repository.DB()}).Claim(r.Context(),userID,body.PlanCode)
+ if err!=nil{
+  switch{
+  case errors.Is(err,starterpolicy.ErrFreePlanUnavailable):writeJSONError(w,404,"free plan not available")
+  case errors.Is(err,starterpolicy.ErrFreePlanClaimed):writeJSONError(w,409,"free plan already claimed")
+  case errors.Is(err,starterpolicy.ErrActiveSubscription):writeJSONError(w,409,"another subscription is active")
+  case errors.Is(err,starterpolicy.ErrNotEligible):writeJSONError(w,403,"verified account required")
+  default:writeJSONError(w,500,"could not activate free plan")
+  }
+  return
+ }
+ writeJSON(w,http.StatusCreated,result)
+}
