@@ -74,11 +74,11 @@ func (h *Handler) AdminDNSQueries(w http.ResponseWriter,r *http.Request){
  where:=` FROM dns_query_events e LEFT JOIN LATERAL (SELECT domain, mode FROM network_domain_policies WHERE domain=e.domain OR e.domain LIKE '%.' || domain ORDER BY length(domain) DESC LIMIT 1) p ON true WHERE ($1='' OR e.domain ILIKE '%' || $1 || '%') AND ($2='' OR e.controller_id=$2) AND ($3='' OR e.qtype=$3) AND ($4='' OR e.rcode=$4) AND ($5='' OR e.resolution_mode=$5) AND ($6='' OR ($6='true' AND p.domain IS NOT NULL) OR ($6='false' AND p.domain IS NULL))`
  args:=[]any{search,controller,qtype,rcode,mode,managed}
  if err:=h.db.QueryRow(r.Context(),"SELECT count(*)"+where,args...).Scan(&total);err!=nil{writeJSONError(w,500,"could not count queries");return}
- rows,err:=h.db.Query(r.Context(),"SELECT e.controller_id,e.event_id,e.observed_at,e.domain,e.qtype,e.rcode,e.resolution_mode,e.duration_ms,(p.domain IS NOT NULL),COALESCE(p.mode,'')"+where+" ORDER BY e.observed_at DESC,e.event_id DESC LIMIT $7 OFFSET $8",append(args,size,(page-1)*size)...)
+ rows,err:=h.db.Query(r.Context(),"SELECT e.controller_id,e.event_id,e.observed_at,e.domain,e.qtype,e.rcode,e.resolution_mode,e.duration_ms,(p.domain IS NOT NULL),COALESCE(p.mode,''),COALESCE(p.domain,'')"+where+" ORDER BY e.observed_at DESC,e.event_id DESC LIMIT $7 OFFSET $8",append(args,size,(page-1)*size)...)
  if err!=nil{writeJSONError(w,500,"could not list queries");return};defer rows.Close()
- type item struct {ControllerID string `json:"controllerId"`;EventID uuid.UUID `json:"eventId"`;ObservedAt time.Time `json:"observedAt"`;Domain string `json:"domain"`;QType string `json:"qtype"`;RCode string `json:"rcode"`;ResolutionMode string `json:"resolutionMode"`;DurationMS int `json:"durationMs"`;Managed bool `json:"managed"`;ManagedMode string `json:"managedMode"`}
+ type item struct {ControllerID string `json:"controllerId"`;EventID uuid.UUID `json:"eventId"`;ObservedAt time.Time `json:"observedAt"`;Domain string `json:"domain"`;QType string `json:"qtype"`;RCode string `json:"rcode"`;ResolutionMode string `json:"resolutionMode"`;DurationMS int `json:"durationMs"`;Managed bool `json:"managed"`;ManagedMode string `json:"managedMode"`;ManagedDomain string `json:"managedDomain"`}
  result:=make([]item,0)
- for rows.Next(){var e item;if err:=rows.Scan(&e.ControllerID,&e.EventID,&e.ObservedAt,&e.Domain,&e.QType,&e.RCode,&e.ResolutionMode,&e.DurationMS,&e.Managed,&e.ManagedMode);err!=nil{writeJSONError(w,500,"could not read queries");return};result=append(result,e)}
+ for rows.Next(){var e item;if err:=rows.Scan(&e.ControllerID,&e.EventID,&e.ObservedAt,&e.Domain,&e.QType,&e.RCode,&e.ResolutionMode,&e.DurationMS,&e.Managed,&e.ManagedMode,&e.ManagedDomain);err!=nil{writeJSONError(w,500,"could not read queries");return};result=append(result,e)}
  if rows.Err()!=nil{writeJSONError(w,500,"could not read queries");return}
  writeJSON(w,200,map[string]any{"queries":result,"total":total,"page":page,"pageSize":size})
 }
