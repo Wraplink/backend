@@ -83,8 +83,11 @@ func (s PolicyStore) List(ctx context.Context) ([]AdminPolicy,error) {
 func (s PolicyStore) SetEnabled(ctx context.Context,id uuid.UUID,enabled bool) error {
  if s.DB==nil {return errors.New("starter policy store has no database")}
  if id==uuid.Nil {return ErrInvalidPolicy}
- tag,err:=s.DB.Exec(ctx,`UPDATE starter_plan_policies SET enabled=$2,
- updated_at=now() WHERE id=$1`,id,enabled)
+ tag,err:=s.DB.Exec(ctx,`UPDATE starter_plan_policies policy SET enabled=$2,
+ updated_at=now() WHERE policy.id=$1 AND (
+ $2=false OR EXISTS(SELECT 1 FROM plans p WHERE p.id=policy.plan_id
+ AND p.price_minor=0 AND p.active=true AND p.archived_at IS NULL
+ AND (p.publish_at IS NULL OR p.publish_at<=now())))`,id,enabled)
  if err!=nil{return err}
  if tag.RowsAffected()==0 {return ErrNotEligible}
  return nil
