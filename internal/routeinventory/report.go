@@ -56,7 +56,7 @@ func (h Handler) ReportAssignment(w http.ResponseWriter, r *http.Request) {
 		FROM network_route_agent_ips i
 		WHERE a.agent_ip_id=i.id AND a.domain=$1 AND i.agent_id=$2
 		  AND i.public_ip=$3::inet AND a.generation=$4
-		  AND ($5 <> 'active' OR (i.enabled=true AND i.last_seen_at > now() - $6::interval))
+		  AND ($5 <> 'active' OR (i.enabled=true AND i.last_seen_at > now() - $6::interval AND EXISTS (SELECT 1 FROM network_agent_health h WHERE h.id=i.agent_id AND h.status='online' AND h.last_seen_at > now() - $6::interval)))
 		  AND ($5='active' OR a.state<>$5 OR a.updated_at IS NULL)`,
 		report.Domain, report.AgentID, ip.To4().String(), report.Generation, state, fmt.Sprintf("%f seconds", offlineAfter.Seconds()))
 	if err != nil {
@@ -69,7 +69,7 @@ func (h Handler) ReportAssignment(w http.ResponseWriter, r *http.Request) {
 		err := h.DB.QueryRow(r.Context(), `SELECT a.state FROM network_route_assignments a
 			JOIN network_route_agent_ips i ON i.id=a.agent_ip_id
 			WHERE a.domain=$1 AND i.agent_id=$2 AND i.public_ip=$3::inet AND a.generation=$4
-			  AND ($5 <> 'active' OR (i.enabled=true AND i.last_seen_at > now() - $6::interval))`,
+			  AND ($5 <> 'active' OR (i.enabled=true AND i.last_seen_at > now() - $6::interval AND EXISTS (SELECT 1 FROM network_agent_health h WHERE h.id=i.agent_id AND h.status='online' AND h.last_seen_at > now() - $6::interval)))`,
 			report.Domain, report.AgentID, ip.To4().String(), report.Generation, state, fmt.Sprintf("%f seconds", offlineAfter.Seconds())).Scan(&current)
 		if err != nil || current != state {
 			http.Error(w, "stale or unknown assignment", http.StatusConflict)
