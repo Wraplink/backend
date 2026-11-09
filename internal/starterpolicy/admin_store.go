@@ -47,6 +47,9 @@ func (s PolicyStore) Create(ctx context.Context,p AdminPolicy) (AdminPolicy,erro
  if s.DB==nil {return AdminPolicy{},errors.New("starter policy store has no database")}
  if err:=validateAdminPolicy(p);err!=nil{return AdminPolicy{},err}
  if p.ID==uuid.Nil {p.ID=uuid.New()}
+ var eligible bool
+ if err:=s.DB.QueryRow(ctx,`SELECT EXISTS(SELECT 1 FROM plans WHERE id=$1 AND price_minor=0 AND active=true AND archived_at IS NULL)`,p.PlanID).Scan(&eligible);err!=nil{return AdminPolicy{},err}
+ if !eligible{return AdminPolicy{},ErrNotEligible}
  err:=s.DB.QueryRow(ctx,`INSERT INTO starter_plan_policies
  (id,plan_id,enabled,priority,region,assignment_trigger,activation_trigger,reservation_ttl_seconds,trial_duration_seconds)
  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
