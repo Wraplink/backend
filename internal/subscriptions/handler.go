@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"backend/internal/requestcontext"
+ "backend/internal/starterpolicy"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -152,4 +153,26 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 func writeJSONError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+
+// ActivateStarter is authenticated by the /api/v1/me router and uses the
+// request context's user identity rather than a caller-provided user ID.
+func (h *Handler) ActivateStarter(w http.ResponseWriter,r *http.Request) {
+ userID,ok:=requestcontext.UserID(r.Context())
+ if !ok {writeJSONError(w,http.StatusUnauthorized,"authentication required");return}
+ claimID,err:=uuid.Parse(chi.URLParam(r,"claimID"))
+ if err!=nil || claimID==uuid.Nil {writeJSONError(w,http.StatusBadRequest,"invalid claim ID");return}
+ result,err:=(starterpolicy.ActivationStore{DB:h.service.repository.DB()}).Activate(r.Context(),userID,claimID)
+ if err!=nil {
+  switch {
+  case errors.Is(err,starterpolicy.ErrNotEligible):writeJSONError(w,http.StatusNotFound,"starter claim not found or unavailable")
+  case errors.Is(err,starterpolicy.ErrReservationExpired):writeJSONError(w,http.StatusConflict,"starter reservation expired")
+  case errors.Is(err,starterpolicy.ErrAlreadyActivated):writeJSONError(w,http.StatusConflict,"starter claim is not reserved")
+  case errors.Is(err,starterpolicy.ErrActiveSubscription):writeJSONError(w,http.StatusConflict,"an active subscription already exists")
+  default:writeJSONError(w,http.StatusInternalServerError,"could not activate starter plan")
+  }
+  return
+ }
+ writeJSON(w,http.StatusOK,result)
 }
