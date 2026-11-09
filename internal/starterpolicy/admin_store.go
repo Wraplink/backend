@@ -21,12 +21,13 @@ type AdminPolicy struct {
  AssignmentTrigger Trigger
  ActivationTrigger string
  ReservationTTL time.Duration
+ TrialDuration time.Duration
 }
 
 type PolicyStore struct { DB *pgxpool.Pool }
 
 func validateAdminPolicy(p AdminPolicy) error {
- if p.PlanID==uuid.Nil || p.ReservationTTL<=0 || p.ReservationTTL%time.Second!=0 {
+ if p.PlanID==uuid.Nil || p.ReservationTTL<=0 || p.ReservationTTL%time.Second!=0 || p.TrialDuration<=0 || p.TrialDuration%time.Second!=0 {
   return ErrInvalidPolicy
  }
  if p.AssignmentTrigger!=AfterVerification && p.AssignmentTrigger!=FirstLogin {
@@ -47,9 +48,9 @@ func (s PolicyStore) Create(ctx context.Context,p AdminPolicy) (AdminPolicy,erro
  if err:=validateAdminPolicy(p);err!=nil{return AdminPolicy{},err}
  if p.ID==uuid.Nil {p.ID=uuid.New()}
  err:=s.DB.QueryRow(ctx,`INSERT INTO starter_plan_policies
- (id,plan_id,enabled,priority,region,assignment_trigger,activation_trigger,reservation_ttl_seconds)
- VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
- RETURNING id`,p.ID,p.PlanID,p.Enabled,p.Priority,p.Region,p.AssignmentTrigger,p.ActivationTrigger,int64(p.ReservationTTL/time.Second)).Scan(&p.ID)
+ (id,plan_id,enabled,priority,region,assignment_trigger,activation_trigger,reservation_ttl_seconds,trial_duration_seconds)
+ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+ RETURNING id`,p.ID,p.PlanID,p.Enabled,p.Priority,p.Region,p.AssignmentTrigger,p.ActivationTrigger,int64(p.ReservationTTL/time.Second),int64(p.TrialDuration/time.Second)).Scan(&p.ID)
  return p,err
 }
 
@@ -57,17 +58,18 @@ func (s PolicyStore) Create(ctx context.Context,p AdminPolicy) (AdminPolicy,erro
 func (s PolicyStore) List(ctx context.Context) ([]AdminPolicy,error) {
  if s.DB==nil {return nil,errors.New("starter policy store has no database")}
  rows,err:=s.DB.Query(ctx,`SELECT id,plan_id,enabled,priority,region,
- assignment_trigger,activation_trigger,reservation_ttl_seconds
+ assignment_trigger,activation_trigger,reservation_ttl_seconds,trial_duration_seconds
  FROM starter_plan_policies ORDER BY priority DESC,id ASC`)
  if err!=nil{return nil,err}
  defer rows.Close()
  result:=make([]AdminPolicy,0)
  for rows.Next() {
   var p AdminPolicy
-  var seconds int64
+  var seconds, trialSeconds int64
   if err:=rows.Scan(&p.ID,&p.PlanID,&p.Enabled,&p.Priority,&p.Region,
-   &p.AssignmentTrigger,&p.ActivationTrigger,&seconds);err!=nil{return nil,err}
+   &p.AssignmentTrigger,&p.ActivationTrigger,&seconds,&trialSeconds);err!=nil{return nil,err}
   p.ReservationTTL=time.Duration(seconds)*time.Second
+  p.TrialDuration=time.Duration(trialSeconds)*time.Second
   result=append(result,p)
  }
  return result,rows.Err()
