@@ -179,10 +179,12 @@ func (r *Repository) ListAdmin(ctx context.Context) ([]Plan,error) {
  return items,rows.Err()
 }
 func (r *Repository) SaveAdmin(ctx context.Context, p AdminPlanInput) error {
- _,err:=r.db.Exec(ctx,`INSERT INTO plans(code,name,description,price_minor,currency,duration_days,data_limit_bytes,active,publish_at,sort_order,is_popular)
+ var savedID uuid.UUID
+ err:=r.db.QueryRow(ctx,`INSERT INTO plans(code,name,description,price_minor,currency,duration_days,data_limit_bytes,active,publish_at,sort_order,is_popular)
  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
- ON CONFLICT(code) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,price_minor=EXCLUDED.price_minor,currency=EXCLUDED.currency,duration_days=EXCLUDED.duration_days,data_limit_bytes=EXCLUDED.data_limit_bytes,active=EXCLUDED.active,publish_at=EXCLUDED.publish_at,sort_order=EXCLUDED.sort_order,is_popular=EXCLUDED.is_popular WHERE plans.archived_at IS NULL`,
- p.Code,p.Name,p.Description,p.PriceMinor,p.Currency,p.DurationDays,p.DataLimitBytes,p.Active,p.PublishAt,p.SortOrder,p.IsPopular)
+ ON CONFLICT(code) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,price_minor=EXCLUDED.price_minor,currency=EXCLUDED.currency,duration_days=EXCLUDED.duration_days,data_limit_bytes=EXCLUDED.data_limit_bytes,active=EXCLUDED.active,publish_at=EXCLUDED.publish_at,sort_order=EXCLUDED.sort_order,is_popular=EXCLUDED.is_popular WHERE plans.archived_at IS NULL RETURNING id`,
+ p.Code,p.Name,p.Description,p.PriceMinor,p.Currency,p.DurationDays,p.DataLimitBytes,p.Active,p.PublishAt,p.SortOrder,p.IsPopular).Scan(&savedID)
+ if errors.Is(err,pgx.ErrNoRows){return fmt.Errorf("archived plan cannot be modified")}
  return err
 }
 
