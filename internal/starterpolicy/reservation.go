@@ -53,7 +53,11 @@ func (s ReservationStore) ReserveVerified(ctx context.Context, userID uuid.UUID,
  FROM starter_plan_policies
  WHERE enabled AND assignment_trigger='email_verified'
  AND (region='' OR lower(region)=lower($1))
- ORDER BY priority DESC,id ASC LIMIT 1`,region).Scan(&policyID,&planID,&ttl)
+ AND NOT EXISTS (
+  SELECT 1 FROM free_plan_claims claimed
+  WHERE claimed.user_id=$2 AND claimed.plan_id=starter_plan_policies.plan_id
+ )
+ ORDER BY priority DESC,id ASC LIMIT 1`,region,userID).Scan(&policyID,&planID,&ttl)
  if errors.Is(err,pgx.ErrNoRows) {
   if err=tx.Commit(ctx);err!=nil{return Reservation{},err}
   return Reservation{},ErrNotEligible
@@ -71,6 +75,11 @@ func (s ReservationStore) ReserveVerified(ctx context.Context, userID uuid.UUID,
   err=tx.QueryRow(ctx,`SELECT id,plan_id,reservation_expires_at
  FROM free_plan_claims WHERE user_id=$1 AND source='starter'`,userID).
  Scan(&existing.ClaimID,&existing.PlanID,&existing.ExpiresAt)
+  if errors.Is(err,pgx.ErrNoRows) {
+   // The plan may have been claimed through the market concurrently.
+   // Do not issue a second starter entitlement or overwrite its claim.
+   return Reservation{},ErrNotEligible
+  }
   if err!=nil{return Reservation{},err}
  } else if err!=nil{return Reservation{},err
  } else {existing.Created=true}
