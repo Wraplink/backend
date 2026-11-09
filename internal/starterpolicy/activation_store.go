@@ -47,7 +47,7 @@ func (s ActivationStore) Activate(ctx context.Context, userID, claimID uuid.UUID
  if state=="active" && oldSubscription!=nil {
   var result ActivatedTrial
   err=tx.QueryRow(ctx,`SELECT id,starts_at,expires_at FROM user_subscriptions
-  WHERE id=$1 AND user_id=$2 AND status='active'`,*oldSubscription,userID).
+  WHERE id=$1 AND user_id=$2`,*oldSubscription,userID).
   Scan(&result.SubscriptionID,&result.StartsAt,&result.ExpiresAt)
   if err!=nil{return ActivatedTrial{},err}
   result.ClaimID=claimID
