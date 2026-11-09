@@ -86,3 +86,30 @@ func (s ActivationStore) Activate(ctx context.Context, userID, claimID uuid.UUID
  if err=tx.Commit(ctx);err!=nil{return ActivatedTrial{},err}
  return result,nil
 }
+
+
+// MyStarterClaims returns durable claims, including expired reservations,
+// so users can see why an already-claimed offer is not available again.
+type MyStarterClaim struct {
+ ID uuid.UUID `json:"id"`
+ PlanID uuid.UUID `json:"planId"`
+ State string `json:"state"`
+ ReservationExpiresAt *time.Time `json:"reservationExpiresAt,omitempty"`
+ ActivatedAt *time.Time `json:"activatedAt,omitempty"`
+ SubscriptionID *uuid.UUID `json:"subscriptionId,omitempty"`
+}
+func (s ActivationStore) MyStarterClaims(ctx context.Context,userID uuid.UUID)([]MyStarterClaim,error){
+ if s.DB==nil || userID==uuid.Nil{return nil,ErrNotEligible}
+ rows,err:=s.DB.Query(ctx,`SELECT id,plan_id,state,reservation_expires_at,activated_at,subscription_id
+ FROM free_plan_claims WHERE user_id=$1 AND source='starter' ORDER BY assigned_at DESC`,userID)
+ if err!=nil{return nil,err}
+ defer rows.Close()
+ result:=make([]MyStarterClaim,0)
+ for rows.Next(){
+  var item MyStarterClaim
+  if err:=rows.Scan(&item.ID,&item.PlanID,&item.State,&item.ReservationExpiresAt,&item.ActivatedAt,&item.SubscriptionID);err!=nil{return nil,err}
+  if item.State=="reserved" && item.ReservationExpiresAt!=nil && !time.Now().Before(*item.ReservationExpiresAt){item.State="expired"}
+  result=append(result,item)
+ }
+ return result,rows.Err()
+}
