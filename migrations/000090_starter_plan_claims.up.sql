@@ -6,6 +6,7 @@ CREATE TABLE starter_plan_policies (
     plan_id UUID NOT NULL,
     enabled BOOLEAN NOT NULL DEFAULT false,
     priority INTEGER NOT NULL DEFAULT 0,
+    trial_duration_seconds BIGINT NOT NULL DEFAULT 3600 CHECK (trial_duration_seconds > 0),
     region TEXT NOT NULL DEFAULT '',
     assignment_trigger TEXT NOT NULL DEFAULT 'email_verified'
         CHECK (assignment_trigger IN ('email_verified','first_login')),
