@@ -11,7 +11,7 @@ import (
 func TestValidateAdminPolicy(t *testing.T) {
  p:=AdminPolicy{
   PlanID:uuid.New(),AssignmentTrigger:AfterVerification,
-  ActivationTrigger:"manual",ReservationTTL:7*24*time.Hour,
+  ActivationTrigger:"manual",ReservationTTL:7*24*time.Hour,TrialDuration:time.Hour,
  }
  if err:=validateAdminPolicy(p);err!=nil {t.Fatalf("valid policy rejected: %v",err)}
  p.AssignmentTrigger="registration"
