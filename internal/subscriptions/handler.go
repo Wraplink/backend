@@ -185,3 +185,9 @@ func (h *Handler) MyStarterClaims(w http.ResponseWriter,r *http.Request) {
  if err!=nil {writeJSONError(w,http.StatusInternalServerError,"could not list starter claims");return}
  writeJSON(w,http.StatusOK,map[string]any{"claims":claims})
 }
+
+
+// AdminStarterPolicies is protected by the router's admin authorization.
+func (h *Handler) AdminStarterPolicies() starterpolicy.AdminHandler {
+ return starterpolicy.AdminHandler{Store:starterpolicy.PolicyStore{DB:h.service.repository.DB()}}
+}
