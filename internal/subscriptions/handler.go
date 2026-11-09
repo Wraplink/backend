@@ -176,3 +176,12 @@ func (h *Handler) ActivateStarter(w http.ResponseWriter,r *http.Request) {
  }
  writeJSON(w,http.StatusOK,result)
 }
+
+
+func (h *Handler) MyStarterClaims(w http.ResponseWriter,r *http.Request) {
+ userID,ok:=requestcontext.UserID(r.Context())
+ if !ok {writeJSONError(w,http.StatusUnauthorized,"authentication required");return}
+ claims,err:=(starterpolicy.ActivationStore{DB:h.service.repository.DB()}).MyStarterClaims(r.Context(),userID)
+ if err!=nil {writeJSONError(w,http.StatusInternalServerError,"could not list starter claims");return}
+ writeJSON(w,http.StatusOK,map[string]any{"claims":claims})
+}
