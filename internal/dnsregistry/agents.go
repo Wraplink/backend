@@ -59,7 +59,7 @@ func (h *Handler) AgentSnapshot(w http.ResponseWriter,r *http.Request) {
  cursor:=r.URL.Query().Get("cursor")
  if len(cursor)>128 {writeJSONError(w,400,"invalid cursor");return}
  var revision int64
- err:=h.db.QueryRow(r.Context(),`SELECT GREATEST(COALESCE(MAX(revision),0),1) FROM network_agent_health`).Scan(&revision)
+ err:=h.db.QueryRow(r.Context(),`SELECT last_value FROM network_agent_health_revision_seq`).Scan(&revision)
  if err!=nil {writeJSONError(w,500,"snapshot unavailable");return}
  rows,err:=h.db.Query(r.Context(),`SELECT id,region,sni_capacity,route_capacity,status,registered_at,last_seen_at
  FROM network_agent_health WHERE id>$1 ORDER BY id LIMIT 501`,cursor)
@@ -88,7 +88,7 @@ func (h *Handler) AgentSnapshot(w http.ResponseWriter,r *http.Request) {
  rows.Close()
  // Recheck revision after reading to avoid returning a mixed page.
  var current int64
- if err:=h.db.QueryRow(r.Context(),`SELECT GREATEST(COALESCE(MAX(revision),0),1) FROM network_agent_health`).Scan(&current);err!=nil || current!=revision {
+ if err:=h.db.QueryRow(r.Context(),`SELECT last_value FROM network_agent_health_revision_seq`).Scan(&current);err!=nil || current!=revision {
   writeJSONError(w,http.StatusConflict,"agent inventory changed; retry");return
  }
  response:=map[string]any{"revision":revision,"agents":agents}
