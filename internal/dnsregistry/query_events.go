@@ -71,7 +71,7 @@ func (h *Handler) AdminDNSQueries(w http.ResponseWriter,r *http.Request){
  if managed!=""&&managed!="true"&&managed!="false" {writeJSONError(w,400,"invalid managed filter");return}
  if len(search)>253||len(controller)>128||len(qtype)>16||len(rcode)>24||len(mode)>32{writeJSONError(w,400,"invalid filters");return}
  var total int64
- where:=` FROM dns_query_events e LEFT JOIN network_domain_policies p ON p.domain=e.domain WHERE ($1='' OR e.domain ILIKE '%' || $1 || '%') AND ($2='' OR e.controller_id=$2) AND ($3='' OR e.qtype=$3) AND ($4='' OR e.rcode=$4) AND ($5='' OR e.resolution_mode=$5) AND ($6='' OR ($6='true' AND p.domain IS NOT NULL) OR ($6='false' AND p.domain IS NULL))`
+ where:=` FROM dns_query_events e LEFT JOIN LATERAL (SELECT domain, mode FROM network_domain_policies WHERE domain=e.domain OR e.domain LIKE '%.' || domain ORDER BY length(domain) DESC LIMIT 1) p ON true WHERE ($1='' OR e.domain ILIKE '%' || $1 || '%') AND ($2='' OR e.controller_id=$2) AND ($3='' OR e.qtype=$3) AND ($4='' OR e.rcode=$4) AND ($5='' OR e.resolution_mode=$5) AND ($6='' OR ($6='true' AND p.domain IS NOT NULL) OR ($6='false' AND p.domain IS NULL))`
  args:=[]any{search,controller,qtype,rcode,mode,managed}
  if err:=h.db.QueryRow(r.Context(),"SELECT count(*)"+where,args...).Scan(&total);err!=nil{writeJSONError(w,500,"could not count queries");return}
  rows,err:=h.db.Query(r.Context(),"SELECT e.controller_id,e.event_id,e.observed_at,e.domain,e.qtype,e.rcode,e.resolution_mode,e.duration_ms,(p.domain IS NOT NULL),COALESCE(p.mode,'')"+where+" ORDER BY e.observed_at DESC,e.event_id DESC LIMIT $7 OFFSET $8",append(args,size,(page-1)*size)...)
