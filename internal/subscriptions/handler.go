@@ -216,3 +216,13 @@ func (h *Handler) ClaimMarketFree(w http.ResponseWriter,r *http.Request){
  }
  writeJSON(w,http.StatusCreated,result)
 }
+
+
+// MyFreeClaims lists all lifetime claims, including expired and cancelled.
+func (h *Handler) MyFreeClaims(w http.ResponseWriter,r *http.Request){
+ userID,ok:=requestcontext.UserID(r.Context())
+ if !ok{writeJSONError(w,http.StatusUnauthorized,"authentication required");return}
+ items,err:=starterpolicy.ListFreeClaims(r.Context(),h.service.repository.DB(),userID)
+ if err!=nil{writeJSONError(w,500,"could not list free claims");return}
+ writeJSON(w,200,map[string]any{"claims":items})
+}
