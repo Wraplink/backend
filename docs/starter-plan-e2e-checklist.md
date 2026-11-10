@@ -53,6 +53,12 @@ starter policy (for example 60 seconds). Do not use production customer accounts
 18. Verify the normal basket/checkout cannot activate a zero-price plan without
     passing through the lifetime-claim path.
 
+## Race and rollback checks
+19. At the exact reservation expiry boundary, race two activation requests. The final claim update must reject an expired reservation and roll back any inserted subscription. Verify claim and subscription counts remain consistent.
+20. Disable or archive the zero-price plan between initial eligibility inspection and subscription creation. The claim transaction must fail without leaving a durable claim or subscription.
+21. Corrupt a disposable staging subscription to have null or future start/end timestamps (only if staging schema permits), then retry activation. Expect conflict, never an extension or a new subscription.
+22. Confirm a user cannot obtain a second entitlement by mixing a starter reservation with a direct Market free claim while another subscription is active.
+
 ## Evidence to capture
 - API request IDs, responses and HTTP statuses for steps 2, 6, 7, 12, 15 and 16.
 - Database snapshots of `free_plan_claims` and `user_subscriptions` (omit PII).
@@ -62,5 +68,5 @@ starter policy (for example 60 seconds). Do not use production customer accounts
 - CI links and deployment image digests for each service.
 
 **Release gate:** Do not mark the starter/free-plan PRs ready solely because unit
-tests and migrations pass. Steps 1–18 must be verified against a staging deployment,
+tests and migrations pass. Steps 1–22 must be verified against a staging deployment,
 especially the network entitlement removal at expiration.
