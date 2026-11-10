@@ -35,3 +35,35 @@ func TestValidateAdminPolicy(t *testing.T) {
  p.PlanID=uuid.Nil
  if err:=validateAdminPolicy(p);!errors.Is(err,ErrInvalidPolicy) {t.Fatalf("missing plan accepted: %v",err)}
 }
+
+func TestValidateAdminPolicyDurationBoundaries(t *testing.T) {
+ base:=AdminPolicy{
+  PlanID:uuid.New(),AssignmentTrigger:AfterVerification,
+  ActivationTrigger:"manual",ReservationTTL:7*24*time.Hour,TrialDuration:time.Hour,
+ }
+ cases:=[]struct{
+  name string
+  ttl time.Duration
+  duration time.Duration
+  valid bool
+ }{
+  {"one second trial",time.Second,time.Second,true},
+  {"one hour trial",7*24*time.Hour,time.Hour,true},
+  {"zero reservation TTL",0,time.Hour,false},
+  {"negative reservation TTL",-time.Second,time.Hour,false},
+  {"subsecond reservation TTL",time.Millisecond,time.Hour,false},
+  {"zero trial duration",time.Hour,0,false},
+  {"negative trial duration",time.Hour,-time.Second,false},
+  {"subsecond trial duration",time.Hour,time.Millisecond,false},
+ }
+ for _,tc:=range cases {
+  t.Run(tc.name,func(t *testing.T){
+   p:=base
+   p.ReservationTTL=tc.ttl
+   p.TrialDuration=tc.duration
+   err:=validateAdminPolicy(p)
+   if tc.valid && err!=nil {t.Fatalf("valid duration rejected: %v",err)}
+   if !tc.valid && !errors.Is(err,ErrInvalidPolicy) {t.Fatalf("invalid duration accepted: %v",err)}
+  })
+ }
+}
