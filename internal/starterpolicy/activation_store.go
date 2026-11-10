@@ -31,8 +31,9 @@ func (s ActivationStore) Activate(ctx context.Context, userID, claimID uuid.UUID
  defer tx.Rollback(ctx)
  // The user row is a common serialization point for concurrent trial
  // activations and avoids races between different claims of this user.
- var exists uuid.UUID
- if err=tx.QueryRow(ctx,`SELECT id FROM users WHERE id=$1 FOR UPDATE`,userID).Scan(&exists);err!=nil{return ActivatedTrial{},err}
+ var verified bool
+ if err=tx.QueryRow(ctx,`SELECT email_verified FROM users WHERE id=$1 FOR UPDATE`,userID).Scan(&verified);err!=nil{return ActivatedTrial{},err}
+ if !verified{return ActivatedTrial{},ErrNotEligible}
 
  var state string
  var deadline *time.Time
