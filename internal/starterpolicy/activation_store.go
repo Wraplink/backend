@@ -49,15 +49,18 @@ func (s ActivationStore) Activate(ctx context.Context, userID, claimID uuid.UUID
  if oldSubscription!=nil && state=="active" {
   var result ActivatedTrial
   var subscriptionStatus string
+  var startsAt,expiresAt *time.Time
   err=tx.QueryRow(ctx,`SELECT id,starts_at,expires_at,status FROM user_subscriptions
   WHERE id=$1 AND user_id=$2`,*oldSubscription,userID).
-  Scan(&result.SubscriptionID,&result.StartsAt,&result.ExpiresAt,&subscriptionStatus)
+  Scan(&result.SubscriptionID,&startsAt,&expiresAt,&subscriptionStatus)
   if errors.Is(err,pgx.ErrNoRows){return ActivatedTrial{},ErrAlreadyActivated}
   if err!=nil{return ActivatedTrial{},err}
-  if subscriptionStatus!="active" {return ActivatedTrial{},ErrAlreadyActivated}
+  if subscriptionStatus!="active" || startsAt==nil || expiresAt==nil {return ActivatedTrial{},ErrAlreadyActivated}
   result.ClaimID=claimID
   retryNow:=time.Now().UTC()
-  if result.StartsAt.After(retryNow) || !result.ExpiresAt.After(retryNow) || !result.ExpiresAt.After(result.StartsAt) {return ActivatedTrial{},ErrAlreadyActivated}
+  if startsAt.After(retryNow) || !expiresAt.After(retryNow) || !expiresAt.After(*startsAt) {return ActivatedTrial{},ErrAlreadyActivated}
+  result.StartsAt=*startsAt
+  result.ExpiresAt=*expiresAt
   if err=tx.Commit(ctx);err!=nil{return ActivatedTrial{},err}
   return result,nil
  }
