@@ -47,3 +47,28 @@ func TestWindowBoundaryAndClaimStates(t *testing.T) {
   })
  }
 }
+
+func TestDurationFromSeconds(t *testing.T) {
+ const maxSeconds = int64((1<<63 - 1) / int64(time.Second))
+ cases := []struct {
+  name string
+  seconds int64
+  wantErr bool
+ }{
+  {"one hour",3600,false},
+  {"one second",1,false},
+  {"zero",0,true},
+  {"negative",-1,true},
+  {"maximum supported",maxSeconds,false},
+  {"overflow",maxSeconds+1,true},
+  {"max int64",1<<63-1,true},
+ }
+ for _,tc:=range cases {
+  t.Run(tc.name,func(t *testing.T){
+   got,err:=DurationFromSeconds(tc.seconds)
+   if (err!=nil)!=tc.wantErr {t.Fatalf("seconds=%d duration=%v err=%v",tc.seconds,got,err)}
+   if tc.wantErr && !errors.Is(err,ErrInvalidDuration){t.Fatalf("expected invalid duration: %v",err)}
+   if !tc.wantErr && got!=time.Duration(tc.seconds)*time.Second {t.Fatalf("wrong duration: %v",got)}
+  })
+ }
+}
