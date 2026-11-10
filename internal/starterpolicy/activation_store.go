@@ -35,7 +35,7 @@ func (s ActivationStore) Activate(ctx context.Context, userID, claimID uuid.UUID
  if err=tx.QueryRow(ctx,`SELECT id FROM users WHERE id=$1 FOR UPDATE`,userID).Scan(&exists);err!=nil{return ActivatedTrial{},err}
 
  var state string
- var deadline time.Time
+ var deadline *time.Time
  var planID uuid.UUID
  var policyID *uuid.UUID
  var oldSubscription *uuid.UUID
@@ -66,7 +66,8 @@ func (s ActivationStore) Activate(ctx context.Context, userID, claimID uuid.UUID
  err=tx.QueryRow(ctx,`SELECT trial_duration_seconds FROM starter_plan_policies WHERE id=$1`,*policyID).Scan(&durationSeconds)
  if err!=nil{return ActivatedTrial{},err}
  now:=time.Now().UTC()
- window,err:=Window(now,deadline,time.Duration(durationSeconds)*time.Second,state)
+ if deadline==nil {return ActivatedTrial{},ErrReservationExpired}
+ window,err:=Window(now,*deadline,time.Duration(durationSeconds)*time.Second,state)
  if err!=nil{return ActivatedTrial{},err}
  var active bool
  err=tx.QueryRow(ctx,`SELECT EXISTS(SELECT 1 FROM user_subscriptions
