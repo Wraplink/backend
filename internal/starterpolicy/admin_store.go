@@ -70,8 +70,11 @@ func (s PolicyStore) List(ctx context.Context) ([]AdminPolicy,error) {
   var seconds, trialSeconds int64
   if err:=rows.Scan(&p.ID,&p.PlanID,&p.Enabled,&p.Priority,&p.Region,
    &p.AssignmentTrigger,&p.ActivationTrigger,&seconds,&trialSeconds);err!=nil{return nil,err}
-  p.ReservationTTL=time.Duration(seconds)*time.Second
-  p.TrialDuration=time.Duration(trialSeconds)*time.Second
+  var conversionErr error
+  p.ReservationTTL,conversionErr=DurationFromSeconds(seconds)
+  if conversionErr!=nil{return nil,conversionErr}
+  p.TrialDuration,conversionErr=DurationFromSeconds(trialSeconds)
+  if conversionErr!=nil{return nil,conversionErr}
   result=append(result,p)
  }
  return result,rows.Err()
