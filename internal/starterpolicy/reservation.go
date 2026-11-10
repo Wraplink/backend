@@ -53,11 +53,11 @@ func (s ReservationStore) ReserveVerified(ctx context.Context, userID uuid.UUID,
  FROM starter_plan_policies policy JOIN plans p ON p.id=policy.plan_id
  WHERE p.price_minor=0 AND p.active=true AND p.archived_at IS NULL
  AND (p.publish_at IS NULL OR p.publish_at<=now())
- AND enabled AND assignment_trigger='email_verified'
- AND (region='' OR lower(region)=lower($1))
+ AND policy.enabled AND policy.assignment_trigger='email_verified'
+ AND (policy.region='' OR lower(policy.region)=lower($1))
  AND NOT EXISTS (
   SELECT 1 FROM free_plan_claims claimed
-  WHERE claimed.user_id=$2 AND claimed.plan_id=starter_plan_policies.plan_id
+  WHERE claimed.user_id=$2 AND claimed.plan_id=policy.plan_id
  )
  ORDER BY policy.priority DESC,policy.id ASC LIMIT 1`,region,userID).Scan(&policyID,&planID,&ttl)
  if errors.Is(err,pgx.ErrNoRows) {
