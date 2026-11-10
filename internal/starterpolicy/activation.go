@@ -28,3 +28,13 @@ func Window(now, reservationExpiresAt time.Time, duration time.Duration, state s
  }
  return ActivationWindow{StartsAt:now,ExpiresAt:now.Add(duration)},nil
 }
+
+// DurationFromSeconds converts persisted policy seconds without overflowing
+// Go's nanosecond-based time.Duration representation.
+func DurationFromSeconds(seconds int64) (time.Duration, error) {
+ const maxSeconds = int64((1<<63 - 1) / int64(time.Second))
+ if seconds <= 0 || seconds > maxSeconds {
+  return 0, ErrInvalidDuration
+ }
+ return time.Duration(seconds) * time.Second, nil
+}
