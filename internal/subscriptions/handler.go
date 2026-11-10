@@ -61,6 +61,8 @@ func (h *Handler) CreatePending(
 			writeJSONError(w, http.StatusBadRequest, "planCode is required")
 		case errors.Is(err, ErrPlanNotFound):
 			writeJSONError(w, http.StatusNotFound, "plan not found")
+		case errors.Is(err, ErrFreePlanRequiresClaim):
+			writeJSONError(w, http.StatusConflict, "free plans must be activated through the free claim endpoint")
 		default:
 			writeJSONError(w, http.StatusInternalServerError, "could not create subscription")
 		}
