@@ -55,6 +55,10 @@ func TestValidateAdminPolicyDurationBoundaries(t *testing.T) {
   {"zero trial duration",time.Hour,0,false},
   {"negative trial duration",time.Hour,-time.Second,false},
   {"subsecond trial duration",time.Hour,time.Millisecond,false},
+  {"maximum allowed TTL",365*24*time.Hour,time.Hour,true},
+  {"TTL above maximum",365*24*time.Hour+time.Second,time.Hour,false},
+  {"maximum allowed trial",time.Hour,365*24*time.Hour,true},
+  {"trial above maximum",time.Hour,365*24*time.Hour+time.Second,false},
  }
  for _,tc:=range cases {
   t.Run(tc.name,func(t *testing.T){
