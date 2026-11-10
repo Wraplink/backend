@@ -119,6 +119,7 @@ func (s ActivationStore) MyStarterClaims(ctx context.Context,userID uuid.UUID)([
   var subscriptionStatus *string
   if err:=rows.Scan(&item.ID,&item.PlanID,&item.State,&item.ReservationExpiresAt,&item.ActivatedAt,&item.SubscriptionID,&item.StartsAt,&item.ExpiresAt,&subscriptionStatus);err!=nil{return nil,err}
   if item.State=="active" && (subscriptionStatus==nil || *subscriptionStatus!="active" || item.ExpiresAt==nil) {item.State="cancelled"}
+  if item.State=="active" && item.StartsAt!=nil && time.Now().Before(*item.StartsAt) {item.State="reserved"}
   if item.State=="reserved" && item.ReservationExpiresAt!=nil && !time.Now().Before(*item.ReservationExpiresAt){item.State="expired"}
   if item.State=="active" && item.ExpiresAt!=nil && !time.Now().Before(*item.ExpiresAt){item.State="expired"}
   result=append(result,item)
