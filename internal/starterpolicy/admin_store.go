@@ -30,12 +30,10 @@ func validateAdminPolicy(p AdminPolicy) error {
  if p.PlanID==uuid.Nil || p.ReservationTTL<=0 || p.ReservationTTL%time.Second!=0 || p.TrialDuration<=0 || p.TrialDuration%time.Second!=0 {
   return ErrInvalidPolicy
  }
- if p.AssignmentTrigger!=AfterVerification && p.AssignmentTrigger!=FirstLogin {
+ // Only email verification and manual activation are wired end-to-end.
+ // Reject other triggers instead of silently creating policies that never run.
+ if p.AssignmentTrigger!=AfterVerification || p.ActivationTrigger!="manual" {
   return ErrInvalidPolicy
- }
- switch p.ActivationTrigger {
- case "manual", "first_dns_use", "immediate":
- default: return ErrInvalidPolicy
  }
  return nil
 }
