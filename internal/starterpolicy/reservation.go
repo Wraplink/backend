@@ -60,6 +60,9 @@ func (s ReservationStore) ReserveVerified(ctx context.Context, userID uuid.UUID,
  WHERE p.price_minor=0 AND p.active=true AND p.archived_at IS NULL
  AND (p.publish_at IS NULL OR p.publish_at<=now())
  AND policy.enabled AND policy.assignment_trigger='email_verified'
+ AND policy.activation_trigger='manual'
+ AND policy.reservation_ttl_seconds BETWEEN 1 AND 31536000
+ AND policy.trial_duration_seconds BETWEEN 1 AND 31536000
  AND (policy.region='' OR lower(policy.region)=lower($1))
  AND NOT EXISTS (
   SELECT 1 FROM free_plan_claims claimed
