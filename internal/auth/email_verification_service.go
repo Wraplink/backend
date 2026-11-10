@@ -105,6 +105,7 @@ func (s *EmailVerificationService) Verify(
 		UPDATE email_verifications
 		SET used_at = now()
 		WHERE id = $1
+		  AND email_verified = FALSE
 	`
 
 	if _, err := tx.Exec(
