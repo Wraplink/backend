@@ -13,6 +13,7 @@ type FreeClaimSummary struct {
  State string `json:"state"`
 }
 func ListFreeClaims(ctx context.Context,db *pgxpool.Pool,userID uuid.UUID)([]FreeClaimSummary,error){
+ if db==nil || userID==uuid.Nil {return nil,ErrNotEligible}
  rows,err:=db.Query(ctx,`SELECT c.plan_id,COALESCE(c.plan_code,p.code,''),c.source,c.state
  FROM free_plan_claims c LEFT JOIN plans p ON p.id=c.plan_id
  WHERE c.user_id=$1 ORDER BY c.assigned_at DESC`,userID)
