@@ -75,11 +75,11 @@ func (s ReservationStore) ReserveVerified(ctx context.Context, userID uuid.UUID,
  SELECT $1,$2,$3,p.code,$4,'starter','reserved',now()+($5 * interval '1 second') FROM plans p WHERE p.id=$3
  ON CONFLICT DO NOTHING
  RETURNING id,plan_id,reservation_expires_at`,claimID,userID,planID,policyID,ttl).
- Scan(&existing.ClaimID,&existing.PlanID,&existing.ExpiresAt)
+ Scan(&existing.ClaimID,&existing.PlanID,&existingDeadline)
  if errors.Is(err,pgx.ErrNoRows) {
   err=tx.QueryRow(ctx,`SELECT id,plan_id,reservation_expires_at
  FROM free_plan_claims WHERE user_id=$1 AND source='starter'`,userID).
- Scan(&existing.ClaimID,&existing.PlanID,&existing.ExpiresAt)
+ Scan(&existing.ClaimID,&existing.PlanID,&existingDeadline)
   if errors.Is(err,pgx.ErrNoRows) {
    // The plan may have been claimed through the market concurrently.
    // Do not issue a second starter entitlement or overwrite its claim.
