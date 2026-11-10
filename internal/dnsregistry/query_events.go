@@ -30,7 +30,7 @@ func validQueryDomain(v string) bool {
  if len(v)<1||len(v)>253||strings.Trim(v,".")=="" {return false}
  for _,label:=range strings.Split(v,".") {
   if len(label)==0||len(label)>63{return false}
-  for _,c:=range label {if !(c>='a'&&c<='z'||c>='0'&&c<='9'||c=='-'){return false}}
+  for _,c:=range label {if !(c>='a'&&c<='z'||c>='0'&&c<='9'||c=='-'||c=='_'){return false}}
  }
  return true
 }
