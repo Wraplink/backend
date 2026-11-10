@@ -53,6 +53,7 @@ func (s ActivationStore) Activate(ctx context.Context, userID, claimID uuid.UUID
   Scan(&result.SubscriptionID,&result.StartsAt,&result.ExpiresAt)
   if err!=nil{return ActivatedTrial{},err}
   result.ClaimID=claimID
+  if !result.ExpiresAt.After(time.Now().UTC()) {return ActivatedTrial{},ErrAlreadyActivated}
   if err=tx.Commit(ctx);err!=nil{return ActivatedTrial{},err}
   return result,nil
  }
