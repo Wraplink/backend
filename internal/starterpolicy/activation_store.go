@@ -70,6 +70,12 @@ func (s ActivationStore) Activate(ctx context.Context, userID, claimID uuid.UUID
  err=tx.QueryRow(ctx,`SELECT trial_duration_seconds FROM starter_plan_policies WHERE id=$1`,*policyID).Scan(&durationSeconds)
  if errors.Is(err,pgx.ErrNoRows){return ActivatedTrial{},ErrNotEligible}
  if err!=nil{return ActivatedTrial{},err}
+ // Reject invalid or overflowing policy durations before converting seconds
+ // to time.Duration (nanoseconds). An overflow could otherwise grant a
+ // much shorter or negative trial than the administrator configured.
+ if durationSeconds<=0 || durationSeconds>int64((1<<63-1)/int64(time.Second)) {
+  return ActivatedTrial{},ErrInvalidDuration
+ }
  now:=time.Now().UTC()
  window,err:=Window(now,*deadline,time.Duration(durationSeconds)*time.Second,state)
  if err!=nil{return ActivatedTrial{},err}
