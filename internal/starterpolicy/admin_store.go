@@ -76,6 +76,7 @@ func (s PolicyStore) List(ctx context.Context) ([]AdminPolicy,error) {
   if conversionErr!=nil{return nil,conversionErr}
   p.TrialDuration,conversionErr=DurationFromSeconds(trialSeconds)
   if conversionErr!=nil{return nil,conversionErr}
+  if err:=validateAdminPolicy(p);err!=nil{return nil,err}
   result=append(result,p)
  }
  return result,rows.Err()
