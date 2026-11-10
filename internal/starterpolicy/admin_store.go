@@ -3,6 +3,7 @@ package starterpolicy
 import (
  "context"
  "errors"
+ "strings"
  "time"
 
  "github.com/google/uuid"
@@ -33,7 +34,7 @@ func validateAdminPolicy(p AdminPolicy) error {
  }
  // Only email verification and manual activation are wired end-to-end.
  // Reject other triggers instead of silently creating policies that never run.
- if p.AssignmentTrigger!=AfterVerification || p.ActivationTrigger!="manual" {
+ if p.AssignmentTrigger!=AfterVerification || p.ActivationTrigger!="manual" || strings.TrimSpace(p.Region)!="" {
   return ErrInvalidPolicy
  }
  return nil
