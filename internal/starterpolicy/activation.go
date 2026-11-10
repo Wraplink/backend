@@ -22,6 +22,7 @@ type ActivationWindow struct {
 func Window(now, reservationExpiresAt time.Time, duration time.Duration, state string) (ActivationWindow,error) {
  if duration<=0 { return ActivationWindow{},ErrInvalidDuration }
  if state!="reserved" { return ActivationWindow{},ErrAlreadyActivated }
+ if now.Add(duration).Before(now) { return ActivationWindow{},ErrInvalidDuration }
  if reservationExpiresAt.IsZero() || !now.Before(reservationExpiresAt) {
   return ActivationWindow{},ErrReservationExpired
  }
