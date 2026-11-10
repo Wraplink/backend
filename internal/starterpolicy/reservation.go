@@ -57,7 +57,7 @@ func (s ReservationStore) ReserveVerified(ctx context.Context, userID uuid.UUID,
  AND (policy.region='' OR lower(policy.region)=lower($1))
  AND NOT EXISTS (
   SELECT 1 FROM free_plan_claims claimed
-  WHERE claimed.user_id=$2 AND claimed.plan_id=policy.plan_id
+  WHERE claimed.user_id=$2 AND (claimed.plan_id=policy.plan_id OR lower(claimed.plan_code)=lower(p.code))
  )
  ORDER BY policy.priority DESC,policy.id ASC LIMIT 1`,region,userID).Scan(&policyID,&planID,&ttl)
  if errors.Is(err,pgx.ErrNoRows) {
