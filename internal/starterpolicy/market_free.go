@@ -45,14 +45,16 @@ func (s MarketFreeStore) Claim(ctx context.Context,userID uuid.UUID,planCode str
  var existing bool
  if err=tx.QueryRow(ctx,`SELECT EXISTS(SELECT 1 FROM free_plan_claims WHERE user_id=$1 AND plan_id=$2)`,userID,planID).Scan(&existing);err!=nil{return MarketFreeResult{},err}
  if existing{return MarketFreeResult{},ErrFreePlanClaimed}
+ if err=tx.QueryRow(ctx,`SELECT EXISTS(SELECT 1 FROM free_plan_claims WHERE user_id=$1 AND lower(plan_code)=$2)`,userID,planCode).Scan(&existing);err!=nil{return MarketFreeResult{},err}
+ if existing{return MarketFreeResult{},ErrFreePlanClaimed}
  if err=tx.QueryRow(ctx,`SELECT EXISTS(SELECT 1 FROM user_subscriptions WHERE user_id=$1 AND status='active' AND starts_at<=now() AND expires_at>now())`,userID).Scan(&existing);err!=nil{return MarketFreeResult{},err}
  if existing{return MarketFreeResult{},ErrActiveSubscription}
  result:=MarketFreeResult{ClaimID:uuid.New(),StartsAt:time.Now().UTC()}
  result.ExpiresAt=result.StartsAt.AddDate(0,0,days)
  // First reserve the durable claim. A concurrent request can never grant
  // another subscription even if it races across multiple API workers.
- tag,err:=tx.Exec(ctx,`INSERT INTO free_plan_claims(id,user_id,plan_id,source,state,activated_at)
- VALUES($1,$2,$3,'market','activating',$4) ON CONFLICT DO NOTHING`,result.ClaimID,userID,planID,result.StartsAt)
+ tag,err:=tx.Exec(ctx,`INSERT INTO free_plan_claims(id,user_id,plan_id,plan_code,source,state,activated_at)
+ VALUES($1,$2,$3,$5,'market','activating',$4) ON CONFLICT DO NOTHING`,result.ClaimID,userID,planID,result.StartsAt,planCode)
  if err!=nil{return MarketFreeResult{},err}
  if tag.RowsAffected()!=1{return MarketFreeResult{},ErrFreePlanClaimed}
  err=tx.QueryRow(ctx,`INSERT INTO user_subscriptions
