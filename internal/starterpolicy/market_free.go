@@ -37,7 +37,7 @@ func (s MarketFreeStore) Claim(ctx context.Context,userID uuid.UUID,planCode str
  var planID uuid.UUID
  var days int
  err=tx.QueryRow(ctx,`SELECT id,duration_days FROM plans
- WHERE code=$1 AND active AND price_minor=0 AND archived_at IS NULL
+ WHERE lower(code)=$1 AND active AND price_minor=0 AND archived_at IS NULL
  AND (publish_at IS NULL OR publish_at<=now()) FOR SHARE`,planCode).Scan(&planID,&days)
  if errors.Is(err,pgx.ErrNoRows){return MarketFreeResult{},ErrFreePlanUnavailable}
  if err!=nil{return MarketFreeResult{},err}
