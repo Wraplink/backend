@@ -39,9 +39,7 @@ func validateAdminPolicy(p AdminPolicy) error {
  return nil
 }
 
-// Create inserts a disabled-by-default policy unless Enabled is explicitly set.
-// A plan's zero-price and starter eligibility MUST be verified by the caller
-// against the authoritative plan catalog before invoking this method.
+// Create checks free, active and published plan eligibility atomically.
 func (s PolicyStore) Create(ctx context.Context,p AdminPolicy) (AdminPolicy,error) {
  if s.DB==nil {return AdminPolicy{},errors.New("starter policy store has no database")}
  if err:=validateAdminPolicy(p);err!=nil{return AdminPolicy{},err}
