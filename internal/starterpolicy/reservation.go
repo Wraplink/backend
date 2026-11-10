@@ -68,8 +68,8 @@ func (s ReservationStore) ReserveVerified(ctx context.Context, userID uuid.UUID,
 
  claimID:=uuid.New()
  err=tx.QueryRow(ctx,`INSERT INTO free_plan_claims
- (id,user_id,plan_id,starter_policy_id,source,state,reservation_expires_at)
- VALUES ($1,$2,$3,$4,'starter','reserved',now()+($5 * interval '1 second'))
+ (id,user_id,plan_id,plan_code,starter_policy_id,source,state,reservation_expires_at)
+ SELECT $1,$2,$3,p.code,$4,'starter','reserved',now()+($5 * interval '1 second') FROM plans p WHERE p.id=$3
  ON CONFLICT DO NOTHING
  RETURNING id,plan_id,reservation_expires_at`,claimID,userID,planID,policyID,ttl).
  Scan(&existing.ClaimID,&existing.PlanID,&existing.ExpiresAt)
