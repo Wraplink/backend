@@ -6,6 +6,7 @@ import (
  "time"
 
  "github.com/google/uuid"
+ "github.com/jackc/pgx/v5"
  "github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -45,13 +46,14 @@ func (s PolicyStore) Create(ctx context.Context,p AdminPolicy) (AdminPolicy,erro
  if s.DB==nil {return AdminPolicy{},errors.New("starter policy store has no database")}
  if err:=validateAdminPolicy(p);err!=nil{return AdminPolicy{},err}
  if p.ID==uuid.Nil {p.ID=uuid.New()}
- var eligible bool
- if err:=s.DB.QueryRow(ctx,`SELECT EXISTS(SELECT 1 FROM plans WHERE id=$1 AND price_minor=0 AND active=true AND archived_at IS NULL)`,p.PlanID).Scan(&eligible);err!=nil{return AdminPolicy{},err}
- if !eligible{return AdminPolicy{},ErrNotEligible}
  err:=s.DB.QueryRow(ctx,`INSERT INTO starter_plan_policies
  (id,plan_id,enabled,priority,region,assignment_trigger,activation_trigger,reservation_ttl_seconds,trial_duration_seconds)
- VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+ SELECT $1,catalog.id,$3,$4,$5,$6,$7,$8,$9 FROM plans catalog
+ WHERE catalog.id=$2 AND catalog.price_minor=0 AND catalog.active=true
+ AND catalog.archived_at IS NULL
+ AND (catalog.publish_at IS NULL OR catalog.publish_at<=now())
  RETURNING id`,p.ID,p.PlanID,p.Enabled,p.Priority,p.Region,p.AssignmentTrigger,p.ActivationTrigger,int64(p.ReservationTTL/time.Second),int64(p.TrialDuration/time.Second)).Scan(&p.ID)
+ if errors.Is(err,pgx.ErrNoRows){return AdminPolicy{},ErrNotEligible}
  return p,err
 }
 
