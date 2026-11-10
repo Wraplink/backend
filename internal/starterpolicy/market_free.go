@@ -61,8 +61,11 @@ func (s MarketFreeStore) Claim(ctx context.Context,userID uuid.UUID,planCode str
  (user_id,plan_id,plan_code,plan_name,price_minor,currency,duration_days,data_limit_bytes,
  status,starts_at,expires_at,activated_at)
  SELECT $1,p.id,p.code,p.name,0,p.currency,p.duration_days,p.data_limit_bytes,
- 'active',$3,$4,$3 FROM plans p WHERE p.id=$2
+ 'active',$3,$4,$3 FROM plans p
+ WHERE p.id=$2 AND p.price_minor=0 AND p.active
+ AND p.archived_at IS NULL AND (p.publish_at IS NULL OR p.publish_at<=now())
  RETURNING id`,userID,planID,result.StartsAt,result.ExpiresAt).Scan(&result.SubscriptionID)
+ if errors.Is(err,pgx.ErrNoRows){return MarketFreeResult{},ErrFreePlanUnavailable}
  if err!=nil{return MarketFreeResult{},fmt.Errorf("create free subscription: %w",err)}
  updateTag,err:=tx.Exec(ctx,`UPDATE free_plan_claims
  SET state='active',subscription_id=$2
