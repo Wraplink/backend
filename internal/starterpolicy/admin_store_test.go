@@ -26,6 +26,9 @@ func TestValidateAdminPolicy(t *testing.T) {
  p.ActivationTrigger="unknown"
  if err:=validateAdminPolicy(p);!errors.Is(err,ErrInvalidPolicy) {t.Fatalf("unknown activation trigger accepted: %v",err)}
  p.ActivationTrigger="manual"
+ p.Region="eu-1"
+ if err:=validateAdminPolicy(p);!errors.Is(err,ErrInvalidPolicy) {t.Fatalf("unimplemented region policy accepted: %v",err)}
+ p.Region=""
  p.ReservationTTL=500*time.Millisecond
  if err:=validateAdminPolicy(p);!errors.Is(err,ErrInvalidPolicy) {t.Fatalf("subsecond TTL accepted: %v",err)}
  p.ReservationTTL=time.Hour
