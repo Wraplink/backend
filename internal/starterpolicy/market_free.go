@@ -4,6 +4,7 @@ import (
  "context"
  "errors"
  "fmt"
+ "strings"
  "time"
 
  "github.com/google/uuid"
@@ -25,6 +26,7 @@ type MarketFreeResult struct{
 // Claim atomically grants one zero-cost market plan, never charging a wallet.
 // Claims remain after cancellation or expiry and cannot be reissued.
 func (s MarketFreeStore) Claim(ctx context.Context,userID uuid.UUID,planCode string)(MarketFreeResult,error){
+ planCode=strings.ToLower(strings.TrimSpace(planCode))
  if s.DB==nil || userID==uuid.Nil || planCode==""{return MarketFreeResult{},ErrFreePlanUnavailable}
  tx,err:=s.DB.BeginTx(ctx,pgx.TxOptions{})
  if err!=nil{return MarketFreeResult{},err}
