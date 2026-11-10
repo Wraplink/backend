@@ -178,8 +178,8 @@ func (s *EmailVerificationService) Verify(
 	// No subscription or network entitlement is activated here.
 	const reserveStarter = `
 		INSERT INTO free_plan_claims
-			(id, user_id, plan_id, starter_policy_id, source, state, reservation_expires_at)
-		SELECT gen_random_uuid(), $1, p.plan_id, p.id, 'starter', 'reserved',
+			(id, user_id, plan_id, plan_code, starter_policy_id, source, state, reservation_expires_at)
+		SELECT gen_random_uuid(), $1, p.plan_id, catalog.code, p.id, 'starter', 'reserved',
 			now() + (p.reservation_ttl_seconds * interval '1 second')
 		FROM starter_plan_policies p
 		JOIN plans catalog ON catalog.id = p.plan_id
