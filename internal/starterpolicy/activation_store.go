@@ -46,7 +46,7 @@ func (s ActivationStore) Activate(ctx context.Context, userID, claimID uuid.UUID
  if err!=nil{return ActivatedTrial{},err}
  // Idempotent retries return the original subscription, even after expiry.
  // Never create another trial subscription for a previously activated claim.
- if oldSubscription!=nil && state!="reserved" {
+ if oldSubscription!=nil && (state=="active" || state=="expired" || state=="cancelled") {
   var result ActivatedTrial
   err=tx.QueryRow(ctx,`SELECT id,starts_at,expires_at FROM user_subscriptions
   WHERE id=$1 AND user_id=$2`,*oldSubscription,userID).
