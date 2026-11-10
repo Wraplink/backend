@@ -35,6 +35,9 @@ func TestDisplayClaimState(t *testing.T) {
   {"expiry before start","active",nil,&past,&earlier,&active,"failed"},
   {"cancelled claim","cancelled",nil,&earlier,&future,&active,"cancelled"},
   {"failed claim","failed",nil,nil,nil,nil,"failed"},
+  {"activating claim","activating",nil,nil,nil,nil,"activating"},
+  {"expired claim remains expired","expired",nil,&earlier,&future,&active,"expired"},
+  {"reserved claim ignores subscription state","reserved",&future,&earlier,&future,&cancelled,"reserved"},
  }
  for _,tc:=range cases{
   t.Run(tc.name,func(t *testing.T){
