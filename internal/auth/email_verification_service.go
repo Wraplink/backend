@@ -196,7 +196,7 @@ func (s *EmailVerificationService) Verify(
 			)
 			AND NOT EXISTS (
 				SELECT 1 FROM free_plan_claims c
-				WHERE c.user_id = $1 AND c.plan_id = p.plan_id
+				WHERE c.user_id = $1 AND (c.plan_id = p.plan_id OR lower(c.plan_code) = lower(catalog.code))
 			)
 		ORDER BY p.priority DESC, p.id ASC
 		LIMIT 1
