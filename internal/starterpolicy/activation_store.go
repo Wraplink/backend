@@ -91,7 +91,9 @@ func (s ActivationStore) Activate(ctx context.Context, userID, claimID uuid.UUID
  if err!=nil{return ActivatedTrial{},fmt.Errorf("create trial subscription: %w",err)}
  tag,err:=tx.Exec(ctx,`UPDATE free_plan_claims
  SET state='active',activated_at=$3,subscription_id=$4
- WHERE id=$1 AND user_id=$2 AND state='reserved'`,claimID,userID,window.StartsAt,result.SubscriptionID)
+ WHERE id=$1 AND user_id=$2 AND source='starter'
+ AND state='reserved' AND subscription_id IS NULL
+ AND reservation_expires_at > $3`,claimID,userID,window.StartsAt,result.SubscriptionID)
  if err!=nil{return ActivatedTrial{},err}
  if tag.RowsAffected()!=1{return ActivatedTrial{},ErrAlreadyActivated}
  if err=tx.Commit(ctx);err!=nil{return ActivatedTrial{},err}
