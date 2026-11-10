@@ -38,10 +38,13 @@ func (s ReservationStore) ReserveVerified(ctx context.Context, userID uuid.UUID,
  if !verified { return Reservation{},ErrNotEligible }
 
  var existing Reservation
+ var existingDeadline *time.Time
  err=tx.QueryRow(ctx,`SELECT id,plan_id,reservation_expires_at
  FROM free_plan_claims WHERE user_id=$1 AND source='starter'`,userID).
- Scan(&existing.ClaimID,&existing.PlanID,&existing.ExpiresAt)
+ Scan(&existing.ClaimID,&existing.PlanID,&existingDeadline)
  if err==nil {
+  if existingDeadline==nil {return Reservation{},ErrNotEligible}
+  existing.ExpiresAt=*existingDeadline
   if err=tx.Commit(ctx);err!=nil{return Reservation{},err}
   return existing,nil
  }
@@ -85,6 +88,8 @@ func (s ReservationStore) ReserveVerified(ctx context.Context, userID uuid.UUID,
   if err!=nil{return Reservation{},err}
  } else if err!=nil{return Reservation{},err
  } else {existing.Created=true}
+ if existingDeadline==nil {return Reservation{},ErrNotEligible}
+ existing.ExpiresAt=*existingDeadline
  if err=tx.Commit(ctx);err!=nil{return Reservation{},err}
  return existing,nil
 }
