@@ -32,6 +32,9 @@ func (s ReservationStore) ReserveVerified(ctx context.Context, userID uuid.UUID,
 
  // Serialize competing callbacks for the same account, including callbacks
  // racing to select different policies. Locking users also ensures existence.
+ // This helper is only safe for onboarding callers that independently prove
+ // newUser from a trusted first-verification transition; do not expose it
+ // directly to client-controlled requests.
  var verified bool
  err=tx.QueryRow(ctx,`SELECT email_verified FROM users WHERE id=$1 FOR UPDATE`,userID).Scan(&verified)
  if err!=nil { return Reservation{},err }
