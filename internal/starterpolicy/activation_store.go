@@ -56,7 +56,8 @@ func (s ActivationStore) Activate(ctx context.Context, userID, claimID uuid.UUID
   if err!=nil{return ActivatedTrial{},err}
   if subscriptionStatus!="active" {return ActivatedTrial{},ErrAlreadyActivated}
   result.ClaimID=claimID
-  if !result.ExpiresAt.After(time.Now().UTC()) {return ActivatedTrial{},ErrAlreadyActivated}
+  retryNow:=time.Now().UTC()
+  if result.StartsAt.After(retryNow) || !result.ExpiresAt.After(retryNow) || !result.ExpiresAt.After(result.StartsAt) {return ActivatedTrial{},ErrAlreadyActivated}
   if err=tx.Commit(ctx);err!=nil{return ActivatedTrial{},err}
   return result,nil
  }
