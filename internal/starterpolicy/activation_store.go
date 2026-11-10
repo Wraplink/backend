@@ -65,11 +65,12 @@ func (s ActivationStore) Activate(ctx context.Context, userID, claimID uuid.UUID
   return result,nil
  }
  if state!="reserved" || policyID==nil {return ActivatedTrial{},ErrAlreadyActivated}
+ if deadline==nil {return ActivatedTrial{},ErrReservationExpired}
  var durationSeconds int64
  err=tx.QueryRow(ctx,`SELECT trial_duration_seconds FROM starter_plan_policies WHERE id=$1`,*policyID).Scan(&durationSeconds)
+ if errors.Is(err,pgx.ErrNoRows){return ActivatedTrial{},ErrNotEligible}
  if err!=nil{return ActivatedTrial{},err}
  now:=time.Now().UTC()
- if deadline==nil {return ActivatedTrial{},ErrReservationExpired}
  window,err:=Window(now,*deadline,time.Duration(durationSeconds)*time.Second,state)
  if err!=nil{return ActivatedTrial{},err}
  var active bool
