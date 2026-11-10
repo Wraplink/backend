@@ -29,7 +29,8 @@ type AdminPolicy struct {
 type PolicyStore struct { DB *pgxpool.Pool }
 
 func validateAdminPolicy(p AdminPolicy) error {
- if p.PlanID==uuid.Nil || p.ReservationTTL<=0 || p.ReservationTTL%time.Second!=0 || p.TrialDuration<=0 || p.TrialDuration%time.Second!=0 {
+ const maxPolicyDuration = 365 * 24 * time.Hour
+ if p.PlanID==uuid.Nil || p.ReservationTTL<=0 || p.ReservationTTL>maxPolicyDuration || p.ReservationTTL%time.Second!=0 || p.TrialDuration<=0 || p.TrialDuration>maxPolicyDuration || p.TrialDuration%time.Second!=0 {
   return ErrInvalidPolicy
  }
  // Only email verification and manual activation are wired end-to-end.
