@@ -64,8 +64,11 @@ func (s MarketFreeStore) Claim(ctx context.Context,userID uuid.UUID,planCode str
  'active',$3,$4,$3 FROM plans p WHERE p.id=$2
  RETURNING id`,userID,planID,result.StartsAt,result.ExpiresAt).Scan(&result.SubscriptionID)
  if err!=nil{return MarketFreeResult{},fmt.Errorf("create free subscription: %w",err)}
- _,err=tx.Exec(ctx,`UPDATE free_plan_claims SET state='active',subscription_id=$2 WHERE id=$1`,result.ClaimID,result.SubscriptionID)
+ updateTag,err:=tx.Exec(ctx,`UPDATE free_plan_claims
+ SET state='active',subscription_id=$2
+ WHERE id=$1 AND user_id=$3 AND state='activating' AND subscription_id IS NULL`,result.ClaimID,result.SubscriptionID,userID)
  if err!=nil{return MarketFreeResult{},err}
+ if updateTag.RowsAffected()!=1{return MarketFreeResult{},ErrFreePlanClaimed}
  if err=tx.Commit(ctx);err!=nil{return MarketFreeResult{},err}
  return result,nil
 }
