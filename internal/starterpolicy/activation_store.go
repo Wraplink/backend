@@ -48,10 +48,13 @@ func (s ActivationStore) Activate(ctx context.Context, userID, claimID uuid.UUID
  // Never create another trial subscription for a previously activated claim.
  if oldSubscription!=nil && state=="active" {
   var result ActivatedTrial
-  err=tx.QueryRow(ctx,`SELECT id,starts_at,expires_at FROM user_subscriptions
-  WHERE id=$1 AND user_id=$2 AND status='active'`,*oldSubscription,userID).
-  Scan(&result.SubscriptionID,&result.StartsAt,&result.ExpiresAt)
+  var subscriptionStatus string
+  err=tx.QueryRow(ctx,`SELECT id,starts_at,expires_at,status FROM user_subscriptions
+  WHERE id=$1 AND user_id=$2`,*oldSubscription,userID).
+  Scan(&result.SubscriptionID,&result.StartsAt,&result.ExpiresAt,&subscriptionStatus)
+  if errors.Is(err,pgx.ErrNoRows){return ActivatedTrial{},ErrAlreadyActivated}
   if err!=nil{return ActivatedTrial{},err}
+  if subscriptionStatus!="active" {return ActivatedTrial{},ErrAlreadyActivated}
   result.ClaimID=claimID
   if !result.ExpiresAt.After(time.Now().UTC()) {return ActivatedTrial{},ErrAlreadyActivated}
   if err=tx.Commit(ctx);err!=nil{return ActivatedTrial{},err}
