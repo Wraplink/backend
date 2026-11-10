@@ -108,7 +108,7 @@ type MyStarterClaim struct {
 }
 func (s ActivationStore) MyStarterClaims(ctx context.Context,userID uuid.UUID)([]MyStarterClaim,error){
  if s.DB==nil || userID==uuid.Nil{return nil,ErrNotEligible}
- rows,err:=s.DB.Query(ctx,`SELECT c.id,c.plan_id,c.state,c.reservation_expires_at,c.activated_at,c.subscription_id,s.starts_at,s.expires_at
+ rows,err:=s.DB.Query(ctx,`SELECT c.id,c.plan_id,c.state,c.reservation_expires_at,c.activated_at,c.subscription_id,s.starts_at,s.expires_at,s.status
  FROM free_plan_claims c LEFT JOIN user_subscriptions s ON s.id=c.subscription_id AND s.user_id=c.user_id
  WHERE c.user_id=$1 AND c.source='starter' ORDER BY c.assigned_at DESC`,userID)
  if err!=nil{return nil,err}
@@ -116,7 +116,9 @@ func (s ActivationStore) MyStarterClaims(ctx context.Context,userID uuid.UUID)([
  result:=make([]MyStarterClaim,0)
  for rows.Next(){
   var item MyStarterClaim
-  if err:=rows.Scan(&item.ID,&item.PlanID,&item.State,&item.ReservationExpiresAt,&item.ActivatedAt,&item.SubscriptionID,&item.StartsAt,&item.ExpiresAt);err!=nil{return nil,err}
+  var subscriptionStatus *string
+  if err:=rows.Scan(&item.ID,&item.PlanID,&item.State,&item.ReservationExpiresAt,&item.ActivatedAt,&item.SubscriptionID,&item.StartsAt,&item.ExpiresAt,&subscriptionStatus);err!=nil{return nil,err}
+  if item.State=="active" && subscriptionStatus!=nil && *subscriptionStatus!="active" {item.State="cancelled"}
   if item.State=="reserved" && item.ReservationExpiresAt!=nil && !time.Now().Before(*item.ReservationExpiresAt){item.State="expired"}
   if item.State=="active" && item.ExpiresAt!=nil && !time.Now().Before(*item.ExpiresAt){item.State="expired"}
   result=append(result,item)
