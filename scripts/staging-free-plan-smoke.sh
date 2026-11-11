@@ -51,4 +51,22 @@ jq -e --arg code "$code" '
  ($matches|length)==1 and $matches[0].source=="market" and $matches[0].state=="active"
 ' "$tmp/after" >/dev/null
 echo "PASS: free claim, active zero-price subscription, duplicate rejection, durable claim."
-echo "NOT VERIFIED: concurrent claims, plan expiry, DNS/Edge entitlement propagation and revocation."
+if [[ "${WRAPLINK_CHECK_FREE_EXPIRY:-}" == YES ]]; then
+ : "${WRAPLINK_EXPIRY_TIMEOUT_SECONDS:=180}"
+ [[ "$WRAPLINK_EXPIRY_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] && (( WRAPLINK_EXPIRY_TIMEOUT_SECONDS >= 1 && WRAPLINK_EXPIRY_TIMEOUT_SECONDS <= 3600 )) || {
+  echo "Expiry timeout must be 1..3600 seconds" >&2; exit 2;
+ }
+ deadline=$((SECONDS + WRAPLINK_EXPIRY_TIMEOUT_SECONDS))
+ expired=false
+ while (( SECONDS < deadline )); do
+  status="$(call GET /api/v1/me/subscriptions/current "$tmp/expired")"
+  if [[ "$status" == 404 ]]; then expired=true; break; fi
+  [[ "$status" == 200 ]] || { echo "Unexpected current subscription HTTP $status" >&2; exit 1; }
+  sleep 2
+ done
+ [[ "$expired" == true ]] || { echo "Subscription did not expire before timeout" >&2; exit 1; }
+ again="$(call POST /api/v1/me/free-plans/claim "$tmp/after-expiry" -H 'Content-Type: application/json' --data "$payload")"
+ [[ "$again" == 409 ]] || { echo "Expired plan re-claim HTTP $again; expected 409" >&2; exit 1; }
+ echo "PASS: expired subscription removed from current view; lifetime re-claim blocked."
+fi
+echo "NOT VERIFIED: concurrent claims, DNS/Edge entitlement propagation and revocation."
