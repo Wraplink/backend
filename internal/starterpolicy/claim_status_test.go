@@ -37,7 +37,9 @@ func TestDisplayClaimState(t *testing.T) {
   {"failed claim","failed",nil,nil,nil,nil,"failed"},
   {"activating claim","activating",nil,nil,nil,nil,"activating"},
   {"expired claim remains expired","expired",nil,&earlier,&future,&active,"expired"},
-  {"reserved claim ignores subscription state","reserved",&future,&earlier,&future,&cancelled,"reserved"},
+  {"reserved claim with linked subscription is invalid","reserved",&future,&earlier,&future,&cancelled,"failed"},
+  {"reserved claim with unexpected start is invalid","reserved",&future,&earlier,nil,nil,"failed"},
+  {"reserved claim with unexpected expiry is invalid","reserved",&future,nil,&future,nil,"failed"},
  }
  for _,tc:=range cases{
   t.Run(tc.name,func(t *testing.T){
