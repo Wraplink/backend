@@ -39,9 +39,9 @@ second="$(call POST /api/v1/me/free-plans/claim "$tmp/second" -H 'Content-Type: 
 [[ "$second" == 409 ]] || { echo "Duplicate claim HTTP $second; expected 409" >&2; exit 1; }
 after="$(call GET /api/v1/me/free-plans/claims "$tmp/after")"
 [[ "$after" == 200 ]] || { echo "Claims recheck HTTP $after" >&2; exit 1; }
-jq -e --arg code "$code" --arg id "$sub" '
+jq -e --arg code "$code" '
  [.claims[]|select((.planCode|ascii_downcase)==$code)] as $matches |
- ($matches|length)==1 and $matches[0].subscriptionId==$id
+ ($matches|length)==1 and $matches[0].source=="market" and $matches[0].state=="active"
 ' "$tmp/after" >/dev/null
 echo "PASS: free claim, active zero-price subscription, duplicate rejection, durable claim."
 echo "NOT VERIFIED: concurrent claims, plan expiry, DNS/Edge entitlement propagation and revocation."
