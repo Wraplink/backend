@@ -15,6 +15,17 @@ case "$base" in
   https://api.wraplink.ir|https://wraplink.ir|https://www.wraplink.ir)
     echo "Refusing to run starter smoke tests against production" >&2; exit 2 ;;
 esac
+# A hostname allowlist prevents accidental writes to a production alias.
+# Supply the exact staging hostname, not a URL or wildcard.
+if [[ "${WRAPLINK_ACTIVATE_TRIAL:-}" == "YES" ]]; then
+ : "${WRAPLINK_STAGING_HOST:?Set the exact staging hostname}"
+ api_host="${base#https://}"
+ api_host="${api_host%%/*}"
+ api_host="${api_host%%:*}"
+ [[ "$api_host" == "$WRAPLINK_STAGING_HOST" ]] || {
+  echo "API hostname does not match WRAPLINK_STAGING_HOST" >&2; exit 2;
+ }
+fi
 if [[ "${WRAPLINK_ACTIVATE_TRIAL:-}" == "YES" && "${WRAPLINK_STAGING_CONFIRMED:-}" != "YES" ]]; then
  echo "Activation requires WRAPLINK_STAGING_CONFIRMED=YES" >&2
  exit 2
