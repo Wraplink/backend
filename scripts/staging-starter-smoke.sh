@@ -9,6 +9,12 @@ case "$WRAPLINK_API_URL" in
   *) echo "Refusing non-HTTPS API URL" >&2; exit 2 ;;
 esac
 base="${WRAPLINK_API_URL%/}"
+# Reject URL paths, query strings, fragments, userinfo, and unexpected ports.
+# Only a bare HTTPS origin is accepted for destructive staging tests.
+if [[ ! "$base" =~ ^https://[a-zA-Z0-9.-]+(:[0-9]{1,5})?$ ]]; then
+ echo "WRAPLINK_API_URL must be a bare HTTPS origin (no path or credentials)" >&2
+ exit 2
+fi
 # Do not accidentally consume a real customer's one-time trial.
 # Production URLs are rejected even when the caller explicitly opts in.
 case "$base" in
