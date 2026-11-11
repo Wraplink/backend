@@ -186,6 +186,9 @@ func (s *EmailVerificationService) Verify(
 		JOIN plans catalog ON catalog.id = p.plan_id
 		WHERE p.enabled = TRUE
 			AND p.assignment_trigger = 'email_verified'
+			AND p.activation_trigger = 'manual'
+			AND p.reservation_ttl_seconds BETWEEN 1 AND 31536000
+			AND p.trial_duration_seconds BETWEEN 1 AND 31536000
 			AND p.region = ''
 			AND catalog.price_minor = 0
 			AND catalog.active = TRUE
