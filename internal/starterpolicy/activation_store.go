@@ -134,7 +134,13 @@ func (s ActivationStore) MyStarterClaims(ctx context.Context,userID uuid.UUID)([
   var item MyStarterClaim
   var subscriptionStatus *string
   if err:=rows.Scan(&item.ID,&item.PlanID,&item.State,&item.ReservationExpiresAt,&item.ActivatedAt,&item.SubscriptionID,&item.StartsAt,&item.ExpiresAt,&subscriptionStatus);err!=nil{return nil,err}
-  item.State=DisplayClaimState(item.State,item.ReservationExpiresAt,item.StartsAt,item.ExpiresAt,subscriptionStatus,time.Now().UTC())
+  // A reserved claim must not point at any subscription, even if the
+  // linked subscription row is missing and the LEFT JOIN yields NULLs.
+  if item.State=="reserved" && item.SubscriptionID!=nil {
+   item.State="failed"
+  } else {
+   item.State=DisplayClaimState(item.State,item.ReservationExpiresAt,item.StartsAt,item.ExpiresAt,subscriptionStatus,time.Now().UTC())
+  }
   result=append(result,item)
  }
  return result,rows.Err()
