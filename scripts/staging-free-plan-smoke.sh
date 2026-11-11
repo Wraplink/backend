@@ -27,6 +27,13 @@ before="$(call GET /api/v1/me/free-plans/claims "$tmp/before")"
 jq -e --arg code "$code" '(.claims|type=="array") and (all(.claims[]; (.planCode|ascii_downcase)!=$code))' "$tmp/before" >/dev/null || {
  echo "Account already claimed this plan; use a fresh disposable account" >&2; exit 1;
 }
+# Refuse to consume a one-time claim when the account already has a live subscription.
+# This also makes a failed claim easier to diagnose before any mutation.
+pre_current="$(call GET /api/v1/me/subscriptions/current "$tmp/pre-current")"
+[[ "$pre_current" == 404 ]] || {
+ echo "Expected no current subscription before claiming (HTTP $pre_current)" >&2
+ exit 1
+}
 payload="$(jq -nc --arg code "$WRAPLINK_FREE_PLAN_CODE" '{planCode:$code}')"
 first="$(call POST /api/v1/me/free-plans/claim "$tmp/first" -H 'Content-Type: application/json' --data "$payload")"
 [[ "$first" == 200 || "$first" == 201 ]] || { echo "Initial claim HTTP $first" >&2; exit 1; }
