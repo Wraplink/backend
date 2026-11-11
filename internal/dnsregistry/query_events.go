@@ -27,12 +27,17 @@ type DNSQueryBatch struct {
 }
 
 func validQueryDomain(v string) bool {
+ if v=="." {return true}
  if len(v)<1||len(v)>253||strings.Trim(v,".")=="" {return false}
  for _,label:=range strings.Split(v,".") {
   if len(label)==0||len(label)>63{return false}
-  for _,c:=range label {if !(c>='a'&&c<='z'||c>='0'&&c<='9'||c=='-'){return false}}
+  for _,c:=range label {if !(c>='a'&&c<='z'||c>='0'&&c<='9'||c=='-'||c=='_'){return false}}
  }
  return true
+}
+
+func validDNSQueryEvent(e DNSQueryEvent, now time.Time) bool {
+ return e.EventID!=uuid.Nil&&validQueryDomain(e.Domain)&&e.Domain==strings.ToLower(e.Domain)&&!e.ObservedAt.IsZero()&&!e.ObservedAt.After(now.Add(5*time.Minute))&&len(e.QType)>0&&len(e.QType)<=16&&len(e.RCode)>0&&len(e.RCode)<=24&&len(e.ResolutionMode)>0&&len(e.ResolutionMode)<=32&&e.DurationMS>=0&&e.DurationMS<=600000
 }
 
 func (h *Handler) IngestDNSQueries(w http.ResponseWriter,r *http.Request){
@@ -49,7 +54,7 @@ func (h *Handler) IngestDNSQueries(w http.ResponseWriter,r *http.Request){
  if !registered {writeJSONError(w,403,"unregistered DNS controller");return}
  now:=time.Now().UTC()
  for _,e:=range batch.Events {
-  if e.EventID==uuid.Nil||!validQueryDomain(e.Domain)||e.Domain!=strings.ToLower(e.Domain)||e.ObservedAt.Before(now.Add(-7*24*time.Hour))||e.ObservedAt.After(now.Add(5*time.Minute))||len(e.QType)>16||len(e.QType)==0||len(e.RCode)>24||len(e.RCode)==0||len(e.ResolutionMode)>32||len(e.ResolutionMode)==0||e.DurationMS<0||e.DurationMS>600000 {writeJSONError(w,400,"invalid query event");return}
+  if !validDNSQueryEvent(e,now) {writeJSONError(w,400,"invalid query event");return}
  }
  tx,err:=h.db.Begin(r.Context());if err!=nil{writeJSONError(w,500,"database unavailable");return};defer tx.Rollback(r.Context())
  accepted:=0
@@ -67,17 +72,18 @@ func (h *Handler) AdminDNSQueries(w http.ResponseWriter,r *http.Request){
  page,_:=strconv.Atoi(q.Get("page"));if page<1{page=1}
  size,_:=strconv.Atoi(q.Get("pageSize"));if size<1{size=25};if size>100{size=100}
  if page>100000 {writeJSONError(w,400,"page too large");return}
- search:=strings.TrimSpace(q.Get("search"));controller:=strings.TrimSpace(q.Get("controller"));qtype:=strings.TrimSpace(q.Get("qtype"));rcode:=strings.TrimSpace(q.Get("rcode"));mode:=strings.TrimSpace(q.Get("mode"))
+ search:=strings.TrimSpace(q.Get("search"));controller:=strings.TrimSpace(q.Get("controller"));qtype:=strings.TrimSpace(q.Get("qtype"));rcode:=strings.TrimSpace(q.Get("rcode"));mode:=strings.TrimSpace(q.Get("mode"));managed:=strings.TrimSpace(q.Get("managed"))
+ if managed!=""&&managed!="true"&&managed!="false" {writeJSONError(w,400,"invalid managed filter");return}
  if len(search)>253||len(controller)>128||len(qtype)>16||len(rcode)>24||len(mode)>32{writeJSONError(w,400,"invalid filters");return}
  var total int64
- where:=` FROM dns_query_events WHERE ($1='' OR domain ILIKE '%' || $1 || '%') AND ($2='' OR controller_id=$2) AND ($3='' OR qtype=$3) AND ($4='' OR rcode=$4) AND ($5='' OR resolution_mode=$5)`
- args:=[]any{search,controller,qtype,rcode,mode}
+ where:=` FROM dns_query_events e LEFT JOIN LATERAL (SELECT domain, mode FROM network_domain_policies WHERE domain=e.domain OR e.domain LIKE '%.' || domain ORDER BY length(domain) DESC LIMIT 1) p ON true WHERE ($1='' OR e.domain ILIKE '%' || $1 || '%') AND ($2='' OR e.controller_id=$2) AND ($3='' OR e.qtype=$3) AND ($4='' OR e.rcode=$4) AND ($5='' OR e.resolution_mode=$5) AND ($6='' OR ($6='true' AND p.domain IS NOT NULL) OR ($6='false' AND p.domain IS NULL))`
+ args:=[]any{search,controller,qtype,rcode,mode,managed}
  if err:=h.db.QueryRow(r.Context(),"SELECT count(*)"+where,args...).Scan(&total);err!=nil{writeJSONError(w,500,"could not count queries");return}
- rows,err:=h.db.Query(r.Context(),"SELECT controller_id,event_id,observed_at,domain,qtype,rcode,resolution_mode,duration_ms"+where+" ORDER BY observed_at DESC,event_id DESC LIMIT $6 OFFSET $7",append(args,size,(page-1)*size)...)
+ rows,err:=h.db.Query(r.Context(),"SELECT e.controller_id,e.event_id,e.observed_at,e.domain,e.qtype,e.rcode,e.resolution_mode,e.duration_ms,(p.domain IS NOT NULL),COALESCE(p.mode,''),COALESCE(p.domain,'')"+where+" ORDER BY e.observed_at DESC,e.event_id DESC LIMIT $7 OFFSET $8",append(args,size,(page-1)*size)...)
  if err!=nil{writeJSONError(w,500,"could not list queries");return};defer rows.Close()
- type item struct {ControllerID string `json:"controllerId"`;EventID uuid.UUID `json:"eventId"`;ObservedAt time.Time `json:"observedAt"`;Domain string `json:"domain"`;QType string `json:"qtype"`;RCode string `json:"rcode"`;ResolutionMode string `json:"resolutionMode"`;DurationMS int `json:"durationMs"`}
+ type item struct {ControllerID string `json:"controllerId"`;EventID uuid.UUID `json:"eventId"`;ObservedAt time.Time `json:"observedAt"`;Domain string `json:"domain"`;QType string `json:"qtype"`;RCode string `json:"rcode"`;ResolutionMode string `json:"resolutionMode"`;DurationMS int `json:"durationMs"`;Managed bool `json:"managed"`;ManagedMode string `json:"managedMode"`;ManagedDomain string `json:"managedDomain"`}
  result:=make([]item,0)
- for rows.Next(){var e item;if err:=rows.Scan(&e.ControllerID,&e.EventID,&e.ObservedAt,&e.Domain,&e.QType,&e.RCode,&e.ResolutionMode,&e.DurationMS);err!=nil{writeJSONError(w,500,"could not read queries");return};result=append(result,e)}
+ for rows.Next(){var e item;if err:=rows.Scan(&e.ControllerID,&e.EventID,&e.ObservedAt,&e.Domain,&e.QType,&e.RCode,&e.ResolutionMode,&e.DurationMS,&e.Managed,&e.ManagedMode,&e.ManagedDomain);err!=nil{writeJSONError(w,500,"could not read queries");return};result=append(result,e)}
  if rows.Err()!=nil{writeJSONError(w,500,"could not read queries");return}
  writeJSON(w,200,map[string]any{"queries":result,"total":total,"page":page,"pageSize":size})
 }

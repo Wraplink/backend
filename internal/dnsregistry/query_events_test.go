@@ -1,0 +1,117 @@
+package dnsregistry
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+func TestValidQueryDomainAcceptsDNSServiceLabels(t *testing.T) {
+	for _, domain := range []string{
+		"example.org",
+		".",
+		"_sip._tcp.example.org",
+		"_dmarc.example.org",
+		"_acme-challenge.example.org",
+	} {
+		if !validQueryDomain(domain) {
+			t.Errorf("valid DNS query domain rejected: %q", domain)
+		}
+	}
+}
+
+func TestValidQueryDomainRejectsMalformedNames(t *testing.T) {
+	for _, domain := range []string{
+		"",
+		"example..org",
+		"example.org.",
+		"bad domain.example",
+		"UPPER.example",
+	} {
+		if validQueryDomain(domain) {
+			t.Errorf("invalid DNS query domain accepted: %q", domain)
+		}
+	}
+}
+
+func TestDNSQueryBatchAcceptsDNSControlWireFormat(t *testing.T) {
+	// Matches the DNS-Control reporter's outbound JSON field names.
+	const payload = `{
+		"controller_id": "dns-eu-01",
+		"events": [{
+			"event_id": "d19d4a31-3eb4-4a87-bad0-82b4cfcf3d90",
+			"observed_at": "2026-11-10T10:15:00Z",
+			"domain": "_sip._tcp.example.org",
+			"qtype": "SRV",
+			"rcode": "NOERROR",
+			"resolution_mode": "normal",
+			"duration_ms": 12
+		}]
+	}`
+	var batch DNSQueryBatch
+	decoder := json.NewDecoder(strings.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&batch); err != nil {
+		t.Fatalf("DNS-Control wire payload rejected: %v", err)
+	}
+	if batch.ControllerID != "dns-eu-01" || len(batch.Events) != 1 {
+		t.Fatalf("unexpected batch: %+v", batch)
+	}
+	event := batch.Events[0]
+	if event.EventID.String() != "d19d4a31-3eb4-4a87-bad0-82b4cfcf3d90" ||
+		!validQueryDomain(event.Domain) || event.QType != "SRV" ||
+		event.RCode != "NOERROR" || event.ResolutionMode != "normal" ||
+		event.DurationMS != 12 || event.ObservedAt.IsZero() {
+		t.Fatalf("unexpected decoded DNS-Control event: %+v", event)
+	}
+}
+
+func TestDNSQueryBatchRejectsUnexpectedClientAddress(t *testing.T) {
+	// Backend must not silently accept additional client-identifying fields.
+	const payload = `{
+		"controller_id": "dns-eu-01",
+		"events": [{
+			"event_id": "d19d4a31-3eb4-4a87-bad0-82b4cfcf3d90",
+			"observed_at": "2026-11-10T10:15:00Z",
+			"domain": "example.org",
+			"qtype": "A",
+			"rcode": "NOERROR",
+			"resolution_mode": "normal",
+			"duration_ms": 1,
+			"client_ip": "192.0.2.10"
+		}]
+	}`
+	var batch DNSQueryBatch
+	decoder := json.NewDecoder(strings.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&batch); err == nil {
+		t.Fatal("DNS audit ingestion accepted an unexpected client IP field")
+	}
+}
+
+func TestDNSQueryEventAcceptsDelayedReplay(t *testing.T) {
+ now := time.Now().UTC()
+ event := DNSQueryEvent{
+  EventID: uuid.New(),
+  ObservedAt: now.Add(-30 * 24 * time.Hour),
+  Domain: "_sip._tcp.example.org",
+  QType: "SRV",
+  RCode: "NOERROR",
+  ResolutionMode: "normal",
+  DurationMS: 12,
+ }
+ if !validDNSQueryEvent(event, now) {
+  t.Fatal("valid DNS audit event rejected after a prolonged backend outage")
+ }
+ event.ObservedAt = time.Time{}
+ if validDNSQueryEvent(event, now) {
+  t.Fatal("missing DNS audit timestamp accepted")
+ }
+ event.ObservedAt = now.Add(6 * time.Minute)
+ if validDNSQueryEvent(event, now) {
+  t.Fatal("DNS audit event with future timestamp accepted")
+ }
+}
