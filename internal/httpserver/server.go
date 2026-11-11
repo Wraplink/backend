@@ -122,6 +122,7 @@ func NewRouter(
         r.Use(paymentsHandler.AccessAdminMiddleware)
         r.Get("/dns-controls", dnsRegistryHandler.AdminNodes)
         r.Get("/dns-queries",dnsRegistryHandler.AdminDNSQueries)
+        r.Delete("/dns-queries",dnsRegistryHandler.AdminClearDNSQueries)
         r.Get("/agents", dnsRegistryHandler.AdminAgents)
         r.Get("/route-agent-ips",routeInventoryHandler.AdminInventory)
 		r.Get("/domains", dnsRegistryHandler.AdminPolicies)
