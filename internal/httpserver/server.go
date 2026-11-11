@@ -128,6 +128,15 @@ func NewRouter(
 		r.Delete("/domains/{domain}", dnsRegistryHandler.DeletePolicy)
     })
 
+    r.Route("/api/v1/admin/starter-policies",func(r chi.Router){
+        r.Use(requireAuthMiddleware)
+        r.Use(paymentsHandler.AccessAdminMiddleware)
+        admin:=subscriptionsHandler.AdminStarterPolicies()
+        r.Get("/",admin.List)
+        r.Post("/",admin.Create)
+        r.Patch("/{policyID}",admin.SetEnabled)
+    })
+
 	r.Route("/api/v1/admin/access", func(r chi.Router) {
         r.Use(requireAuthMiddleware)
         r.Get("/permissions", paymentsHandler.ListAdminPermissions)
@@ -203,6 +212,10 @@ func NewRouter(
 		r.Post("/sessions/revoke-others", revokeOthersHandler.Revoke)
 
 		r.Post("/subscriptions", subscriptionsHandler.CreatePending)
+        r.Get("/free-plans/claims", subscriptionsHandler.MyFreeClaims)
+        r.Post("/free-plans/claim", subscriptionsHandler.ClaimMarketFree)
+        r.Get("/starter-claims", subscriptionsHandler.MyStarterClaims)
+        r.Post("/starter-claims/{claimID}/activate", subscriptionsHandler.ActivateStarter)
 		r.Get("/subscriptions", subscriptionsHandler.List)
 		r.Get("/subscriptions/current", subscriptionsHandler.Current)
 		r.Delete("/subscriptions/{subscriptionID}", subscriptionsHandler.CancelPending)

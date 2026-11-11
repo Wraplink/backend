@@ -15,6 +15,7 @@ var (
 	ErrSubscriptionNotFound = errors.New("subscription not found")
 	ErrInvalidUserID        = errors.New("invalid user ID")
 	ErrInvalidPlanCode      = errors.New("invalid plan code")
+	ErrFreePlanRequiresClaim = errors.New("free plans must use the one-time claim endpoint")
 )
 
 type Service struct {
@@ -59,6 +60,11 @@ func (s *Service) CreatePending(
 	}
 	if plan == nil {
 		return nil, ErrPlanNotFound
+	}
+
+	// Prevent zero-cost plans from bypassing lifetime claim accounting via checkout.
+	if plan.PriceMinor == 0 {
+		return nil, ErrFreePlanRequiresClaim
 	}
 
 	return s.repository.CreatePending(

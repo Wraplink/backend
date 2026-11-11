@@ -348,3 +348,6 @@ func (r *Repository) AddUsage(
 
 	return nil
 }
+
+// DB provides the shared pool to subscription lifecycle integrations.
+func (r *Repository) DB() *pgxpool.Pool { return r.db }

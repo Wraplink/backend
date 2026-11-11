@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"backend/internal/requestcontext"
+ "backend/internal/starterpolicy"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -60,6 +61,8 @@ func (h *Handler) CreatePending(
 			writeJSONError(w, http.StatusBadRequest, "planCode is required")
 		case errors.Is(err, ErrPlanNotFound):
 			writeJSONError(w, http.StatusNotFound, "plan not found")
+		case errors.Is(err, ErrFreePlanRequiresClaim):
+			writeJSONError(w, http.StatusConflict, "free plans must be activated through the free claim endpoint")
 		default:
 			writeJSONError(w, http.StatusInternalServerError, "could not create subscription")
 		}
@@ -152,4 +155,76 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 func writeJSONError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+
+// ActivateStarter is authenticated by the /api/v1/me router and uses the
+// request context's user identity rather than a caller-provided user ID.
+func (h *Handler) ActivateStarter(w http.ResponseWriter,r *http.Request) {
+ userID,ok:=requestcontext.UserID(r.Context())
+ if !ok {writeJSONError(w,http.StatusUnauthorized,"authentication required");return}
+ claimID,err:=uuid.Parse(chi.URLParam(r,"claimID"))
+ if err!=nil || claimID==uuid.Nil {writeJSONError(w,http.StatusBadRequest,"invalid claim ID");return}
+ result,err:=(starterpolicy.ActivationStore{DB:h.service.repository.DB()}).Activate(r.Context(),userID,claimID)
+ if err!=nil {
+  switch {
+  case errors.Is(err,starterpolicy.ErrNotEligible):writeJSONError(w,http.StatusNotFound,"starter claim not found or unavailable")
+  case errors.Is(err,starterpolicy.ErrReservationExpired):writeJSONError(w,http.StatusConflict,"starter reservation expired")
+  case errors.Is(err,starterpolicy.ErrAlreadyActivated):writeJSONError(w,http.StatusConflict,"starter claim is not reserved")
+  case errors.Is(err,starterpolicy.ErrActiveSubscription):writeJSONError(w,http.StatusConflict,"an active subscription already exists")
+  default:writeJSONError(w,http.StatusInternalServerError,"could not activate starter plan")
+  }
+  return
+ }
+ writeJSON(w,http.StatusOK,result)
+}
+
+
+func (h *Handler) MyStarterClaims(w http.ResponseWriter,r *http.Request) {
+ userID,ok:=requestcontext.UserID(r.Context())
+ if !ok {writeJSONError(w,http.StatusUnauthorized,"authentication required");return}
+ claims,err:=(starterpolicy.ActivationStore{DB:h.service.repository.DB()}).MyStarterClaims(r.Context(),userID)
+ if err!=nil {writeJSONError(w,http.StatusInternalServerError,"could not list starter claims");return}
+ writeJSON(w,http.StatusOK,map[string]any{"claims":claims})
+}
+
+
+// AdminStarterPolicies is protected by the router's admin authorization.
+func (h *Handler) AdminStarterPolicies() starterpolicy.AdminHandler {
+ return starterpolicy.AdminHandler{Store:starterpolicy.PolicyStore{DB:h.service.repository.DB()}}
+}
+
+
+// ClaimMarketFree activates an eligible free plan without basket or payment.
+func (h *Handler) ClaimMarketFree(w http.ResponseWriter,r *http.Request){
+ userID,ok:=requestcontext.UserID(r.Context())
+ if !ok{writeJSONError(w,http.StatusUnauthorized,"authentication required");return}
+ var body struct{PlanCode string `json:"planCode"`}
+ dec:=json.NewDecoder(http.MaxBytesReader(w,r.Body,4096))
+ dec.DisallowUnknownFields()
+ if err:=dec.Decode(&body);err!=nil{writeJSONError(w,400,"invalid request");return}
+ var extra any
+ if err:=dec.Decode(&extra);!errors.Is(err,io.EOF){writeJSONError(w,400,"invalid request");return}
+ result,err:=(starterpolicy.MarketFreeStore{DB:h.service.repository.DB()}).Claim(r.Context(),userID,body.PlanCode)
+ if err!=nil{
+  switch{
+  case errors.Is(err,starterpolicy.ErrFreePlanUnavailable):writeJSONError(w,404,"free plan not available")
+  case errors.Is(err,starterpolicy.ErrFreePlanClaimed):writeJSONError(w,409,"free plan already claimed")
+  case errors.Is(err,starterpolicy.ErrActiveSubscription):writeJSONError(w,409,"another subscription is active")
+  case errors.Is(err,starterpolicy.ErrNotEligible):writeJSONError(w,403,"verified account required")
+  default:writeJSONError(w,500,"could not activate free plan")
+  }
+  return
+ }
+ writeJSON(w,http.StatusCreated,result)
+}
+
+
+// MyFreeClaims lists all lifetime claims, including expired and cancelled.
+func (h *Handler) MyFreeClaims(w http.ResponseWriter,r *http.Request){
+ userID,ok:=requestcontext.UserID(r.Context())
+ if !ok{writeJSONError(w,http.StatusUnauthorized,"authentication required");return}
+ items,err:=starterpolicy.ListFreeClaims(r.Context(),h.service.repository.DB(),userID)
+ if err!=nil{writeJSONError(w,500,"could not list free claims");return}
+ writeJSON(w,200,map[string]any{"claims":items})
 }
