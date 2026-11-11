@@ -9,6 +9,20 @@ case "$WRAPLINK_API_URL" in
   *) echo "Refusing non-HTTPS API URL" >&2; exit 2 ;;
 esac
 base="${WRAPLINK_API_URL%/}"
+# Do not accidentally consume a real customer's one-time trial.
+# Production URLs are rejected even when the caller explicitly opts in.
+case "$base" in
+  https://api.wraplink.ir|https://wraplink.ir|https://www.wraplink.ir)
+    echo "Refusing to run starter smoke tests against production" >&2; exit 2 ;;
+esac
+if [[ "${WRAPLINK_ACTIVATE_TRIAL:-}" == "YES" && "${WRAPLINK_STAGING_CONFIRMED:-}" != "YES" ]]; then
+ echo "Activation requires WRAPLINK_STAGING_CONFIRMED=YES" >&2
+ exit 2
+fi
+if [[ "${WRAPLINK_CHECK_EXPIRY:-}" == "YES" && "${WRAPLINK_ACTIVATE_TRIAL:-}" != "YES" ]]; then
+ echo "Expiry testing requires WRAPLINK_ACTIVATE_TRIAL=YES" >&2
+ exit 2
+fi
 auth=(-H "Authorization: Bearer $WRAPLINK_TEST_TOKEN" -H "Accept: application/json")
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
