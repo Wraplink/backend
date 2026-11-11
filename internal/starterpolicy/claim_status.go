@@ -6,6 +6,8 @@ import "time"
 // claim and its linked subscription. It never grants network entitlement.
 func DisplayClaimState(state string, reservationExpiresAt, startsAt, expiresAt *time.Time, subscriptionStatus *string, now time.Time) string {
  if state=="reserved" {
+  // A reservation must not already be linked to a subscription.
+  if subscriptionStatus!=nil || startsAt!=nil || expiresAt!=nil {return "failed"}
   if reservationExpiresAt==nil || !now.Before(*reservationExpiresAt) {return "expired"}
   return state
  }
