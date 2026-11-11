@@ -65,3 +65,26 @@ func TestDNSQueryBatchAcceptsDNSControlWireFormat(t *testing.T) {
 		t.Fatalf("unexpected decoded DNS-Control event: %+v", event)
 	}
 }
+
+func TestDNSQueryBatchRejectsUnexpectedClientAddress(t *testing.T) {
+	// Backend must not silently accept additional client-identifying fields.
+	const payload = `{
+		"controller_id": "dns-eu-01",
+		"events": [{
+			"event_id": "d19d4a31-3eb4-4a87-bad0-82b4cfcf3d90",
+			"observed_at": "2026-11-10T10:15:00Z",
+			"domain": "example.org",
+			"qtype": "A",
+			"rcode": "NOERROR",
+			"resolution_mode": "normal",
+			"duration_ms": 1,
+			"client_ip": "192.0.2.10"
+		}]
+	}`
+	var batch DNSQueryBatch
+	decoder := json.NewDecoder(strings.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&batch); err == nil {
+		t.Fatal("DNS audit ingestion accepted an unexpected client IP field")
+	}
+}
