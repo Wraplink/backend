@@ -87,3 +87,17 @@ func (h *Handler) AdminDNSQueries(w http.ResponseWriter,r *http.Request){
  if rows.Err()!=nil{writeJSONError(w,500,"could not read queries");return}
  writeJSON(w,200,map[string]any{"queries":result,"total":total,"page":page,"pageSize":size})
 }
+
+ 
+// AdminClearDNSQueries permanently deletes stored DNS query history.
+// It does not change DNS controller registration, policies, or reporting configuration.
+func (h *Handler) AdminClearDNSQueries(w http.ResponseWriter, r *http.Request) {
+ if h.db == nil { writeJSONError(w, http.StatusServiceUnavailable, "query database unavailable"); return }
+ if r.URL.Query().Get("confirm") != "clear-all" {
+  writeJSONError(w, http.StatusBadRequest, "explicit clear-all confirmation required")
+  return
+ }
+ tag, err := h.db.Exec(r.Context(), "DELETE FROM dns_query_events")
+ if err != nil { writeJSONError(w, http.StatusInternalServerError, "could not clear DNS query history"); return }
+ writeJSON(w, http.StatusOK, map[string]int64{"deleted": tag.RowsAffected()})
+}
