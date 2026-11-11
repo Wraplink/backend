@@ -27,6 +27,7 @@ type DNSQueryBatch struct {
 }
 
 func validQueryDomain(v string) bool {
+ if v=="." {return true}
  if len(v)<1||len(v)>253||strings.Trim(v,".")=="" {return false}
  for _,label:=range strings.Split(v,".") {
   if len(label)==0||len(label)>63{return false}
