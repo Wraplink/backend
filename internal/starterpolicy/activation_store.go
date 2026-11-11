@@ -90,7 +90,12 @@ func (s ActivationStore) Activate(ctx context.Context, userID, claimID uuid.UUID
  'active',$3,$4,$3
  FROM plans p WHERE p.id=$2 AND p.price_minor=0 AND p.active
  AND p.archived_at IS NULL AND (p.publish_at IS NULL OR p.publish_at <= now())
- RETURNING id`,userID,planID,window.StartsAt,window.ExpiresAt).Scan(&result.SubscriptionID)
+ AND EXISTS (SELECT 1 FROM starter_plan_policies policy
+ WHERE policy.id=$5 AND policy.plan_id=p.id
+ AND policy.assignment_trigger='email_verified' AND policy.activation_trigger='manual'
+ AND policy.trial_duration_seconds BETWEEN 1 AND 31536000
+ AND policy.reservation_ttl_seconds BETWEEN 1 AND 31536000)
+ RETURNING id`,userID,planID,window.StartsAt,window.ExpiresAt,*policyID).Scan(&result.SubscriptionID)
  if errors.Is(err,pgx.ErrNoRows){return ActivatedTrial{},ErrNotEligible}
  if err!=nil{return ActivatedTrial{},fmt.Errorf("create trial subscription: %w",err)}
  tag,err:=tx.Exec(ctx,`UPDATE free_plan_claims
