@@ -18,8 +18,8 @@ request() {
   -X "$method" "${auth[@]}" -o "$output" "$base$path"
 }
 request GET /api/v1/me/starter-claims "$tmp/before.json"
-jq -e 'type=="array" and length==1 and .[0].state=="reserved" and (.[0].subscriptionId==null)' "$tmp/before.json" >/dev/null
-claim_id="$(jq -r '.[0].id' "$tmp/before.json")"
+jq -e '(.claims|type=="array") and (.claims|length)==1 and .claims[0].state=="reserved" and (.claims[0].subscriptionId==null)' "$tmp/before.json" >/dev/null
+claim_id="$(jq -r '.claims[0].id' "$tmp/before.json")"
 [[ "$claim_id" =~ ^[0-9a-fA-F-]{36}$ ]] || { echo "Invalid claim ID" >&2; exit 1; }
 echo "Reservation verified; claim ID: $claim_id"
 if [[ "${WRAPLINK_ACTIVATE_TRIAL:-}" != "YES" ]]; then
@@ -31,5 +31,5 @@ jq -e --arg claim "$claim_id" '.claimId==$claim and (.subscriptionId|type=="stri
 request POST "/api/v1/me/starter-claims/$claim_id/activate" "$tmp/retry.json"
 jq -e --arg sub "$(jq -r '.subscriptionId' "$tmp/activated.json")" '.subscriptionId==$sub' "$tmp/retry.json" >/dev/null
 request GET /api/v1/me/starter-claims "$tmp/after.json"
-jq -e --arg claim "$claim_id" --arg sub "$(jq -r '.subscriptionId' "$tmp/activated.json")" 'any(.[]; .id==$claim and .subscriptionId==$sub and .state=="active")' "$tmp/after.json" >/dev/null
+jq -e --arg claim "$claim_id" --arg sub "$(jq -r '.subscriptionId' "$tmp/activated.json")" 'any(.claims[]; .id==$claim and .subscriptionId==$sub and .state=="active")' "$tmp/after.json" >/dev/null
 echo "Activation and idempotent retry passed. DNS/Edge entitlement and expiry revocation still require separate verification."
