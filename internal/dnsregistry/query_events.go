@@ -36,6 +36,10 @@ func validQueryDomain(v string) bool {
  return true
 }
 
+func validDNSQueryEvent(e DNSQueryEvent, now time.Time) bool {
+ return e.EventID!=uuid.Nil&&validQueryDomain(e.Domain)&&e.Domain==strings.ToLower(e.Domain)&&!e.ObservedAt.IsZero()&&!e.ObservedAt.After(now.Add(5*time.Minute))&&len(e.QType)>0&&len(e.QType)<=16&&len(e.RCode)>0&&len(e.RCode)<=24&&len(e.ResolutionMode)>0&&len(e.ResolutionMode)<=32&&e.DurationMS>=0&&e.DurationMS<=600000
+}
+
 func (h *Handler) IngestDNSQueries(w http.ResponseWriter,r *http.Request){
  if h.db==nil||!h.Enabled(){writeJSONError(w,503,"query ingestion unavailable");return}
  if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Network-Control-Key")),[]byte(h.controlKey))!=1 {writeJSONError(w,401,"unauthorized");return}
@@ -50,7 +54,7 @@ func (h *Handler) IngestDNSQueries(w http.ResponseWriter,r *http.Request){
  if !registered {writeJSONError(w,403,"unregistered DNS controller");return}
  now:=time.Now().UTC()
  for _,e:=range batch.Events {
-  if e.EventID==uuid.Nil||!validQueryDomain(e.Domain)||e.Domain!=strings.ToLower(e.Domain)||e.ObservedAt.IsZero()||e.ObservedAt.After(now.Add(5*time.Minute))||len(e.QType)>16||len(e.QType)==0||len(e.RCode)>24||len(e.RCode)==0||len(e.ResolutionMode)>32||len(e.ResolutionMode)==0||e.DurationMS<0||e.DurationMS>600000 {writeJSONError(w,400,"invalid query event");return}
+  !validDNSQueryEvent(e,now) {writeJSONError(w,400,"invalid query event");return}
  }
  tx,err:=h.db.Begin(r.Context());if err!=nil{writeJSONError(w,500,"database unavailable");return};defer tx.Rollback(r.Context())
  accepted:=0
