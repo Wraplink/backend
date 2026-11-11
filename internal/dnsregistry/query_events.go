@@ -54,7 +54,7 @@ func (h *Handler) IngestDNSQueries(w http.ResponseWriter,r *http.Request){
  if !registered {writeJSONError(w,403,"unregistered DNS controller");return}
  now:=time.Now().UTC()
  for _,e:=range batch.Events {
-  !validDNSQueryEvent(e,now) {writeJSONError(w,400,"invalid query event");return}
+  if !validDNSQueryEvent(e,now) {writeJSONError(w,400,"invalid query event");return}
  }
  tx,err:=h.db.Begin(r.Context());if err!=nil{writeJSONError(w,500,"database unavailable");return};defer tx.Rollback(r.Context())
  accepted:=0
