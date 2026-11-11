@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 func TestValidQueryDomainAcceptsDNSServiceLabels(t *testing.T) {
@@ -87,4 +90,28 @@ func TestDNSQueryBatchRejectsUnexpectedClientAddress(t *testing.T) {
 	if err := decoder.Decode(&batch); err == nil {
 		t.Fatal("DNS audit ingestion accepted an unexpected client IP field")
 	}
+}
+
+func TestDNSQueryEventAcceptsDelayedReplay(t *testing.T) {
+ now := time.Now().UTC()
+ event := DNSQueryEvent{
+  EventID: uuid.New(),
+  ObservedAt: now.Add(-30 * 24 * time.Hour),
+  Domain: "_sip._tcp.example.org",
+  QType: "SRV",
+  RCode: "NOERROR",
+  ResolutionMode: "normal",
+  DurationMS: 12,
+ }
+ if !validDNSQueryEvent(event, now) {
+  t.Fatal("valid DNS audit event rejected after a prolonged backend outage")
+ }
+ event.ObservedAt = time.Time{}
+ if validDNSQueryEvent(event, now) {
+  t.Fatal("missing DNS audit timestamp accepted")
+ }
+ event.ObservedAt = now.Add(6 * time.Minute)
+ if validDNSQueryEvent(event, now) {
+  t.Fatal("DNS audit event with future timestamp accepted")
+ }
 }
