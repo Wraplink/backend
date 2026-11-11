@@ -32,4 +32,25 @@ request POST "/api/v1/me/starter-claims/$claim_id/activate" "$tmp/retry.json"
 jq -e --arg sub "$(jq -r '.subscriptionId' "$tmp/activated.json")" '.subscriptionId==$sub' "$tmp/retry.json" >/dev/null
 request GET /api/v1/me/starter-claims "$tmp/after.json"
 jq -e --arg claim "$claim_id" --arg sub "$(jq -r '.subscriptionId' "$tmp/activated.json")" 'any(.claims[]; .id==$claim and .subscriptionId==$sub and .state=="active")' "$tmp/after.json" >/dev/null
-echo "Activation and idempotent retry passed. DNS/Edge entitlement and expiry revocation still require separate verification."
+echo "Activation and idempotent retry passed."
+if [[ "${WRAPLINK_CHECK_EXPIRY:-}" == "YES" ]]; then
+ : "${WRAPLINK_EXPIRY_TIMEOUT_SECONDS:=180}"
+ [[ "$WRAPLINK_EXPIRY_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] && (( WRAPLINK_EXPIRY_TIMEOUT_SECONDS > 0 && WRAPLINK_EXPIRY_TIMEOUT_SECONDS <= 3600 )) || {
+  echo "Expiry timeout must be an integer between 1 and 3600 seconds" >&2; exit 2;
+ }
+ deadline=$((SECONDS + WRAPLINK_EXPIRY_TIMEOUT_SECONDS))
+ expired=false
+ while (( SECONDS < deadline )); do
+  request GET /api/v1/me/starter-claims "$tmp/expired.json"
+  if jq -e --arg claim "$claim_id" 'any(.claims[]; .id==$claim and .state=="expired")' "$tmp/expired.json" >/dev/null; then
+   expired=true
+   break
+  fi
+  sleep 2
+ done
+ [[ "$expired" == "true" ]] || { echo "Trial did not become expired before timeout" >&2; exit 1; }
+ status="$(curl --silent --show-error --max-time 20 -o "$tmp/rejected.json" -w '%{http_code}' -X POST "${auth[@]}" "$base/api/v1/me/starter-claims/$claim_id/activate")"
+ [[ "$status" == "409" ]] || { echo "Expired activation returned HTTP $status, expected 409" >&2; exit 1; }
+ echo "Expired trial is displayed as expired and cannot be reactivated."
+fi
+echo "DNS/Edge entitlement propagation and expiry revocation still require separate verification."
