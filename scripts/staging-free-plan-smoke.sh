@@ -21,6 +21,13 @@ call() {
  curl --silent --show-error --max-time 20 -o "$file" -w '%{http_code}' \
   -X "$method" "${auth[@]}" "$@" "$base$path"
 }
+# Validate optional expiry settings before consuming the one-time claim.
+if [[ "${WRAPLINK_CHECK_FREE_EXPIRY:-}" == YES ]]; then
+ : "${WRAPLINK_EXPIRY_TIMEOUT_SECONDS:=180}"
+ [[ "$WRAPLINK_EXPIRY_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] && (( 10#$WRAPLINK_EXPIRY_TIMEOUT_SECONDS >= 1 && 10#$WRAPLINK_EXPIRY_TIMEOUT_SECONDS <= 3600 )) || {
+  echo "Expiry timeout must be 1..3600 seconds" >&2; exit 2;
+ }
+fi
 code="$(printf '%s' "$WRAPLINK_FREE_PLAN_CODE" | tr '[:upper:]' '[:lower:]')"
 before="$(call GET /api/v1/me/free-plans/claims "$tmp/before")"
 [[ "$before" == 200 ]] || { echo "Claims listing HTTP $before" >&2; exit 1; }
@@ -52,10 +59,6 @@ jq -e --arg code "$code" '
 ' "$tmp/after" >/dev/null
 echo "PASS: free claim, active zero-price subscription, duplicate rejection, durable claim."
 if [[ "${WRAPLINK_CHECK_FREE_EXPIRY:-}" == YES ]]; then
- : "${WRAPLINK_EXPIRY_TIMEOUT_SECONDS:=180}"
- [[ "$WRAPLINK_EXPIRY_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] && (( WRAPLINK_EXPIRY_TIMEOUT_SECONDS >= 1 && WRAPLINK_EXPIRY_TIMEOUT_SECONDS <= 3600 )) || {
-  echo "Expiry timeout must be 1..3600 seconds" >&2; exit 2;
- }
  deadline=$((SECONDS + WRAPLINK_EXPIRY_TIMEOUT_SECONDS))
  expired=false
  while (( SECONDS < deadline )); do
