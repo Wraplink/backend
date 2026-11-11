@@ -49,8 +49,8 @@ func (h *Handler) Activate(
 	}
 
 	clientIP := h.trustedProxy.ClientIP(r)
-	if clientIP == nil || clientIP.To4() == nil {
-		writeJSONError(w, http.StatusBadRequest, "a public IPv4 client address is required")
+	if clientIP == nil || clientIP.To4() == nil || clientIP.IsPrivate() || clientIP.IsLoopback() || clientIP.IsUnspecified() || clientIP.IsLinkLocalUnicast() {
+		writeJSONError(w, http.StatusBadRequest, "a public IPv4 client address is required; check trusted reverse-proxy configuration")
 		return
 	}
 
