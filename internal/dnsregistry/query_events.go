@@ -50,7 +50,7 @@ func (h *Handler) IngestDNSQueries(w http.ResponseWriter,r *http.Request){
  if !registered {writeJSONError(w,403,"unregistered DNS controller");return}
  now:=time.Now().UTC()
  for _,e:=range batch.Events {
-  if e.EventID==uuid.Nil||!validQueryDomain(e.Domain)||e.Domain!=strings.ToLower(e.Domain)||e.ObservedAt.Before(now.Add(-7*24*time.Hour))||e.ObservedAt.After(now.Add(5*time.Minute))||len(e.QType)>16||len(e.QType)==0||len(e.RCode)>24||len(e.RCode)==0||len(e.ResolutionMode)>32||len(e.ResolutionMode)==0||e.DurationMS<0||e.DurationMS>600000 {writeJSONError(w,400,"invalid query event");return}
+  if e.EventID==uuid.Nil||!validQueryDomain(e.Domain)||e.Domain!=strings.ToLower(e.Domain)||e.ObservedAt.IsZero()||e.ObservedAt.After(now.Add(5*time.Minute))||len(e.QType)>16||len(e.QType)==0||len(e.RCode)>24||len(e.RCode)==0||len(e.ResolutionMode)>32||len(e.ResolutionMode)==0||e.DurationMS<0||e.DurationMS>600000 {writeJSONError(w,400,"invalid query event");return}
  }
  tx,err:=h.db.Begin(r.Context());if err!=nil{writeJSONError(w,500,"database unavailable");return};defer tx.Rollback(r.Context())
  accepted:=0
