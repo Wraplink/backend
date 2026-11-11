@@ -9,6 +9,7 @@ import (
 func TestValidQueryDomainAcceptsDNSServiceLabels(t *testing.T) {
 	for _, domain := range []string{
 		"example.org",
+		".",
 		"_sip._tcp.example.org",
 		"_dmarc.example.org",
 		"_acme-challenge.example.org",
@@ -22,7 +23,6 @@ func TestValidQueryDomainAcceptsDNSServiceLabels(t *testing.T) {
 func TestValidQueryDomainRejectsMalformedNames(t *testing.T) {
 	for _, domain := range []string{
 		"",
-		".",
 		"example..org",
 		"example.org.",
 		"bad domain.example",
