@@ -109,7 +109,7 @@ func NewRouter(
         r.Post("/api/v1/internal/network/route-agent-ips",routeInventoryHandler.RegisterInventory)
         r.Post("/api/v1/internal/network/route-assignments/report",routeInventoryHandler.ReportAssignment)
  r.Get("/api/v1/internal/network/managed-domains",dnsDomainsHandler.Snapshot)
-        r.Post("/api/v1/internal/network/dns-queries", dnsRegistryHandler.IngestDNSQueries)
+        r.Post("/api/v1/internal/network/dns-queries/batch", dnsRegistryHandler.IngestDNSQueries)
 	}
 
 	r.Route("/api/v1/admin/dns/domains",func(r chi.Router){
