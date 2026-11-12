@@ -309,7 +309,7 @@ func accessStatus(state *subscriptionState, now time.Time) string {
 	if state.Status != "active" || !state.ExpiresAt.After(now) {
 		return AccessStatusExpired
 	}
-	if state.UsedBytes >= state.DataLimitBytes {
+	if state.DataLimitBytes > 0 && state.UsedBytes >= state.DataLimitBytes {
 		return AccessStatusQuotaExhausted
 	}
 	return AccessStatusActive
