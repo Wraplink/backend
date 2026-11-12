@@ -58,9 +58,9 @@ func (s MarketFreeStore) Claim(ctx context.Context,userID uuid.UUID,planCode str
  if err!=nil{return MarketFreeResult{},err}
  if tag.RowsAffected()!=1{return MarketFreeResult{},ErrFreePlanClaimed}
  err=tx.QueryRow(ctx,`INSERT INTO user_subscriptions
- (user_id,plan_id,plan_code,plan_name,price_minor,currency,duration_days,data_limit_bytes,
+ (user_id,plan_id,plan_code,plan_name,plan_description,price_minor,currency,duration_days,data_limit_bytes,
  status,starts_at,expires_at,activated_at)
- SELECT $1,p.id,p.code,p.name,0,p.currency,p.duration_days,p.data_limit_bytes,
+ SELECT $1,p.id,p.code,p.name,p.description,0,p.currency,p.duration_days,p.data_limit_bytes,
  'active',$3,$4,$3 FROM plans p
  WHERE p.id=$2 AND p.price_minor=0 AND p.active
  AND p.archived_at IS NULL AND (p.publish_at IS NULL OR p.publish_at<=now())
