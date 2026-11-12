@@ -2,6 +2,7 @@ package networkentitlement
 
 import (
     "context"
+    "errors"
     "os"
     "sync"
     "backend/internal/networkaccess"
@@ -137,4 +138,23 @@ func TestReservedEntitlementRolloverPostgres(t *testing.T) {
     if newUsage != 0 { t.Fatalf("new subscription charged historical traffic: %d",newUsage) }
     if err := pool.QueryRow(ctx, "SELECT used_bytes FROM user_subscriptions WHERE id=$1",oldID).Scan(&oldUsage); err != nil { t.Fatal(err) }
     if oldUsage != 1200 { t.Fatalf("historical usage=%d, want 1200",oldUsage) }
+    // A report crossing the entitlement switch cannot be attributed
+    // accurately from aggregate bytes alone. Reject it rather than
+    // charging either plan incorrectly; edge must report split intervals.
+    var switchAt time.Time
+    if err := pool.QueryRow(ctx, `SELECT activated_at FROM network_entitlements
+        WHERE user_id=$1 AND subscription_id=$2 AND status='active'`,
+        userID,nextID).Scan(&switchAt); err != nil { t.Fatal(err) }
+    crossing := edge
+    crossing.Sequence = 3
+    crossing.StartedAt = switchAt.Add(-time.Second)
+    crossing.EndedAt = switchAt.Add(time.Second)
+    _, err = usage.IngestEdgeUsage(ctx, crossing)
+    if !errors.Is(err, networkaccess.ErrSubscriptionNotFound) {
+        t.Fatalf("cross-boundary report error=%v, want ErrSubscriptionNotFound",err)
+    }
+    if err := pool.QueryRow(ctx, "SELECT used_bytes FROM user_subscriptions WHERE id=$1",nextID).Scan(&newUsage); err != nil { t.Fatal(err) }
+    if newUsage != 0 { t.Fatalf("cross-boundary report charged new subscription: %d",newUsage) }
+    if err := pool.QueryRow(ctx, "SELECT used_bytes FROM user_subscriptions WHERE id=$1",oldID).Scan(&oldUsage); err != nil { t.Fatal(err) }
+    if oldUsage != 1200 { t.Fatalf("cross-boundary report charged old subscription: %d",oldUsage) }
 }
