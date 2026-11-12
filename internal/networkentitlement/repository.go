@@ -70,6 +70,11 @@ func (r *Repository) Activate(
 		}
 	}
 
+	// Promote a reserved plan when the current plan has expired or exhausted its quota.
+	if _, err := tx.Exec(ctx, "SELECT promote_user_subscription($1)", userID); err != nil {
+		return nil, fmt.Errorf("reconcile subscription before connection: %w", err)
+	}
+
 	subscription, err := lockUsableSubscription(
 		ctx,
 		tx,
