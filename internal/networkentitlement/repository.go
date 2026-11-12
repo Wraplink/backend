@@ -309,9 +309,78 @@ func (r *Repository) SetMode(ctx context.Context, userID uuid.UUID, mode Connect
 	return nil
 }
 
+// reconcileReservedEntitlements preserves the user's connected IP while moving
+// authorization to the next active subscription. Historical entitlement rows
+// remain immutable for traffic attribution.
+func (r *Repository) reconcileReservedEntitlements(ctx context.Context) error {
+	rows, err := r.db.Query(ctx, `SELECT DISTINCT e.user_id, host(e.client_ip)
+		FROM network_entitlements e
+		JOIN user_subscriptions s ON s.id = e.subscription_id
+		WHERE e.status = 'active'
+		AND (s.status <> 'active' OR s.expires_at <= now()
+		OR (s.data_limit_bytes > 0 AND s.used_bytes >= s.data_limit_bytes))`)
+	if err != nil { return fmt.Errorf("list exhausted entitlements: %w", err) }
+	type candidate struct { user uuid.UUID; ip string }
+	var candidates []candidate
+	for rows.Next() {
+		var item candidate
+		if err := rows.Scan(&item.user, &item.ip); err != nil { rows.Close(); return err }
+		candidates = append(candidates, item)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil { return err }
+	for _, item := range candidates {
+		if err := r.reconcileReservedEntitlement(ctx, item.user, item.ip); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Repository) reconcileReservedEntitlement(ctx context.Context, userID uuid.UUID, clientIP string) error {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil { return fmt.Errorf("begin reserved entitlement rollover: %w", err) }
+	defer func() { _ = tx.Rollback(ctx) }()
+	// Edge usage ingestion takes the same IP lock before subscription row locks.
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", clientIP); err != nil {
+		return fmt.Errorf("lock rollover IP: %w", err)
+	}
+	var entitlementID, oldSubscriptionID uuid.UUID
+	err = tx.QueryRow(ctx, `SELECT id, subscription_id FROM network_entitlements
+		WHERE user_id = $1 AND client_ip = $2::inet AND status = 'active'
+		FOR UPDATE`, userID, clientIP).Scan(&entitlementID, &oldSubscriptionID)
+	if errors.Is(err, pgx.ErrNoRows) { return tx.Commit(ctx) }
+	if err != nil { return fmt.Errorf("lock rollover entitlement: %w", err) }
+	if _, err := tx.Exec(ctx, "SELECT promote_user_subscription($1)", userID); err != nil {
+		return fmt.Errorf("promote reserved subscription: %w", err)
+	}
+	var nextSubscriptionID uuid.UUID
+	err = tx.QueryRow(ctx, `SELECT id FROM user_subscriptions
+		WHERE user_id = $1 AND status = 'active' AND starts_at <= now()
+		AND expires_at > now()
+		AND (data_limit_bytes = 0 OR used_bytes < data_limit_bytes)
+		ORDER BY starts_at DESC LIMIT 1 FOR UPDATE`, userID).Scan(&nextSubscriptionID)
+	if errors.Is(err, pgx.ErrNoRows) { return tx.Commit(ctx) }
+	if err != nil { return fmt.Errorf("find promoted subscription: %w", err) }
+	if oldSubscriptionID == nextSubscriptionID { return tx.Commit(ctx) }
+	if _, err := tx.Exec(ctx, `UPDATE network_entitlements SET status = 'revoked',
+		revoked_at = now(), updated_at = now() WHERE id = $1 AND status = 'active'`, entitlementID); err != nil {
+		return fmt.Errorf("revoke exhausted entitlement: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO network_entitlements
+		(user_id, subscription_id, client_ip, status)
+		VALUES ($1, $2, $3::inet, 'active')`, userID, nextSubscriptionID, clientIP); err != nil {
+		return fmt.Errorf("create reserved entitlement: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil { return fmt.Errorf("commit reserved entitlement rollover: %w", err) }
+	return nil
+}
+
 func (r *Repository) Snapshot(
 	ctx context.Context,
 ) ([]SnapshotItem, error) {
+	if err := r.reconcileReservedEntitlements(ctx); err != nil { return nil, err }
 	if _, err := r.db.Exec(ctx, "SELECT promote_user_subscription(id) FROM users WHERE EXISTS (SELECT 1 FROM user_subscriptions WHERE user_id=users.id AND status='active' AND (expires_at<=now() OR (data_limit_bytes > 0 AND used_bytes>=data_limit_bytes)))"); err != nil {return nil, fmt.Errorf("reconcile network snapshot: %w",err)}
 	const query = `
 		SELECT
