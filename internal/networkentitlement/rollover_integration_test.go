@@ -157,4 +157,18 @@ func TestReservedEntitlementRolloverPostgres(t *testing.T) {
     if newUsage != 0 { t.Fatalf("cross-boundary report charged new subscription: %d",newUsage) }
     if err := pool.QueryRow(ctx, "SELECT used_bytes FROM user_subscriptions WHERE id=$1",oldID).Scan(&oldUsage); err != nil { t.Fatal(err) }
     if oldUsage != 1200 { t.Fatalf("cross-boundary report charged old subscription: %d",oldUsage) }
+    // Without another reserved plan, an exhausted subscription must not
+    // create an entitlement or authorize the exhausted connection.
+    _, err = pool.Exec(ctx, `UPDATE user_subscriptions SET status='cancelled'
+        WHERE id=$1`, nextID)
+    if err != nil { t.Fatal(err) }
+    if _, err := repo.Snapshot(ctx); err != nil { t.Fatal(err) }
+    var eligibleCount int
+    if err := pool.QueryRow(ctx, `SELECT count(*) FROM network_entitlements e
+        JOIN user_subscriptions s ON s.id=e.subscription_id
+        WHERE e.user_id=$1 AND e.status='active'
+        AND s.status='active' AND s.starts_at<=now() AND s.expires_at>now()
+        AND (s.data_limit_bytes=0 OR s.used_bytes<s.data_limit_bytes)`,
+        userID).Scan(&eligibleCount); err != nil { t.Fatal(err) }
+    if eligibleCount != 0 { t.Fatalf("exhausted user retained %d usable entitlements",eligibleCount) }
 }
