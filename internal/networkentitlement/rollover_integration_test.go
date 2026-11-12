@@ -3,6 +3,7 @@ package networkentitlement
 import (
     "context"
     "os"
+    "sync"
     "testing"
     "time"
 
@@ -51,7 +52,29 @@ func TestReservedEntitlementRolloverPostgres(t *testing.T) {
     if err != nil { t.Fatal(err) }
 
     repo := NewRepository(pool)
-    if _, err := repo.Snapshot(ctx); err != nil { t.Fatal(err) }
+    // Exercise concurrent reconciliation by snapshot synchronization and
+    // user-facing connection-status reads. Both must converge to one active
+    // entitlement rather than inserting duplicate replacements.
+    var wg sync.WaitGroup
+    failures := make(chan error, 8)
+    for i := 0; i < 4; i++ {
+        wg.Add(2)
+        go func() {
+            defer wg.Done()
+            _, err := repo.Snapshot(ctx)
+            failures <- err
+        }()
+        go func() {
+            defer wg.Done()
+            _, err := repo.Current(ctx, userID)
+            failures <- err
+        }()
+    }
+    wg.Wait()
+    close(failures)
+    for err := range failures {
+        if err != nil { t.Fatalf("concurrent rollover: %v", err) }
+    }
     var activeCount, oldRevokedCount int
     if err := pool.QueryRow(ctx, `SELECT count(*) FROM network_entitlements
         WHERE user_id=$1 AND subscription_id=$2 AND status='active'`,userID,nextID).Scan(&activeCount); err != nil { t.Fatal(err) }
