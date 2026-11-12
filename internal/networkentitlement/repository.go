@@ -189,6 +189,23 @@ func (r *Repository) Current(
 	ctx context.Context,
 	userID uuid.UUID,
 ) (*Entitlement, error) {
+	// Keep the user-facing connection status consistent with the next
+	// entitlement snapshot, without waiting for the DNS polling cycle.
+	var rolloverIP string
+	lookupErr := r.db.QueryRow(ctx, `SELECT host(e.client_ip)
+		FROM network_entitlements e JOIN user_subscriptions s ON s.id = e.subscription_id
+		WHERE e.user_id = $1 AND e.status = 'active'
+		AND (s.status <> 'active' OR s.expires_at <= now()
+		OR (s.data_limit_bytes > 0 AND s.used_bytes >= s.data_limit_bytes))
+		LIMIT 1`, userID).Scan(&rolloverIP)
+	if lookupErr != nil && !errors.Is(lookupErr, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("find current entitlement rollover: %w", lookupErr)
+	}
+	if rolloverIP != "" {
+		if err := r.reconcileReservedEntitlement(ctx, userID, rolloverIP); err != nil {
+			return nil, fmt.Errorf("reconcile current entitlement: %w", err)
+		}
+	}
 	if _, err := r.db.Exec(ctx, "SELECT promote_user_subscription($1)", userID); err != nil {return nil, fmt.Errorf("reconcile network subscription: %w",err)}
 	const query = `
 		SELECT
