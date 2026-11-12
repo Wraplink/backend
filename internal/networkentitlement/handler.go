@@ -62,13 +62,13 @@ func (h *Handler) Activate(
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrNoUsableSubscription):
-			writeJSONError(w, http.StatusConflict, "an active subscription with remaining quota is required")
+			writeJSON(w, http.StatusConflict, map[string]string{"code": "NO_USABLE_SUBSCRIPTION", "error": "No active plan with remaining bandwidth. Purchase another plan to connect."})
 		case errors.Is(err, ErrClientIPInUse):
-			writeJSONError(w, http.StatusConflict, "this public IP is already active on another account")
+			writeJSON(w, http.StatusConflict, map[string]string{"code": "CLIENT_IP_IN_USE", "error": "This public IP is already active on another account."})
 		case errors.Is(err, ErrInvalidClientIP):
 			writeJSONError(w, http.StatusBadRequest, "invalid client IP")
 		default:
-			writeJSONError(w, http.StatusInternalServerError, "could not activate network entitlement")
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"code": "CONNECTION_FAILED", "error": "Connection failed. Please try again or contact support."})
 		}
 		return
 	}
