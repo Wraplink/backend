@@ -381,6 +381,19 @@ func (r *Repository) reconcileReservedEntitlement(ctx context.Context, userID uu
 	if errors.Is(err, pgx.ErrNoRows) { return tx.Commit(ctx) }
 	if err != nil { return fmt.Errorf("find promoted subscription: %w", err) }
 	if oldSubscriptionID == nextSubscriptionID { return tx.Commit(ctx) }
+	// A candidate can become stale while waiting for the IP advisory lock.
+	// Never replace an entitlement whose original subscription is still usable.
+	// This also protects against racing Connect requests and snapshot polling.
+	var oldStillUsable bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (
+		SELECT 1 FROM user_subscriptions
+		WHERE id = $1 AND user_id = $2 AND status = 'active'
+		AND starts_at <= now() AND expires_at > now()
+		AND (data_limit_bytes = 0 OR used_bytes < data_limit_bytes)
+	)`, oldSubscriptionID, userID).Scan(&oldStillUsable); err != nil {
+		return fmt.Errorf("recheck old entitlement subscription: %w", err)
+	}
+	if oldStillUsable { return tx.Commit(ctx) }
 	if _, err := tx.Exec(ctx, `UPDATE network_entitlements SET status = 'revoked',
 		revoked_at = now(), updated_at = now() WHERE id = $1 AND status = 'active'`, entitlementID); err != nil {
 		return fmt.Errorf("revoke exhausted entitlement: %w", err)
