@@ -105,4 +105,36 @@ func TestReservedEntitlementRolloverPostgres(t *testing.T) {
     var oldUsage int64
     if err := pool.QueryRow(ctx, "SELECT used_bytes FROM user_subscriptions WHERE id=$1",oldID).Scan(&oldUsage); err != nil { t.Fatal(err) }
     if oldUsage != 1100 { t.Fatalf("historical usage=%d, want 1100",oldUsage) }
+    // Concurrent snapshots and a second delayed edge report must not
+    // reassign historical traffic to the newly activated plan.
+    edge2 := edge
+    edge2.Sequence = 2
+    edge2.UploadedBytes = 40
+    edge2.DownloadedBytes = 60
+    var concurrent sync.WaitGroup
+    concurrentErrors := make(chan error, 5)
+    concurrent.Add(1)
+    go func() {
+        defer concurrent.Done()
+        _, err := usage.IngestEdgeUsage(ctx, edge2)
+        concurrentErrors <- err
+    }()
+    for i := 0; i < 4; i++ {
+        concurrent.Add(1)
+        go func() {
+            defer concurrent.Done()
+            _, err := repo.Snapshot(ctx)
+            concurrentErrors <- err
+        }()
+    }
+    concurrent.Wait()
+    close(concurrentErrors)
+    for err := range concurrentErrors {
+        if err != nil { t.Fatalf("concurrent edge report and snapshot: %v", err) }
+    }
+    var newUsage int64
+    if err := pool.QueryRow(ctx, "SELECT used_bytes FROM user_subscriptions WHERE id=$1",nextID).Scan(&newUsage); err != nil { t.Fatal(err) }
+    if newUsage != 0 { t.Fatalf("new subscription charged historical traffic: %d",newUsage) }
+    if err := pool.QueryRow(ctx, "SELECT used_bytes FROM user_subscriptions WHERE id=$1",oldID).Scan(&oldUsage); err != nil { t.Fatal(err) }
+    if oldUsage != 1200 { t.Fatalf("historical usage=%d, want 1200",oldUsage) }
 }
