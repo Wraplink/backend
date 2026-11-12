@@ -26,6 +26,7 @@ type Subscription struct {
 	PlanID         uuid.UUID  `json:"planId"`
 	PlanCode       string     `json:"planCode"`
 	PlanName       string     `json:"planName"`
+	PlanDescription string `json:"planDescription"`
 	PriceMinor     int64      `json:"priceMinor"`
 	Currency       string     `json:"currency"`
 	DurationDays   int        `json:"durationDays"`
@@ -46,6 +47,7 @@ type CreatePendingParams struct {
 	PlanID         uuid.UUID
 	PlanCode       string
 	PlanName       string
+	PlanDescription string
 	PriceMinor     int64
 	Currency       string
 	DurationDays   int
@@ -74,13 +76,14 @@ func (r *Repository) CreatePending(
 			plan_id,
 			plan_code,
 			plan_name,
+			plan_description,
 			price_minor,
 			currency,
 			duration_days,
 			data_limit_bytes,
 			status
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
 		RETURNING
 			id,
 			order_number,
@@ -88,6 +91,7 @@ func (r *Repository) CreatePending(
 			plan_id,
 			plan_code,
 			plan_name,
+			plan_description,
 			price_minor,
 			currency,
 			duration_days,
@@ -112,6 +116,7 @@ func (r *Repository) CreatePending(
 		params.PlanID,
 		params.PlanCode,
 		params.PlanName,
+		params.PlanDescription,
 		params.PriceMinor,
 		params.Currency,
 		params.DurationDays,
@@ -124,6 +129,7 @@ func (r *Repository) CreatePending(
 		&result.PlanID,
 		&result.PlanCode,
 		&result.PlanName,
+		&result.PlanDescription,
 		&result.PriceMinor,
 		&result.Currency,
 		&result.DurationDays,
@@ -158,6 +164,7 @@ func (r *Repository) ListByUser(
 			plan_id,
 			plan_code,
 			plan_name,
+			plan_description,
 			price_minor,
 			currency,
 			duration_days,
@@ -194,6 +201,7 @@ func (r *Repository) ListByUser(
 			&item.PlanID,
 			&item.PlanCode,
 			&item.PlanName,
+			&item.PlanDescription,
 			&item.PriceMinor,
 			&item.Currency,
 			&item.DurationDays,
@@ -234,6 +242,7 @@ func (r *Repository) Current(
 			plan_id,
 			plan_code,
 			plan_name,
+			plan_description,
 			price_minor,
 			currency,
 			duration_days,
@@ -265,6 +274,7 @@ func (r *Repository) Current(
 		&result.PlanID,
 		&result.PlanCode,
 		&result.PlanName,
+		&result.PlanDescription,
 		&result.PriceMinor,
 		&result.Currency,
 		&result.DurationDays,

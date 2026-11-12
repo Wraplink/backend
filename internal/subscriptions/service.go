@@ -74,6 +74,7 @@ func (s *Service) CreatePending(
 			PlanID:         plan.ID,
 			PlanCode:       plan.Code,
 			PlanName:       plan.Name,
+			PlanDescription: plan.Description,
 			PriceMinor:     plan.PriceMinor,
 			Currency:       plan.Currency,
 			DurationDays:   plan.DurationDays,
