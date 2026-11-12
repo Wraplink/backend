@@ -4,6 +4,7 @@ import (
     "context"
     "os"
     "sync"
+    "backend/internal/networkaccess"
     "testing"
     "time"
 
@@ -87,4 +88,21 @@ func TestReservedEntitlementRolloverPostgres(t *testing.T) {
     if err := pool.QueryRow(ctx, `SELECT count(*) FROM network_entitlements
         WHERE user_id=$1 AND status='active'`,userID).Scan(&activeCount); err != nil { t.Fatal(err) }
     if activeCount != 1 { t.Fatalf("repeated snapshot created %d active entitlements",activeCount) }
+    // A delayed edge report entirely within the old entitlement interval
+    // must still be charged to the historical subscription after rollover.
+    edge := networkaccess.EdgeUsageReport{
+        AgentID: "rollover-"+uuid.NewString(), Sequence: 1, ClientIP: ip,
+        UploadedBytes: 25, DownloadedBytes: 75,
+        StartedAt: now.Add(-50*time.Second), EndedAt: now.Add(-40*time.Second),
+    }
+    usage := networkaccess.NewService(networkaccess.NewRepository(pool),
+        networkaccess.ConnectionDetails{}, nil, 0)
+    result, err := usage.IngestEdgeUsage(ctx, edge)
+    if err != nil { t.Fatalf("historical edge report after rollover: %v", err) }
+    if result.SubscriptionID != oldID || !result.Applied {
+        t.Fatalf("historical report subscription=%s applied=%v; want old subscription", result.SubscriptionID, result.Applied)
+    }
+    var oldUsage int64
+    if err := pool.QueryRow(ctx, "SELECT used_bytes FROM user_subscriptions WHERE id=$1",oldID).Scan(&oldUsage); err != nil { t.Fatal(err) }
+    if oldUsage != 1100 { t.Fatalf("historical usage=%d, want 1100",oldUsage) }
 }
