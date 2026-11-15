@@ -459,6 +459,27 @@ func ensureClientIPAvailable(
 	userID uuid.UUID,
 	clientIP string,
 ) error {
+	// The caller holds the advisory lock for this IP. Release only claims
+	// that no longer qualify for the authoritative network snapshot.
+	// Historical subscription and entitlement records remain intact.
+	_, err := tx.Exec(ctx, `UPDATE network_entitlements e
+		SET status = 'revoked', revoked_at = now(), updated_at = now()
+		WHERE e.client_ip = $1::inet AND e.status = 'active'
+		  AND (
+			e.last_activity_at < now() - INTERVAL '30 minutes'
+			OR NOT EXISTS (
+				SELECT 1 FROM user_subscriptions s
+				WHERE s.id = e.subscription_id
+				  AND s.status = 'active'
+				  AND s.starts_at <= now()
+				  AND s.expires_at > now()
+				  AND (s.data_limit_bytes = 0 OR s.used_bytes < s.data_limit_bytes)
+			)
+		  )`, clientIP)
+	if err != nil {
+		return fmt.Errorf("revoke stale network entitlement: %w", err)
+	}
+
 	var ownerID uuid.UUID
 	err := tx.QueryRow(
 		ctx,
