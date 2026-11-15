@@ -35,7 +35,41 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
+// Activate retries transactions aborted by PostgreSQL concurrency control.
+// Every attempt uses a fresh serializable transaction and reacquires IP locks.
 func (r *Repository) Activate(
+	ctx context.Context,
+	userID uuid.UUID,
+	clientIP net.IP,
+) (*Entitlement, error) {
+	const maxAttempts = 3
+	var result *Entitlement
+	var err error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if err = ctx.Err(); err != nil {
+			return nil, err
+		}
+		result, err = r.activateOnce(ctx, userID, clientIP)
+		if err == nil || !isRetryableTransactionError(err) || attempt == maxAttempts-1 {
+			return result, err
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 20 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return result, err
+}
+
+func isRetryableTransactionError(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && (pgErr.Code == "40001" || pgErr.Code == "40P01")
+}
+
+func (r *Repository) activateOnce(
 	ctx context.Context,
 	userID uuid.UUID,
 	clientIP net.IP,
@@ -251,7 +285,29 @@ func (r *Repository) Current(
 	return &result, nil
 }
 
+// Deactivate also retries serializable conflicts with concurrent IP activation.
 func (r *Repository) Deactivate(ctx context.Context, userID uuid.UUID) error {
+	const maxAttempts = 3
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		err := r.deactivateOnce(ctx, userID)
+		if err == nil || !isRetryableTransactionError(err) || attempt == maxAttempts-1 {
+			return err
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 20 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil
+}
+
+func (r *Repository) deactivateOnce(ctx context.Context, userID uuid.UUID) error {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil { return fmt.Errorf("begin entitlement deactivation: %w", err) }
 	defer func() { _ = tx.Rollback(ctx) }()
@@ -459,8 +515,29 @@ func ensureClientIPAvailable(
 	userID uuid.UUID,
 	clientIP string,
 ) error {
+	// The caller holds the advisory lock for this IP. Release only claims
+	// that no longer qualify for the authoritative network snapshot.
+	// Historical subscription and entitlement records remain intact.
+	_, err := tx.Exec(ctx, `UPDATE network_entitlements e
+		SET status = 'revoked', revoked_at = now(), updated_at = now()
+		WHERE e.client_ip = $1::inet AND e.status = 'active'
+		  AND (
+			e.last_activity_at < now() - INTERVAL '30 minutes'
+			OR NOT EXISTS (
+				SELECT 1 FROM user_subscriptions s
+				WHERE s.id = e.subscription_id
+				  AND s.status = 'active'
+				  AND s.starts_at <= now()
+				  AND s.expires_at > now()
+				  AND (s.data_limit_bytes = 0 OR s.used_bytes < s.data_limit_bytes)
+			)
+		  )`, clientIP)
+	if err != nil {
+		return fmt.Errorf("revoke stale network entitlement: %w", err)
+	}
+
 	var ownerID uuid.UUID
-	err := tx.QueryRow(
+	err = tx.QueryRow(
 		ctx,
 		`SELECT user_id
 		 FROM network_entitlements
