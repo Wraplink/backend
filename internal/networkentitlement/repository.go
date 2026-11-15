@@ -56,9 +56,7 @@ func (r *Repository) Activate(
 		timer := time.NewTimer(time.Duration(attempt+1) * 20 * time.Millisecond)
 		select {
 		case <-ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
-			}
+			timer.Stop()
 			return nil, ctx.Err()
 		case <-timer.C:
 		}
