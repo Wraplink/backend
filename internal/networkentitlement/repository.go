@@ -35,7 +35,43 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
+// Activate retries transactions aborted by PostgreSQL concurrency control.
+// Every attempt uses a fresh serializable transaction and reacquires IP locks.
 func (r *Repository) Activate(
+	ctx context.Context,
+	userID uuid.UUID,
+	clientIP net.IP,
+) (*Entitlement, error) {
+	const maxAttempts = 3
+	var result *Entitlement
+	var err error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if err = ctx.Err(); err != nil {
+			return nil, err
+		}
+		result, err = r.activateOnce(ctx, userID, clientIP)
+		if err == nil || !isRetryableTransactionError(err) || attempt == maxAttempts-1 {
+			return result, err
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 20 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return result, err
+}
+
+func isRetryableTransactionError(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && (pgErr.Code == "40001" || pgErr.Code == "40P01")
+}
+
+func (r *Repository) activateOnce(
 	ctx context.Context,
 	userID uuid.UUID,
 	clientIP net.IP,
