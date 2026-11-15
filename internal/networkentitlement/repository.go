@@ -481,7 +481,7 @@ func ensureClientIPAvailable(
 	}
 
 	var ownerID uuid.UUID
-	err := tx.QueryRow(
+	err = tx.QueryRow(
 		ctx,
 		`SELECT user_id
 		 FROM network_entitlements
