@@ -2,6 +2,7 @@ package email
 
 import (
  "context"
+ "crypto/rand"
  "crypto/tls"
  "errors"
  "fmt"
@@ -56,6 +57,10 @@ func (s *SMTPSender) SendPasswordResetEmail(ctx context.Context,m PasswordResetE
 func (s *SMTPSender) send(ctx context.Context,to,subject,body string) error {
  recipient,err:=mail.ParseAddress(to);if err!=nil || recipient.Address!=to {return errors.New("invalid email recipient")}
  from,_:=mail.ParseAddress(s.config.From)
+	msg, err := buildSMTPMessage(from, recipient, subject, body)
+	if err != nil {
+		return err
+	}
  addr:=net.JoinHostPort(s.config.Host,strconv.Itoa(s.config.Port))
  dialer:=net.Dialer{Timeout:10*time.Second}
  conn,err:=dialer.DialContext(ctx,"tcp",addr);if err!=nil{return fmt.Errorf("connect to SMTP: %w",err)}
@@ -78,10 +83,31 @@ func (s *SMTPSender) send(ctx context.Context,to,subject,body string) error {
  if err:=client.Mail(from.Address);err!=nil{return err}
  if err:=client.Rcpt(recipient.Address);err!=nil{return err}
  writer,err:=client.Data();if err!=nil{return err}
- // Encode UTF-8 subjects according to RFC 2047; never allow header injection.
- subject=mime.QEncoding.Encode("utf-8",strings.NewReplacer("\r","","\n","").Replace(subject))
- msg:="From: "+from.String()+"\r\nTo: "+recipient.String()+"\r\nSubject: "+subject+"\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"+strings.ReplaceAll(strings.ReplaceAll(body,"\r\n","\n"),"\n","\r\n")
  if _,err:=writer.Write([]byte(msg));err!=nil{_ = writer.Close();return err}
  if err:=writer.Close();err!=nil{return err}
  return client.Quit()
+}
+
+func buildSMTPMessage(from, recipient *mail.Address, subject, body string) (string, error) {
+	var id [16]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		return "", fmt.Errorf("generate SMTP Message-ID: %w", err)
+	}
+
+	// The parsed address may contain an @ in the local part.
+	domain := from.Address[strings.LastIndexByte(from.Address, '@')+1:]
+	messageID := fmt.Sprintf("<%x@%s>", id, domain)
+	date := time.Now().UTC().Format(time.RFC1123Z)
+
+	// Encode UTF-8 subjects according to RFC 2047 and strip header delimiters.
+	subject = mime.QEncoding.Encode("utf-8", strings.NewReplacer("\r", "", "\n", "").Replace(subject))
+	body = strings.ReplaceAll(strings.ReplaceAll(body, "\r\n", "\n"), "\n", "\r\n")
+	return "From: " + from.String() + "\r\n" +
+		"To: " + recipient.String() + "\r\n" +
+		"Subject: " + subject + "\r\n" +
+		"Date: " + date + "\r\n" +
+		"Message-ID: " + messageID + "\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: text/plain; charset=UTF-8\r\n" +
+		"Content-Transfer-Encoding: 8bit\r\n\r\n" + body, nil
 }

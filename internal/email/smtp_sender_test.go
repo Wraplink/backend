@@ -1,6 +1,11 @@
 package email
 
-import "testing"
+import (
+	"net/mail"
+	"regexp"
+	"strings"
+	"testing"
+)
 
 func TestNewSMTPSenderValidation(t *testing.T) {
  base:=SMTPConfig{Host:"smtp.gmail.com",Port:587,From:"no-reply@example.com",FrontendURL:"https://example.com"}
@@ -16,4 +21,30 @@ func TestNewSMTPSenderValidation(t *testing.T) {
   c:=base;tc.edit(&c)
   if _,err:=NewSMTPSender(c);err==nil {t.Fatal("expected SMTP validation error")}
  })}
+}
+
+func TestBuildSMTPMessageHeaders(t *testing.T) {
+	from := &mail.Address{Address: "no-reply@wraplink.ir"}
+	to := &mail.Address{Address: "user@example.com"}
+	messageIDFormat := regexp.MustCompile(`^<[0-9a-f]{32}@wraplink\.ir>$`)
+	lastID := ""
+
+	for i := 0; i < 2; i++ {
+		message, err := buildSMTPMessage(from, to, "Verify your WrapLink email", "Test body")
+		if err != nil {
+			t.Fatal(err)
+		}
+		parsed, err := mail.ReadMessage(strings.NewReader(message))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := parsed.Header.Date(); err != nil {
+			t.Fatalf("invalid or missing Date: %v", err)
+		}
+		id := parsed.Header.Get("Message-ID")
+		if !messageIDFormat.MatchString(id) || id == lastID {
+			t.Fatalf("expected a unique sender-domain Message-ID, got %q", id)
+		}
+		lastID = id
+	}
 }
