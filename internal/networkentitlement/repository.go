@@ -285,7 +285,29 @@ func (r *Repository) Current(
 	return &result, nil
 }
 
+// Deactivate also retries serializable conflicts with concurrent IP activation.
 func (r *Repository) Deactivate(ctx context.Context, userID uuid.UUID) error {
+	const maxAttempts = 3
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		err := r.deactivateOnce(ctx, userID)
+		if err == nil || !isRetryableTransactionError(err) || attempt == maxAttempts-1 {
+			return err
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 20 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil
+}
+
+func (r *Repository) deactivateOnce(ctx context.Context, userID uuid.UUID) error {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil { return fmt.Errorf("begin entitlement deactivation: %w", err) }
 	defer func() { _ = tx.Rollback(ctx) }()
