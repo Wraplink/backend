@@ -25,3 +25,24 @@ func TestRemoveInactiveDNSNode(t *testing.T) {
  if !found||!removed {t.Fatal("stale node should be removed")}
  if len(s.List(0))!=0 {t.Fatal("stale node still present")}
 }
+
+func TestRemoveInactiveConcurrentRefresh(t *testing.T) {
+ s:=NewStore()
+ s.Upsert("dns-race","local",[]string{"192.0.2.20"})
+ s.mu.Lock()
+ node:=s.nodes["dns-race"]
+ node.LastSeenAt=time.Now().UTC().Add(-2*time.Minute)
+ s.nodes["dns-race"]=node
+ s.mu.Unlock()
+ done:=make(chan struct{})
+ go func() {
+  defer close(done)
+  for i:=0;i<100;i++ {s.Upsert("dns-race","local",[]string{"192.0.2.20"})}
+ }()
+ for i:=0;i<100;i++ {s.RemoveInactive("dns-race",time.Minute)}
+ <-done
+ nodes:=s.List(0)
+ if len(nodes)!=1 || nodes[0].ID!="dns-race" {
+  t.Fatalf("concurrent refreshed node must survive: %+v",nodes)
+ }
+}
