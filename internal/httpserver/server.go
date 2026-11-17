@@ -124,6 +124,7 @@ func NewRouter(
         r.Get("/dns-queries",dnsRegistryHandler.AdminDNSQueries)
         r.Delete("/dns-queries",dnsRegistryHandler.AdminClearDNSQueries)
         r.Get("/agents", dnsRegistryHandler.AdminAgents)
+        r.Delete("/nodes/{type}/{id}", dnsRegistryHandler.AdminRemoveNode)
         r.Get("/route-agent-ips",routeInventoryHandler.AdminInventory)
 		r.Get("/domains", dnsRegistryHandler.AdminPolicies)
 		r.Put("/domains", dnsRegistryHandler.PutPolicy)

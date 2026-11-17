@@ -28,7 +28,7 @@ func (h *Handler) AdminAgents(w http.ResponseWriter, r *http.Request) {
  for rows.Next() {
   var a agent
   if err:=rows.Scan(&a.ID,&a.Region,&a.Status,&a.SNICapacity,&a.RouteCapacity,&a.RegisteredAt,&a.LastSeenAt);err!=nil {http.Error(w,"agent health unavailable",500);return}
-  a.Online=a.Status=="online" && time.Since(a.LastSeenAt)<30*time.Second
+  a.Online=h.offlineAfter>0 && a.Status=="online" && time.Since(a.LastSeenAt)<h.offlineAfter
   agents=append(agents,a)
   if len(agents)>5000 {http.Error(w,"agent inventory exceeds page limit",http.StatusServiceUnavailable);return}
  }
