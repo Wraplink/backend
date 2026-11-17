@@ -69,8 +69,10 @@ func (s *Service) Access(
 	connection := s.connection
 	connection.DNSServers = append([]string(nil), s.connection.DNSServers...)
 	if s.dnsControls != nil {
+		registeredDNS := s.dnsControls.SelectAddresses(2, s.dnsControlOfflineAfter)
+		result.DNSRegistryReady = len(registeredDNS) > 0
 		connection.DNSServers = mergeDNSServers(
-			s.dnsControls.SelectAddresses(2, s.dnsControlOfflineAfter),
+			registeredDNS,
 			connection.DNSServers,
 			2,
 		)
