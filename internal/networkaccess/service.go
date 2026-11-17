@@ -79,6 +79,13 @@ func (s *Service) Access(
 	}
 
 	result.Readiness = assessConnectionReadiness(result.Status, result.DNSRegistryReady)
+	// Agent capacity is independent of DNS-only access and is not client verification.
+	sniReady, routeReady, agentErr := s.repository.AgentCapacity(ctx, s.dnsControlOfflineAfter)
+	if agentErr == nil {
+		result.Readiness.SNIReady = sniReady
+		result.Readiness.RouteReady = routeReady
+		result.Readiness.AgentReady = sniReady || routeReady
+	}
 
 	if len(connection.DNSServers) > 0 || connection.Proxy != nil {
 		result.Connection = &connection
