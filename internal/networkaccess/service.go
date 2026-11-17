@@ -78,11 +78,27 @@ func (s *Service) Access(
 		)
 	}
 
+	result.Readiness = assessConnectionReadiness(result.Status, result.DNSRegistryReady)
+
 	if len(connection.DNSServers) > 0 || connection.Proxy != nil {
 		result.Connection = &connection
 	}
 
 	return result, nil
+}
+
+// assessConnectionReadiness deliberately does not infer client connectivity from heartbeats.
+func assessConnectionReadiness(status string, dnsReady bool) ConnectionReadiness {
+	result := ConnectionReadiness{DNSReady: dnsReady, AccessReady: status == AccessStatusActive}
+	switch {
+	case !result.AccessReady:
+		result.Reason = "ACCESS_NOT_ACTIVE"
+	case !dnsReady:
+		result.Reason = "DNS_CONTROL_UNAVAILABLE"
+	default:
+		result.Reason = "CLIENT_CONNECTIVITY_UNVERIFIED"
+	}
+	return result
 }
 
 func (s *Service) Usage(
