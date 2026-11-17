@@ -44,6 +44,7 @@ type AccessInfo struct {
 	StartsAt       time.Time          `json:"startsAt"`
 	ExpiresAt      time.Time          `json:"expiresAt"`
 	Connection     *ConnectionDetails `json:"connection,omitempty"`
+	DNSRegistryReady bool `json:"dnsRegistryReady"`
 }
 
 type DailyUsage struct {
