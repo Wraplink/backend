@@ -51,6 +51,9 @@ type AccessInfo struct {
 // ConnectionReadiness reports control-plane prerequisites, not a client-side probe.
 type ConnectionReadiness struct {
 	DNSReady bool `json:"dnsReady"`
+	AgentReady bool `json:"agentReady"`
+	SNIReady bool `json:"sniReady"`
+	RouteReady bool `json:"routeReady"`
 	AccessReady bool `json:"accessReady"`
 	Reason string `json:"reason"`
 	ClientVerified bool `json:"clientVerified"`
