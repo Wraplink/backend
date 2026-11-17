@@ -78,6 +78,18 @@ func (r *Repository) CurrentAccess(
 	return &state, nil
 }
 
+// AgentCapacity reports live registered capabilities, not a tested client path.
+func (r *Repository) AgentCapacity(ctx context.Context, offlineAfter time.Duration) (bool, bool, error) {
+	if offlineAfter <= 0 { return false, false, nil }
+	var sni, route bool
+	err := r.db.QueryRow(ctx, `SELECT
+		COALESCE(bool_or(sni_capacity > 0), false),
+		COALESCE(bool_or(route_capacity > 0), false)
+		FROM network_agent_health
+		WHERE status = 'online' AND last_seen_at > now() - ($1::double precision * interval '1 second')`, offlineAfter.Seconds()).Scan(&sni, &route)
+	return sni, route, err
+}
+
 func (r *Repository) DailyUsage(
 	ctx context.Context,
 	subscriptionID uuid.UUID,

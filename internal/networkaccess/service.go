@@ -69,11 +69,22 @@ func (s *Service) Access(
 	connection := s.connection
 	connection.DNSServers = append([]string(nil), s.connection.DNSServers...)
 	if s.dnsControls != nil {
+		registeredDNS := s.dnsControls.SelectAddresses(2, s.dnsControlOfflineAfter)
+		result.DNSRegistryReady = len(registeredDNS) > 0
 		connection.DNSServers = mergeDNSServers(
-			s.dnsControls.SelectAddresses(2, s.dnsControlOfflineAfter),
+			registeredDNS,
 			connection.DNSServers,
 			2,
 		)
+	}
+
+	result.Readiness = assessConnectionReadiness(result.Status, result.DNSRegistryReady)
+	// Agent capacity is independent of DNS-only access and is not client verification.
+	sniReady, routeReady, agentErr := s.repository.AgentCapacity(ctx, s.dnsControlOfflineAfter)
+	if agentErr == nil {
+		result.Readiness.SNIReady = sniReady
+		result.Readiness.RouteReady = routeReady
+		result.Readiness.AgentReady = sniReady || routeReady
 	}
 
 	if len(connection.DNSServers) > 0 || connection.Proxy != nil {
@@ -81,6 +92,20 @@ func (s *Service) Access(
 	}
 
 	return result, nil
+}
+
+// assessConnectionReadiness deliberately does not infer client connectivity from heartbeats.
+func assessConnectionReadiness(status string, dnsReady bool) ConnectionReadiness {
+	result := ConnectionReadiness{DNSReady: dnsReady, AccessReady: status == AccessStatusActive}
+	switch {
+	case !result.AccessReady:
+		result.Reason = "ACCESS_NOT_ACTIVE"
+	case !dnsReady:
+		result.Reason = "DNS_CONTROL_UNAVAILABLE"
+	default:
+		result.Reason = "CLIENT_CONNECTIVITY_UNVERIFIED"
+	}
+	return result
 }
 
 func (s *Service) Usage(

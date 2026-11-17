@@ -44,6 +44,19 @@ type AccessInfo struct {
 	StartsAt       time.Time          `json:"startsAt"`
 	ExpiresAt      time.Time          `json:"expiresAt"`
 	Connection     *ConnectionDetails `json:"connection,omitempty"`
+	DNSRegistryReady bool `json:"dnsRegistryReady"`
+	Readiness ConnectionReadiness `json:"readiness"`
+}
+
+// ConnectionReadiness reports control-plane prerequisites, not a client-side probe.
+type ConnectionReadiness struct {
+	DNSReady bool `json:"dnsReady"`
+	AgentReady bool `json:"agentReady"`
+	SNIReady bool `json:"sniReady"`
+	RouteReady bool `json:"routeReady"`
+	AccessReady bool `json:"accessReady"`
+	Reason string `json:"reason"`
+	ClientVerified bool `json:"clientVerified"`
 }
 
 type DailyUsage struct {
