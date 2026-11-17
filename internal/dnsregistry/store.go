@@ -123,6 +123,19 @@ func (s *Store) List(offlineAfter time.Duration) []Node {
 	return result
 }
 
+// RemoveInactive removes a DNS controller only if its last heartbeat is stale.
+// The check and deletion share the store lock to prevent a concurrent refresh.
+// Returns found and removed, respectively.
+func (s *Store) RemoveInactive(id string, offlineAfter time.Duration) (bool, bool) {
+ s.mu.Lock()
+ defer s.mu.Unlock()
+ node, ok := s.nodes[id]
+ if !ok { return false, false }
+ if offlineAfter <= 0 || !node.LastSeenAt.Before(time.Now().UTC().Add(-offlineAfter)) { return true, false }
+ delete(s.nodes, id)
+ return true, true
+}
+
 func normalizeAddresses(values []string) []string {
 	result := make([]string, 0, len(values))
 	seen := make(map[string]struct{})
