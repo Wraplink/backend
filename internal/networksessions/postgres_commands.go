@@ -92,6 +92,13 @@ func (r *Repository) Acknowledge(ctx context.Context,agentID,commandID uuid.UUID
  var state CommandStatus
  err=tx.QueryRow(ctx,`SELECT network_session_id,state FROM network_disconnect_commands WHERE id=$1 AND edge_node_id=$2 FOR UPDATE`,commandID,agentID).Scan(&sessionID,&state)
  if err!=nil{return err}
+ if state==CommandPending {
+  // Expire under the same row lock used by acknowledgement. A delayed
+  // acknowledgement cannot turn an expired command into a success.
+  tag,expireErr:=tx.Exec(ctx,`UPDATE network_disconnect_commands SET state='expired',updated_at=now() WHERE id=$1 AND state='pending' AND created_at < now() - interval '2 minutes'`,commandID)
+  if expireErr!=nil {return expireErr}
+  if tag.RowsAffected()>0 {return tx.Commit(ctx)}
+ }
  if state==outcome {return tx.Commit(ctx)}
  if state!=CommandPending {return errors.New("command already finalized")}
  _,err=tx.Exec(ctx,`UPDATE network_disconnect_commands SET state=$3,updated_at=now(),acknowledged_at=now(),error_code=NULLIF($4,'') WHERE id=$1 AND edge_node_id=$2`,commandID,agentID,outcome,errorCode)
@@ -118,6 +125,8 @@ func (r *Repository) ExpirePending(ctx context.Context,olderThan time.Time) (int
 // Authorization of the caller is mandatory before invoking this method.
 func (r *Repository) GetCommand(ctx context.Context,id uuid.UUID) (PersistentCommand,error) {
  if id==uuid.Nil {return PersistentCommand{},errors.New("invalid command ID")}
+ // Materialize expiry on read even when no background cleanup is running.
+ if _,err:=r.DB.Exec(ctx,`UPDATE network_disconnect_commands SET state='expired',updated_at=now() WHERE id=$1 AND state='pending' AND created_at < now() - interval '2 minutes'`,id);err!=nil{return PersistentCommand{},err}
  var c PersistentCommand
  err:=r.DB.QueryRow(ctx,`
  SELECT id,network_session_id,edge_node_id,actor_user_id,reason,idempotency_key,state,created_at,updated_at,acknowledged_at,error_code
