@@ -100,7 +100,10 @@ func (r *Repository) Acknowledge(ctx context.Context,agentID string,commandID uu
   // acknowledgement cannot turn an expired command into a success.
   tag,expireErr:=tx.Exec(ctx,`UPDATE network_disconnect_commands SET state='expired',updated_at=now() WHERE id=$1 AND state='pending' AND created_at < now() - interval '2 minutes'`,commandID)
   if expireErr!=nil {return expireErr}
-  if tag.RowsAffected()>0 {return tx.Commit(ctx)}
+  if tag.RowsAffected()>0 {
+   if err:=tx.Commit(ctx);err!=nil{return err}
+   return errors.New("disconnect command expired before acknowledgement")
+  }
  }
  if state==outcome {return tx.Commit(ctx)}
  if state!=CommandPending {return errors.New("command already finalized")}
