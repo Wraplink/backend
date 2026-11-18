@@ -30,10 +30,20 @@ func (r *Repository) SubmitDisconnect(ctx context.Context,sessionID,actorID uuid
   return PersistentCommand{},errors.New("invalid disconnect request")
  }
  var c PersistentCommand
- // A data-modifying CTE cannot reliably read its own inserted row from
- // the base table in the same statement. RETURNING on the upsert works
- // for both new commands and idempotent retries.
+ // First resolve an idempotent retry, even if the session has since
+ // disconnected. This avoids reporting a false "not online" on retries.
  err:=r.DB.QueryRow(ctx,`
+ SELECT id,network_session_id,edge_node_id,actor_user_id,reason,idempotency_key,state,created_at,updated_at,acknowledged_at,error_code
+ FROM network_disconnect_commands WHERE actor_user_id=$1 AND idempotency_key=$2
+ `,actorID,key).Scan(&c.ID,&c.NetworkSessionID,&c.EdgeNodeID,&c.ActorUserID,&c.Reason,&c.IdempotencyKey,&c.State,&c.CreatedAt,&c.UpdatedAt,&c.AcknowledgedAt,&c.ErrorCode)
+ if err==nil {
+  if c.NetworkSessionID!=sessionID || c.Reason!=reason {return PersistentCommand{},errors.New("idempotency key already used for another request")}
+  return c,nil
+ }
+ if !errors.Is(err,pgx.ErrNoRows) {return PersistentCommand{},err}
+ // Concurrent submissions use the unique actor/key constraint as the
+ // serialization point. RETURNING works for both insert and conflict.
+ err=r.DB.QueryRow(ctx,`
  INSERT INTO network_disconnect_commands(network_session_id,edge_node_id,actor_user_id,reason,idempotency_key)
  SELECT id,edge_node_id,$2,$3,$4 FROM network_sessions
  WHERE id=$1 AND state='online'
