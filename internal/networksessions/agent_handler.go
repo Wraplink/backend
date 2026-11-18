@@ -20,6 +20,13 @@ func (h *AgentHandler) agentID(w http.ResponseWriter,r *http.Request)(string,boo
  if err!=nil {http.Error(w,"unauthorized",http.StatusUnauthorized);return "",false}
  return id,true
 }
+// validReportIdentity prevents agent-provided SNI ownership assertions.
+// Route reporting still requires explicit identity until route attribution is
+// implemented with independently verified assignment records.
+func validReportIdentity(mode string,userID,subscriptionID uuid.UUID) bool {
+ if mode=="sni" {return userID==uuid.Nil && subscriptionID==uuid.Nil}
+ return userID!=uuid.Nil && subscriptionID!=uuid.Nil
+}
 func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
  agentID,ok:=h.agentID(w,r);if !ok{return}
  var body struct {
@@ -50,7 +57,7 @@ func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
    http.Error(w,"duplicate session ID in batch",http.StatusBadRequest);return
   }
   seen[v.SessionID]=struct{}{}
-  if v.UploadBytes<0 || v.DownloadBytes<0 || (v.Mode=="sni" && (v.UserID!=uuid.Nil || v.SubscriptionID!=uuid.Nil)) || (v.Mode!="sni" && (v.UserID==uuid.Nil || v.SubscriptionID==uuid.Nil)) {
+  if v.UploadBytes<0 || v.DownloadBytes<0 || !validReportIdentity(v.Mode,v.UserID,v.SubscriptionID) {
    http.Error(w,"invalid usage counters or identity fields",http.StatusBadRequest);return
   }
   if err:=validate(Session{
