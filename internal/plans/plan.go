@@ -22,7 +22,6 @@ type Plan struct {
 	DurationDays   int       `json:"durationDays"`
 	DataLimitBytes int64     `json:"dataLimitBytes"`
  UnlimitedBandwidth bool `json:"unlimitedBandwidth"`
- UnlimitedBandwidth bool `json:"unlimitedBandwidth"`
 	CreatedAt      time.Time `json:"createdAt"`
 	Active bool `json:"active"`
 	PublishAt *time.Time `json:"publishAt"`
@@ -54,7 +53,6 @@ func (r *Repository) ListActive(ctx context.Context) ([]Plan, error) {
 			currency,
 			duration_days,
 			data_limit_bytes,
-            unlimited_bandwidth,
             unlimited_bandwidth,
 			created_at,
 			active,
@@ -124,7 +122,6 @@ func (r *Repository) GetActiveByCode(
 			duration_days,
 			data_limit_bytes,
             unlimited_bandwidth,
-            unlimited_bandwidth,
 			created_at,
 			active,
 			publish_at,
@@ -175,7 +172,6 @@ type AdminPlanInput struct {
  Currency string `json:"currency"`
  DurationDays int `json:"durationDays"`
  DataLimitBytes int64 `json:"dataLimitBytes"`
- UnlimitedBandwidth bool `json:"unlimitedBandwidth"`
  UnlimitedBandwidth bool `json:"unlimitedBandwidth"`
  Active bool `json:"active"`
  PublishAt *time.Time `json:"publishAt"`
