@@ -315,7 +315,7 @@ func main() {
 		cors,
 		logger,
         onlineHandler,
-        &networksessions.AgentHandler{Repository:onlineRepository,ControlKey:cfg.Network.ControlSyncKey},
+        &networksessions.AgentHandler{Repository:onlineRepository},
 	)
 
 	server := &http.Server{
