@@ -40,6 +40,10 @@ CREATE TABLE network_disconnect_commands (
 );
 CREATE INDEX idx_network_disconnect_pending ON network_disconnect_commands(agent_id,created_at) WHERE state='pending';
 CREATE INDEX idx_network_disconnect_session ON network_disconnect_commands(network_session_id,created_at DESC);
+-- Only one outstanding termination per session: concurrent administrator requests
+-- must not produce duplicate agent-local targets in the same polling batch.
+CREATE UNIQUE INDEX idx_network_disconnect_one_pending_per_session
+ ON network_disconnect_commands(network_session_id) WHERE state='pending';
 
 -- Agent-specific credentials are provisioned by an administrator, never by
 -- self-registration. Store only a SHA-256 digest of a random 32+ byte secret.
