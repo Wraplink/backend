@@ -14,10 +14,10 @@ import (
 type AgentHandler struct {
  Repository *Repository
 }
-func (h *AgentHandler) agentID(w http.ResponseWriter,r *http.Request)(uuid.UUID,bool) {
- if h.Repository==nil {http.Error(w,"unavailable",http.StatusServiceUnavailable);return uuid.Nil,false}
+func (h *AgentHandler) agentID(w http.ResponseWriter,r *http.Request)(string,bool) {
+ if h.Repository==nil {http.Error(w,"unavailable",http.StatusServiceUnavailable);return "",false}
  id,err:=h.Repository.AuthenticateAgent(r)
- if err!=nil {http.Error(w,"unauthorized",http.StatusUnauthorized);return uuid.Nil,false}
+ if err!=nil {http.Error(w,"unauthorized",http.StatusUnauthorized);return "",false}
  return id,true
 }
 func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
@@ -54,7 +54,7 @@ func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
    http.Error(w,"negative usage counters",http.StatusBadRequest);return
   }
   if err:=validate(Session{
-   AgentID:agentID.String(),SessionID:v.SessionID,UserID:v.UserID.String(),
+   AgentID:agentID,SessionID:v.SessionID,UserID:v.UserID.String(),
    SubscriptionID:v.SubscriptionID.String(),ClientIP:v.ClientIP,Mode:v.Mode,
    Protocol:v.Protocol,ConnectedAt:v.ConnectedAt,LastActivityAt:v.LastActivityAt,
   },now);err!=nil {
@@ -64,7 +64,7 @@ func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
  ids:=make([]uuid.UUID,0,len(body.Sessions))
  for _,v:=range body.Sessions {
   id,err:=h.Repository.UpsertSession(r.Context(),PersistentSession{
-   EdgeNodeID:agentID,AgentSessionID:v.SessionID,UserID:v.UserID,SubscriptionID:v.SubscriptionID,
+   AgentID:agentID,AgentSessionID:v.SessionID,UserID:v.UserID,SubscriptionID:v.SubscriptionID,
    ClientIP:v.ClientIP,Mode:v.Mode,Protocol:v.Protocol,ConnectedAt:v.ConnectedAt,
    LastActivityAt:v.LastActivityAt,LastReportAt:now,UploadBytes:v.UploadBytes,DownloadBytes:v.DownloadBytes,
   })
