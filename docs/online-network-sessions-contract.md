@@ -2,7 +2,7 @@
 
 ## Current implementation (PR #109)
 
-The backend includes persistent network-session records, agent report and disconnect-command handlers, admin session endpoints, and database migration `000094_network_sessions`. The agent handlers are **not mounted** in `internal/httpserver/server.go` pending secure agent identity provisioning. Consequently, these APIs are **not usable in production**. The Edge Agent PR #66 contains SNI socket tracking and a separately configurable command polling client, but the client is not wired into agent startup and no authenticated session reporting exists.
+The backend includes persistent network-session records, agent report and disconnect-command handlers, admin session endpoints, and database migration `000094_network_sessions`. The agent handlers are mounted only when `WRAPLINK_NETWORK_SESSIONS_ENABLED=true`; the default is disabled pending secure credential provisioning and verified end-to-end reporting. Consequently, these APIs are **not usable in production**. The Edge Agent PR #66 contains SNI socket tracking and a separately configurable command polling client, and the client is wired into agent startup only when `WRAPLINK_SESSION_AGENT_TOKEN` is set and no authenticated session reporting exists.
 
 Do not interpret passing CI or a mergeable PR as proof of an end-to-end Online Users feature.
 
@@ -52,7 +52,7 @@ Agent endpoints currently implemented in handler code, but **disabled in router*
 - `GET /api/v1/internal/network/sessions/commands`
 - `POST /api/v1/internal/network/sessions/commands/{commandID}/ack`
 
-The exact router paths must be confirmed when mounted. The agent client currently polls the commands endpoint and posts acknowledgements; it does not report sessions.
+These paths are registered only when the backend feature gate is enabled. The agent client currently polls the commands endpoint and posts acknowledgements; it does not report sessions.
 
 Admin contract:
 - `GET /api/v1/admin/network/sessions`: paginated observed sessions with status.
@@ -66,3 +66,10 @@ SNI: close only the identified socket. Preventing immediate reconnection require
 Route: IP-only DNAT cannot identify individual users sharing a source IP. Reject unsupported per-user disconnect rather than interrupt unrelated traffic. UDP needs flow-specific termination. A disconnected/offline agent must not produce a false success.
 
 Before production release, verify agent credential provisioning, registration compatibility, session lifecycle reporting, command delivery and acknowledgement, ownership validation, expiry and retries, admin authorization/auditing, default Persian plus `/fa` and `/en` routes, and a complete live end-to-end test. Deploy behind an explicit feature gate; do not expose unprovisioned endpoints.
+
+
+## Deployment environment gate
+
+Set `WRAPLINK_NETWORK_SESSIONS_ENABLED=false` by default in the central platform `.env`. The platform `compose.yml` forwards this variable to the Backend process. Set to exactly `true` only after migration `000094_network_sessions`, per-agent credential provisioning, authenticated report validation, and end-to-end testing. Recreate Backend after changing it. The flag does not turn on Edge Agent reporting.
+
+Remote Edge Agents use a separate `WRAPLINK_SESSION_AGENT_TOKEN` to opt into disconnect polling. Never reuse fleet-wide control or registration credentials. The token must match the provisioned SHA-256 digest associated with the agent's `network_agent_health.id`. Keep the token out of shared platform environment files.
