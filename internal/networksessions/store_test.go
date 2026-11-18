@@ -58,3 +58,25 @@ func TestListSnapshotAndStaleStatus(t *testing.T) {
  if got:=s.List(now.Add(11*time.Second),Unknown);len(got)!=1 || got[0].AgentID!="agent-2" {t.Fatalf("wrong unknown snapshot: %+v",got)}
  if got:=s.List(now.Add(11*time.Second),Disconnected);len(got)!=1 || got[0].AgentID!="agent-1" {t.Fatalf("wrong disconnected snapshot: %+v",got)}
 }
+
+func TestValidateSessionModesAndTimeBounds(t *testing.T) {
+ now:=time.Date(2026,11,18,12,0,0,0,time.UTC)
+ cases:=[]struct{name string;change func(*Session);wantError bool}{
+  {"valid SNI",func(*Session){},false},
+  {"valid route UDP",func(s *Session){s.Mode="route";s.Protocol="udp"},false},
+  {"SNI UDP",func(s *Session){s.Protocol="udp"},true},
+  {"invalid mode",func(s *Session){s.Mode="other"},true},
+  {"invalid IP",func(s *Session){s.ClientIP="not-an-ip"},true},
+  {"activity before connection",func(s *Session){s.LastActivityAt=s.ConnectedAt.Add(-time.Second)},true},
+  {"activity in future",func(s *Session){s.LastActivityAt=now.Add(time.Second)},true},
+  {"missing agent",func(s *Session){s.AgentID=""},true},
+ }
+ for _,tc:=range cases {
+  t.Run(tc.name,func(t *testing.T){
+   session:=sample(now)
+   tc.change(&session)
+   err:=validate(session,now)
+   if (err!=nil)!=tc.wantError {t.Fatalf("validate error=%v, wantError=%v",err,tc.wantError)}
+  })
+ }
+}
