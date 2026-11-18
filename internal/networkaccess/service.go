@@ -60,6 +60,7 @@ func (s *Service) Access(
 		PlanCode:       state.PlanCode,
 		Status:         accessStatus(state, time.Now()),
 		DataLimitBytes: state.DataLimitBytes,
+        UnlimitedBandwidth: state.UnlimitedBandwidth,
 		UsedBytes:      state.UsedBytes,
 		RemainingBytes: remaining,
 		StartsAt:       *state.StartsAt,
@@ -130,7 +131,7 @@ func (s *Service) Usage(
 	}
 
 	percent := 0.0
-	if state.DataLimitBytes > 0 {
+	if !state.UnlimitedBandwidth && state.DataLimitBytes > 0 {
 		percent = (float64(state.UsedBytes) / float64(state.DataLimitBytes)) * 100
 	}
 
@@ -139,6 +140,7 @@ func (s *Service) Usage(
 		PlanCode:       state.PlanCode,
 		Status:         accessStatus(state, time.Now()),
 		DataLimitBytes: state.DataLimitBytes,
+        UnlimitedBandwidth: state.UnlimitedBandwidth,
 		UsedBytes:      state.UsedBytes,
 		RemainingBytes: remaining,
 		PercentUsed:    percent,
