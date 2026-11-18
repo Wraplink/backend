@@ -32,3 +32,29 @@ func TestAgentScopedIdentity(t *testing.T) {
  got,_:=s.Get(b.AgentID,b.SessionID,now)
  if got.Status!=Online {t.Fatal("other agent session affected")}
 }
+
+func TestValidationAndSessionIdentity(t *testing.T) {
+ now:=time.Now().UTC()
+ s,_:=NewStore(time.Minute)
+ v:=sample(now)
+ v.ClientIP="invalid"
+ if err:=s.Observe(v,now);err==nil {t.Fatal("invalid IP accepted")}
+ v=sample(now)
+ if err:=s.Observe(v,now);err!=nil {t.Fatal(err)}
+ v.ClientIP="192.0.2.11"
+ if err:=s.Observe(v,now.Add(time.Second));err==nil {t.Fatal("session identity changed")}
+ v=sample(now)
+ if err:=s.Observe(v,now);err==nil {t.Fatal("duplicate report accepted")}
+}
+func TestListSnapshotAndStaleStatus(t *testing.T) {
+ now:=time.Now().UTC()
+ s,_:=NewStore(10*time.Second)
+ a:=sample(now);b:=sample(now);b.AgentID="agent-2"
+ if err:=s.Observe(a,now);err!=nil {t.Fatal(err)}
+ if err:=s.Observe(b,now);err!=nil {t.Fatal(err)}
+ if got:=s.List(now,Online);len(got)!=2 {t.Fatalf("want 2 online, got %d",len(got))}
+ s.MarkDisconnected("agent-1","session-1")
+ if got:=s.List(now.Add(11*time.Second),Online);len(got)!=0 {t.Fatalf("stale connection shown online: %d",len(got))}
+ if got:=s.List(now.Add(11*time.Second),Unknown);len(got)!=1 || got[0].AgentID!="agent-2" {t.Fatalf("wrong unknown snapshot: %+v",got)}
+ if got:=s.List(now.Add(11*time.Second),Disconnected);len(got)!=1 || got[0].AgentID!="agent-1" {t.Fatalf("wrong disconnected snapshot: %+v",got)}
+}
