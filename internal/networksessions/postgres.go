@@ -38,11 +38,21 @@ type PersistentSession struct {
 // than trusting user/subscription identifiers supplied by an agent. A shared
 // client IP can correspond to multiple users; ambiguous ownership fails closed.
 func (r *Repository) ResolveSNIOwner(ctx context.Context, clientIP string) (uuid.UUID, uuid.UUID, error) {
+ return resolveSNIOwner(ctx,r.DB,clientIP)
+}
+
+// sessionQueryer is implemented by both pgxpool.Pool and pgx.Tx.
+type sessionQueryer interface {
+ Query(context.Context,string,...any)(pgx.Rows,error)
+ QueryRow(context.Context,string,...any) pgx.Row
+}
+
+func resolveSNIOwner(ctx context.Context,q sessionQueryer, clientIP string) (uuid.UUID, uuid.UUID, error) {
  ip,parseErr:=netip.ParseAddr(clientIP)
  if parseErr!=nil || ip.Is4In6() || ip.Zone()!="" {return uuid.Nil,uuid.Nil,errors.New("invalid SNI client IP")}
  clientIP=ip.String()
  var owners []struct{ user, subscription uuid.UUID }
- rows, err := r.DB.Query(ctx, `
+ rows, err := q.Query(ctx, `
  SELECT DISTINCT e.user_id,e.subscription_id
  FROM network_entitlements e
  JOIN user_subscriptions sub ON sub.id=e.subscription_id AND sub.user_id=e.user_id
@@ -63,13 +73,17 @@ func (r *Repository) ResolveSNIOwner(ctx context.Context, clientIP string) (uuid
 }
 
 func (r *Repository) UpsertSession(ctx context.Context,s PersistentSession) (uuid.UUID,error) {
+ return upsertSession(ctx,r.DB,s)
+}
+
+func upsertSession(ctx context.Context,q sessionQueryer,s PersistentSession) (uuid.UUID,error) {
  if s.AgentID=="" || s.UserID==uuid.Nil || s.SubscriptionID==uuid.Nil || s.AgentSessionID=="" || len(s.AgentSessionID)>256 || s.UploadBytes<0 || s.DownloadBytes<0 {return uuid.Nil,errors.New("invalid session")}
  if err:=validate(Session{AgentID:s.AgentID,SessionID:s.AgentSessionID,UserID:s.UserID.String(),SubscriptionID:s.SubscriptionID.String(),ClientIP:s.ClientIP,Mode:s.Mode,Protocol:s.Protocol,ConnectedAt:s.ConnectedAt,LastActivityAt:s.LastActivityAt},s.LastReportAt);err!=nil {return uuid.Nil,err}
  // The primary entitlement model is network_entitlements, shared by SNI
  // and route. Route additionally requires a matching active edge assignment.
  // The quota predicate respects the explicit unlimited_bandwidth flag.
  var authorized bool
- err:=r.DB.QueryRow(ctx,`
+ err:=q.QueryRow(ctx,`
  SELECT EXISTS (
   SELECT 1 FROM network_entitlements e
   JOIN user_subscriptions sub ON sub.id=e.subscription_id AND sub.user_id=e.user_id
@@ -91,7 +105,7 @@ func (r *Repository) UpsertSession(ctx context.Context,s PersistentSession) (uui
  if err!=nil {return uuid.Nil,err}
  if !authorized {return uuid.Nil,errors.New("session has no active matching entitlement")}
  var id uuid.UUID
- err=r.DB.QueryRow(ctx,`
+ err=q.QueryRow(ctx,`
  INSERT INTO network_sessions(agent_id,agent_session_id,user_id,subscription_id,client_ip,mode,protocol,connected_at,last_activity_at,last_report_at,upload_bytes,download_bytes)
  VALUES($1,$2,$3,$4,$5::inet,$6,$7,$8,$9,$10,$11,$12)
  ON CONFLICT(agent_id,agent_session_id) DO UPDATE SET
