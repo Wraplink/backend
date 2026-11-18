@@ -108,6 +108,7 @@ func (r *Repository) Acknowledge(ctx context.Context,agentID,commandID uuid.UUID
 
 // ExpirePending prevents indefinite pending commands after an agent outage.
 func (r *Repository) ExpirePending(ctx context.Context,olderThan time.Time) (int64,error) {
+ if olderThan.IsZero() || olderThan.After(time.Now()) {return 0,errors.New("invalid expiry cutoff")}
  tag,err:=r.DB.Exec(ctx,`UPDATE network_disconnect_commands SET state='expired',updated_at=now() WHERE state='pending' AND created_at<$1`,olderThan)
  if err!=nil{return 0,err}
  return tag.RowsAffected(),nil
