@@ -34,7 +34,7 @@ type PersistentSession struct {
  State Status
 }
 func (r *Repository) UpsertSession(ctx context.Context,s PersistentSession) (uuid.UUID,error) {
- if s.EdgeNodeID==uuid.Nil || s.UserID==uuid.Nil || s.SubscriptionID==uuid.Nil || s.AgentSessionID=="" || s.UploadBytes<0 || s.DownloadBytes<0 {return uuid.Nil,errors.New("invalid session")}
+ if s.EdgeNodeID==uuid.Nil || s.UserID==uuid.Nil || s.SubscriptionID==uuid.Nil || s.AgentSessionID=="" || len(s.AgentSessionID)>256 || s.UploadBytes<0 || s.DownloadBytes<0 {return uuid.Nil,errors.New("invalid session")}
  if err:=validate(Session{AgentID:s.EdgeNodeID.String(),SessionID:s.AgentSessionID,UserID:s.UserID.String(),SubscriptionID:s.SubscriptionID.String(),ClientIP:s.ClientIP,Mode:s.Mode,Protocol:s.Protocol,ConnectedAt:s.ConnectedAt,LastActivityAt:s.LastActivityAt},s.LastReportAt);err!=nil {return uuid.Nil,err}
  // The primary entitlement model is network_entitlements, shared by SNI
  // and route. Route additionally requires a matching active edge assignment.
@@ -87,7 +87,7 @@ func (r *Repository) UpsertSession(ctx context.Context,s PersistentSession) (uui
 func (r *Repository) ListOnline(ctx context.Context,now time.Time,ttl time.Duration,limit int) ([]PersistentSession,error) {
  if ttl<=0 || limit<=0 || limit>500 {return nil,errors.New("invalid listing bounds")}
  rows,err:=r.DB.Query(ctx,`
- SELECT id,edge_node_id,agent_session_id,user_id,subscription_id,client_ip::text,mode,protocol,connected_at,last_activity_at,last_report_at,upload_bytes,download_bytes,state
+ SELECT id,edge_node_id,agent_session_id,user_id,subscription_id,host(client_ip),mode,protocol,connected_at,last_activity_at,last_report_at,upload_bytes,download_bytes,state
  FROM network_sessions
  WHERE state='online' AND last_report_at >= $1
  ORDER BY last_report_at DESC,id DESC LIMIT $2`,now.Add(-ttl),limit)
