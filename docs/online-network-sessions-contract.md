@@ -16,6 +16,31 @@ Before enabling agent routes:
 3. Bind every reported session to the authenticated agent, and derive or validate user/subscription ownership from backend entitlements. An agent-reported UUID must not grant access or become trusted attribution by itself.
 4. Align the backend and Edge Agent endpoint paths and JSON acknowledgement schema, and add negative authentication and cross-agent command tests.
 
+## Verified existing identity model (migration 000015 and 000046)
+
+The existing registration endpoint `internal/dnsregistry/agents.go` writes the
+agent-provided `agent_id` into `network_agent_health.id` (TEXT primary key).
+It does **not** insert an `edge_nodes` row. Migration 000015 creates
+`edge_nodes.id` (UUID) and `edge_nodes.code` (unique TEXT), independently.
+Therefore a fresh SNI-only agent can register and heartbeat successfully
+without ever acquiring the UUID required by migration 000094. This is a
+confirmed schema mismatch, not merely a hypothetical offline-agent case.
+
+**Chosen compatibility direction for the next implementation:** retain
+`edge_nodes` and its UUID foreign keys for route assignments; use the stable
+registration ID from `network_agent_health.id` as the common session-control
+identity. Session-control credentials must be separately provisioned against
+that registered ID, never minted from the shared `X-Network-Control-Key`.
+Require a live health record plus a matching enabled credential and a
+constant-time digest check. Any route session must additionally resolve and
+validate the matching `edge_nodes.code` assignment; SNI sessions must not
+require a route node. Do not automatically create route-capable `edge_nodes`
+records from untrusted registration requests.
+
+Migration 000094 and repository methods **have not yet been refactored** to
+this model. They still reference `edge_node_id UUID`, so agent endpoints must
+remain unmounted until schema, SQL, authorization and tests change together.
+
 ## Network session semantics
 
 An online network session is an agent-observed, individually enforceable connection, **not** a web login, DNS query, or subscription. Agent-local session IDs must not be recycled for new connections. Stale heartbeats mean `unknown`, not `disconnected`. Distinguish unique users from connection counts; a raw client IP does not reliably establish a user identity behind NAT.
