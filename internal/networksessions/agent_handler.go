@@ -1,37 +1,25 @@
 package networksessions
 
 import (
- "crypto/subtle"
  "encoding/json"
  "net/http"
- "strings"
  "time"
 
  "github.com/google/uuid"
  "github.com/go-chi/chi/v5"
 )
 
-// AgentHandler is a transitional transport using the existing internal control key.
-// Production rollout requires per-agent credentials: a shared control key alone
-// cannot cryptographically bind a request to a particular agent identity.
+// AgentHandler authenticates each request using a separately provisioned agent token.
 type AgentHandler struct {
  Repository *Repository
- ControlKey string
-}
-func (h *AgentHandler) authorized(w http.ResponseWriter,r *http.Request) bool {
- if h.Repository==nil || h.ControlKey=="" || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Network-Control-Key")),[]byte(h.ControlKey))!=1 {
-  http.Error(w,"unauthorized",http.StatusUnauthorized)
-  return false
- }
- return true
 }
 func (h *AgentHandler) agentID(w http.ResponseWriter,r *http.Request)(uuid.UUID,bool) {
- id,err:=uuid.Parse(strings.TrimSpace(r.Header.Get("X-Network-Agent-ID")))
- if err!=nil || id==uuid.Nil {http.Error(w,"invalid agent ID",http.StatusBadRequest);return uuid.Nil,false}
+ if h.Repository==nil {http.Error(w,"unavailable",http.StatusServiceUnavailable);return uuid.Nil,false}
+ id,err:=h.Repository.AuthenticateAgent(r)
+ if err!=nil {http.Error(w,"unauthorized",http.StatusUnauthorized);return uuid.Nil,false}
  return id,true
 }
 func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
- if !h.authorized(w,r){return}
  agentID,ok:=h.agentID(w,r);if !ok{return}
  var body struct {
   Sessions []struct {
@@ -68,14 +56,12 @@ func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
  writeJSON(w,http.StatusOK,map[string]any{"sessionIds":ids})
 }
 func (h *AgentHandler) Commands(w http.ResponseWriter,r *http.Request) {
- if !h.authorized(w,r){return}
  agentID,ok:=h.agentID(w,r);if !ok{return}
  commands,err:=h.Repository.PendingForAgent(r.Context(),agentID,100)
  if err!=nil {http.Error(w,"commands unavailable",http.StatusInternalServerError);return}
  writeJSON(w,http.StatusOK,map[string]any{"commands":commands})
 }
 func (h *AgentHandler) Acknowledge(w http.ResponseWriter,r *http.Request) {
- if !h.authorized(w,r){return}
  agentID,ok:=h.agentID(w,r);if !ok{return}
  commandID,err:=uuid.Parse(chi.URLParam(r,"commandID"))
  if err!=nil {http.Error(w,"invalid command ID",http.StatusBadRequest);return}
