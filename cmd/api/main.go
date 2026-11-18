@@ -11,6 +11,9 @@ import (
 	"backend/internal/email"
 	"backend/internal/httpserver"
 	"backend/internal/networkaccess"
+ "backend/internal/networksessions"
+ "backend/internal/requestcontext"
+ "github.com/google/uuid"
  "backend/internal/routeinventory"
 	"backend/internal/networkentitlement"
 	"backend/internal/payments"
@@ -271,6 +274,14 @@ func main() {
 	authMiddleware := auth.NewAuthMiddleware(tokenService, sessionService)
 	requireAuthMiddleware := authMiddleware.Middleware
 
+	onlineRepository, err := networksessions.NewRepository(db)
+ if err != nil { logger.Error("failed to initialize network sessions", "error",err);os.Exit(1) }
+ onlineHandler := &networksessions.AdminHandler{Repository:onlineRepository,HeartbeatTTL:45*time.Second,ActorID:func(r *http.Request)(uuid.UUID,error){
+  id,ok:=requestcontext.UserID(r.Context())
+  if !ok {return uuid.Nil,errors.New("administrator identity missing")}
+  return id,nil
+ }}
+
 	router := httpserver.NewRouter(
 		plansHandler,
         supportHandler,
@@ -303,6 +314,7 @@ func main() {
 		passwordResetRateLimitMiddleware,
 		cors,
 		logger,
+        onlineHandler,
 	)
 
 	server := &http.Server{
