@@ -63,5 +63,11 @@ func TestPostgresOnlyOnePendingDisconnectPerSession(t *testing.T) {
  var pending,total int
  if err:=tx.QueryRow(ctx,`SELECT count(*) FILTER (WHERE state='pending'),count(*) FROM network_disconnect_commands WHERE network_session_id=$1`,sessionID).Scan(&pending,&total);err!=nil {t.Fatal(err)}
  if pending!=1 || total!=2 {t.Fatal(fmt.Sprintf("expected 1 pending of 2 commands, got %d of %d",pending,total))}
- // No commit: all fixtures are rolled back.
+ // Explicitly roll back and verify no fixture escaped the transaction.
+ if err:=tx.Rollback(ctx);err!=nil {t.Fatal(err)}
+ var persisted int
+ if err:=db.QueryRow(ctx,`SELECT count(*) FROM network_agent_health WHERE id=$1`,agentID).Scan(&persisted);err!=nil {t.Fatal(err)}
+ if persisted!=0 {t.Fatal("rolled-back agent fixture persisted")}
+ if err:=db.QueryRow(ctx,`SELECT count(*) FROM network_disconnect_commands WHERE network_session_id=$1`,sessionID).Scan(&persisted);err!=nil {t.Fatal(err)}
+ if persisted!=0 {t.Fatal("rolled-back disconnect commands persisted")}
 }
