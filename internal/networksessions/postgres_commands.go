@@ -51,13 +51,13 @@ func (r *Repository) SubmitDisconnect(ctx context.Context,sessionID,actorID uuid
  err=r.DB.QueryRow(ctx,`
  INSERT INTO network_disconnect_commands(network_session_id,agent_id,actor_user_id,reason,idempotency_key)
  SELECT id,agent_id,$2,$3,$4 FROM network_sessions
- WHERE id=$1 AND state='online'
+ WHERE id=$1 AND state='online' AND mode='sni' AND protocol='tcp'
  AND last_report_at >= now() - interval '2 minutes'
  ON CONFLICT(actor_user_id,idempotency_key)
  DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key
  RETURNING id,network_session_id,agent_id,actor_user_id,reason,idempotency_key,state,created_at,updated_at,acknowledged_at,error_code
  `,sessionID,actorID,reason,key).Scan(&c.ID,&c.NetworkSessionID,&c.AgentID,&c.ActorUserID,&c.Reason,&c.IdempotencyKey,&c.State,&c.CreatedAt,&c.UpdatedAt,&c.AcknowledgedAt,&c.ErrorCode)
- if errors.Is(err,pgx.ErrNoRows) {return PersistentCommand{},errors.New("session not online or not found")}
+ if errors.Is(err,pgx.ErrNoRows) {return PersistentCommand{},errors.New("session not found, not online, or does not support targeted disconnect")}
  if err!=nil{return PersistentCommand{},err}
  if c.NetworkSessionID!=sessionID || c.ActorUserID!=actorID || c.Reason!=reason {return PersistentCommand{},errors.New("idempotency key already used for another request")}
  return c,nil
