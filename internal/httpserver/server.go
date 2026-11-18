@@ -96,11 +96,9 @@ func NewRouter(
 		)
 	}
 
-	if agentHandler!=nil {
-  r.Post("/api/v1/internal/network/sessions/report",agentHandler.Report)
-  r.Get("/api/v1/internal/network/sessions/commands",agentHandler.Commands)
-  r.Post("/api/v1/internal/network/sessions/commands/{commandID}/ack",agentHandler.Acknowledge)
- }
+	// Agent session endpoints are intentionally not exposed until agent-specific
+ // authentication and network_agent_health identity binding are implemented.
+ _ = agentHandler
  if dnsRegistryHandler.Enabled() {
 		r.Post(
 			"/api/v1/internal/network/dns-controls/register",
