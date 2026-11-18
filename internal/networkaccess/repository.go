@@ -314,6 +314,7 @@ func usageReportResult(
 		Applied:        applied,
 		Status:         accessStatus(state, now),
 		DataLimitBytes: state.DataLimitBytes,
+        UnlimitedBandwidth: state.UnlimitedBandwidth,
 		UsedBytes:      state.UsedBytes,
 		RemainingBytes: remaining,
 	}
