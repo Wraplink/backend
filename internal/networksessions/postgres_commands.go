@@ -12,6 +12,7 @@ import (
 type PersistentCommand struct {
  ID uuid.UUID
  NetworkSessionID uuid.UUID
+ AgentSessionID string `json:"agentSessionId"`
  EdgeNodeID uuid.UUID
  ActorUserID uuid.UUID
  Reason string
@@ -61,15 +62,17 @@ func (r *Repository) SubmitDisconnect(ctx context.Context,sessionID,actorID uuid
 func (r *Repository) PendingForAgent(ctx context.Context,agentID uuid.UUID,limit int) ([]PersistentCommand,error) {
  if agentID==uuid.Nil || limit<=0 || limit>100 {return nil,errors.New("invalid agent or limit")}
  rows,err:=r.DB.Query(ctx,`
- SELECT id,network_session_id,edge_node_id,actor_user_id,reason,idempotency_key,state,created_at,updated_at,acknowledged_at,error_code
- FROM network_disconnect_commands WHERE edge_node_id=$1 AND state='pending'
- ORDER BY created_at,id LIMIT $2`,agentID,limit)
+ SELECT c.id,c.network_session_id,s.agent_session_id,c.edge_node_id,c.actor_user_id,c.reason,c.idempotency_key,c.state,c.created_at,c.updated_at,c.acknowledged_at,c.error_code
+ FROM network_disconnect_commands c
+ JOIN network_sessions s ON s.id=c.network_session_id AND s.edge_node_id=c.edge_node_id
+ WHERE c.edge_node_id=$1 AND c.state='pending' AND s.state='online'
+ ORDER BY c.created_at,c.id LIMIT $2`,agentID,limit)
  if err!=nil{return nil,err}
  defer rows.Close()
  var out []PersistentCommand
  for rows.Next(){
   var c PersistentCommand
-  if err:=rows.Scan(&c.ID,&c.NetworkSessionID,&c.EdgeNodeID,&c.ActorUserID,&c.Reason,&c.IdempotencyKey,&c.State,&c.CreatedAt,&c.UpdatedAt,&c.AcknowledgedAt,&c.ErrorCode);err!=nil{return nil,err}
+  if err:=rows.Scan(&c.ID,&c.NetworkSessionID,&c.AgentSessionID,&c.EdgeNodeID,&c.ActorUserID,&c.Reason,&c.IdempotencyKey,&c.State,&c.CreatedAt,&c.UpdatedAt,&c.AcknowledgedAt,&c.ErrorCode);err!=nil{return nil,err}
   out=append(out,c)
  }
  return out,rows.Err()
