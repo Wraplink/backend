@@ -79,6 +79,7 @@ func (s *Service) CreatePending(
 			Currency:       plan.Currency,
 			DurationDays:   plan.DurationDays,
 			DataLimitBytes: plan.DataLimitBytes,
+            UnlimitedBandwidth: plan.UnlimitedBandwidth,
 		},
 	)
 }
