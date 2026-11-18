@@ -19,6 +19,7 @@ import (
 	"backend/internal/user"
 	"log/slog"
 	"net/http"
+	"os"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -103,9 +104,13 @@ func NewRouter(
 		)
 	}
 
-	// Agent session endpoints are intentionally not exposed until agent-specific
- // authentication and network_agent_health identity binding are implemented.
- _ = agentHandler
+	// Session endpoints are opt-in until agent-specific credentials have been
+	// provisioned. Every handler independently authenticates the agent token.
+	if agentHandler != nil && os.Getenv("WRAPLINK_NETWORK_SESSIONS_ENABLED") == "true" {
+		r.Post("/api/v1/internal/network/sessions/report", agentHandler.Report)
+		r.Get("/api/v1/internal/network/sessions/commands", agentHandler.Commands)
+		r.Post("/api/v1/internal/network/sessions/commands/{commandID}/ack", agentHandler.Acknowledge)
+	}
  if dnsRegistryHandler.Enabled() {
 		r.Post(
 			"/api/v1/internal/network/dns-controls/register",
