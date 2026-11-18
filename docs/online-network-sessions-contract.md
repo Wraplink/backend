@@ -1,11 +1,13 @@
 # Online network sessions — implementation and release gate
 
-## Status (Backend PR #109 / Edge Agent PR #66)
+## Status (Backend PR #109 / merged Edge Agent PR #66)
 
 **Not production-ready.** Keep `WRAPLINK_NETWORK_SESSIONS_ENABLED=false`.
 Backend PR #109 owns persistence, agent authentication, ownership validation,
-admin APIs and disconnect commands. Edge Agent PR #66 is developed separately;
-do not treat the two PRs as an integrated or tested release.
+admin APIs and disconnect commands. Edge Agent PR #66 was merged into its
+`main` branch at `88847032a2933243909851a70f348d8ddee5169c`.
+The merged agent and this backend branch have not yet passed a live
+end-to-end release verification.
 
 Migration `000094_network_sessions` now stores `agent_id TEXT` and references
 `network_agent_health(id)`. The authenticated agent identity is the stable
@@ -45,7 +47,7 @@ Ownership lookups and session upserts then run in the same PostgreSQL
 transaction; a rejected observation rolls back all writes from that batch.
 Database integration tests must still verify rollback and concurrency behavior.
 
-Edge Agent PR #66 contains an opt-in authenticated polling client and periodic
+The merged Edge Agent contains an opt-in authenticated polling client and periodic
 active SNI session snapshot reporting. Lifecycle end events, durable delivery,
 counter reconciliation, and end-to-end testing remain outstanding.
 
