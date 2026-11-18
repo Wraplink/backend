@@ -3,6 +3,7 @@ package networksessions
 import (
  "encoding/json"
  "errors"
+ "io"
  "net/http"
  "strconv"
  "time"
@@ -46,7 +47,11 @@ func (h *AdminHandler) Disconnect(w http.ResponseWriter,r *http.Request) {
  if err!=nil {http.Error(w,"invalid session ID",http.StatusBadRequest);return}
  var req struct {Reason string `json:"reason"`;IdempotencyKey string `json:"idempotencyKey"`}
  r.Body=http.MaxBytesReader(w,r.Body,4096)
- if err:=json.NewDecoder(r.Body).Decode(&req);err!=nil {http.Error(w,"invalid JSON",http.StatusBadRequest);return}
+ decoder:=json.NewDecoder(r.Body)
+ decoder.DisallowUnknownFields()
+ if err:=decoder.Decode(&req);err!=nil {http.Error(w,"invalid JSON",http.StatusBadRequest);return}
+ var trailing any
+ if err:=decoder.Decode(&trailing);err!=io.EOF {http.Error(w,"trailing JSON not allowed",http.StatusBadRequest);return}
  command,err:=h.Repository.SubmitDisconnect(r.Context(),sessionID,actor,req.Reason,req.IdempotencyKey)
  if err!=nil {http.Error(w,"could not submit disconnect",http.StatusConflict);return}
  writeJSON(w,http.StatusAccepted,map[string]any{"commandId":command.ID,"status":command.State})
