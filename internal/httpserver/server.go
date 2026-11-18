@@ -55,9 +55,16 @@ func NewRouter(
 	passwordResetRateLimitMiddleware func(http.Handler) http.Handler,
 	cors *security.CORS,
 	logger *slog.Logger,
- onlineHandler *networksessions.AdminHandler,
- agentHandler *networksessions.AgentHandler,
+ extras ...any,
 ) http.Handler {
+ var onlineHandler *networksessions.AdminHandler
+ var agentHandler *networksessions.AgentHandler
+ for _,extra:=range extras {
+  switch h:=extra.(type) {
+  case *networksessions.AdminHandler: onlineHandler=h
+  case *networksessions.AgentHandler: agentHandler=h
+  }
+ }
 	r := chi.NewRouter()
 
 	r.Use(security.RequestID)
