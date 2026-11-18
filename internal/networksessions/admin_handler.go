@@ -26,7 +26,9 @@ func writeJSON(w http.ResponseWriter,status int,v any) {
  _=json.NewEncoder(w).Encode(v)
 }
 func (h *AdminHandler) ListSessions(w http.ResponseWriter,r *http.Request) {
- if h.Repository==nil {http.Error(w,"unavailable",http.StatusServiceUnavailable);return}
+ if h.Repository==nil || h.ActorID==nil {http.Error(w,"unavailable",http.StatusServiceUnavailable);return}
+ actor,err:=h.ActorID(r)
+ if err!=nil || actor==uuid.Nil {http.Error(w,"forbidden",http.StatusForbidden);return}
  limit:=50
  if raw:=r.URL.Query().Get("limit");raw!="" {
   n,err:=strconv.Atoi(raw)
