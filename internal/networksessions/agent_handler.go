@@ -2,6 +2,7 @@ package networksessions
 
 import (
  "encoding/json"
+ "io"
  "net/http"
  "time"
 
@@ -39,6 +40,8 @@ func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
  if err:=decoder.Decode(&body);err!=nil || len(body.Sessions)==0 || len(body.Sessions)>100 {
   http.Error(w,"invalid session batch",http.StatusBadRequest);return
  }
+ var trailing any
+ if err:=decoder.Decode(&trailing);err!=io.EOF {http.Error(w,"trailing JSON not allowed",http.StatusBadRequest);return}
  now:=time.Now().UTC()
  ids:=make([]uuid.UUID,0,len(body.Sessions))
  for _,v:=range body.Sessions {
@@ -68,6 +71,9 @@ func (h *AgentHandler) Acknowledge(w http.ResponseWriter,r *http.Request) {
  var body struct {Status CommandStatus `json:"status"`;ErrorCode string `json:"errorCode"`}
  dec:=json.NewDecoder(http.MaxBytesReader(w,r.Body,4096));dec.DisallowUnknownFields()
  if err:=dec.Decode(&body);err!=nil {http.Error(w,"invalid acknowledgement",http.StatusBadRequest);return}
+ var trailing any
+ if err:=dec.Decode(&trailing);err!=io.EOF {http.Error(w,"trailing JSON not allowed",http.StatusBadRequest);return}
+ if body.Status!=CommandSucceeded && body.Status!=CommandFailed {http.Error(w,"invalid status",http.StatusBadRequest);return}
  if err:=h.Repository.Acknowledge(r.Context(),agentID,commandID,body.Status,body.ErrorCode);err!=nil {
   http.Error(w,"acknowledgement rejected",http.StatusConflict);return
  }
