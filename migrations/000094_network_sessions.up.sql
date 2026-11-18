@@ -40,3 +40,13 @@ CREATE TABLE network_disconnect_commands (
 );
 CREATE INDEX idx_network_disconnect_pending ON network_disconnect_commands(edge_node_id,created_at) WHERE state='pending';
 CREATE INDEX idx_network_disconnect_session ON network_disconnect_commands(network_session_id,created_at DESC);
+
+-- Agent-specific credentials are provisioned by an administrator, never by
+-- self-registration. Store only a SHA-256 digest of a random 32+ byte secret.
+CREATE TABLE network_session_agent_credentials (
+ edge_node_id uuid PRIMARY KEY REFERENCES edge_nodes(id) ON DELETE CASCADE,
+ token_sha256 bytea NOT NULL CHECK (octet_length(token_sha256)=32),
+ enabled boolean NOT NULL DEFAULT true,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ rotated_at timestamptz
+);
