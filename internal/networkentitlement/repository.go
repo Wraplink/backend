@@ -385,6 +385,7 @@ func (r *Repository) Snapshot(
 			s.plan_code,
 			COALESCE(m.mode, 'smart'),
 			s.data_limit_bytes,
+            s.unlimited_bandwidth,
 			s.used_bytes,
 			CASE WHEN s.unlimited_bandwidth THEN 0 ELSE GREATEST(s.data_limit_bytes - s.used_bytes, 0) END,
 			s.expires_at
