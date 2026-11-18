@@ -64,8 +64,9 @@ counter reconciliation, and end-to-end testing remain outstanding.
   Expired pending commands are cleaned up before a new submission.
 - An administrator request is **not** a successful disconnect. Only the
   authenticated agent's acknowledgement can mark that exact session disconnected.
-- SNI can close a specific socket. IP-only route DNAT cannot safely disconnect
-  one user behind shared NAT; do not claim support for targeted route termination.
+- Only online SNI/TCP sessions can receive new targeted disconnect commands.
+  IP-only route DNAT cannot safely disconnect one user behind shared NAT;
+  Route sessions are rejected rather than queued for unsupported termination.
 
 ## Release checklist
 
