@@ -3,7 +3,6 @@ package networksessions
 import (
  "crypto/subtle"
  "encoding/json"
- "errors"
  "net/http"
  "strings"
  "time"
@@ -84,7 +83,6 @@ func (h *AgentHandler) Acknowledge(w http.ResponseWriter,r *http.Request) {
  dec:=json.NewDecoder(http.MaxBytesReader(w,r.Body,4096));dec.DisallowUnknownFields()
  if err:=dec.Decode(&body);err!=nil {http.Error(w,"invalid acknowledgement",http.StatusBadRequest);return}
  if err:=h.Repository.Acknowledge(r.Context(),agentID,commandID,body.Status,body.ErrorCode);err!=nil {
-  if errors.Is(err,errors.New("invalid acknowledgement")) {http.Error(w,"invalid acknowledgement",http.StatusBadRequest);return}
   http.Error(w,"acknowledgement rejected",http.StatusConflict);return
  }
  writeJSON(w,http.StatusOK,map[string]any{"commandId":commandID,"status":body.Status})
