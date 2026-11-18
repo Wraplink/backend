@@ -3,6 +3,7 @@ package networksessions
 import (
  "context"
  "errors"
+ "net/netip"
  "time"
 
  "github.com/google/uuid"
@@ -37,6 +38,9 @@ type PersistentSession struct {
 // than trusting user/subscription identifiers supplied by an agent. A shared
 // client IP can correspond to multiple users; ambiguous ownership fails closed.
 func (r *Repository) ResolveSNIOwner(ctx context.Context, clientIP string) (uuid.UUID, uuid.UUID, error) {
+ ip,parseErr:=netip.ParseAddr(clientIP)
+ if parseErr!=nil || ip.Is4In6() || ip.Zone()!="" {return uuid.Nil,uuid.Nil,errors.New("invalid SNI client IP")}
+ clientIP=ip.String()
  var owners []struct{ user, subscription uuid.UUID }
  rows, err := r.DB.Query(ctx, `
  SELECT DISTINCT e.user_id,e.subscription_id
