@@ -42,6 +42,10 @@ func (r *Repository) SubmitDisconnect(ctx context.Context,sessionID,actorID uuid
   return c,nil
  }
  if !errors.Is(err,pgx.ErrNoRows) {return PersistentCommand{},err}
+ // Expire stale pending commands for this session before attempting a new
+ // request. Without this cleanup the partial unique index could block a
+ // reconnecting session indefinitely after its original agent went offline.
+ if _,err:=r.DB.Exec(ctx,`UPDATE network_disconnect_commands SET state='expired',updated_at=now() WHERE network_session_id=$1 AND state='pending' AND created_at < now() - interval '2 minutes'`,sessionID);err!=nil{return PersistentCommand{},err}
  // Concurrent submissions use the unique actor/key constraint as the
  // serialization point. RETURNING works for both insert and conflict.
  err=r.DB.QueryRow(ctx,`
