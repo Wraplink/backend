@@ -50,7 +50,7 @@ func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
    http.Error(w,"duplicate session ID in batch",http.StatusBadRequest);return
   }
   seen[v.SessionID]=struct{}{}
-  if v.UserID==uuid.Nil || v.SubscriptionID==uuid.Nil || v.UploadBytes<0 || v.DownloadBytes<0 {
+  if v.UploadBytes<0 || v.DownloadBytes<0 || (v.Mode!="sni" && (v.UserID==uuid.Nil || v.SubscriptionID==uuid.Nil)) {
    http.Error(w,"negative usage counters",http.StatusBadRequest);return
   }
   if err:=validate(Session{
@@ -63,6 +63,12 @@ func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
  }
  ids:=make([]uuid.UUID,0,len(body.Sessions))
  for _,v:=range body.Sessions {
+  // SNI identity is determined by backend entitlements, never by agent input.
+  if v.Mode=="sni" {
+   userID,subscriptionID,err:=h.Repository.ResolveSNIOwner(r.Context(),v.ClientIP)
+   if err!=nil {http.Error(w,"SNI ownership is ambiguous or unavailable",http.StatusConflict);return}
+   v.UserID,v.SubscriptionID=userID,subscriptionID
+  }
   id,err:=h.Repository.UpsertSession(r.Context(),PersistentSession{
    AgentID:agentID,AgentSessionID:v.SessionID,UserID:v.UserID,SubscriptionID:v.SubscriptionID,
    ClientIP:v.ClientIP,Mode:v.Mode,Protocol:v.Protocol,ConnectedAt:v.ConnectedAt,
