@@ -50,8 +50,8 @@ func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
    http.Error(w,"duplicate session ID in batch",http.StatusBadRequest);return
   }
   seen[v.SessionID]=struct{}{}
-  if v.UploadBytes<0 || v.DownloadBytes<0 || (v.Mode!="sni" && (v.UserID==uuid.Nil || v.SubscriptionID==uuid.Nil)) {
-   http.Error(w,"negative usage counters",http.StatusBadRequest);return
+  if v.UploadBytes<0 || v.DownloadBytes<0 || (v.Mode=="sni" && (v.UserID!=uuid.Nil || v.SubscriptionID!=uuid.Nil)) || (v.Mode!="sni" && (v.UserID==uuid.Nil || v.SubscriptionID==uuid.Nil)) {
+   http.Error(w,"invalid usage counters or identity fields",http.StatusBadRequest);return
   }
   if err:=validate(Session{
    AgentID:agentID,SessionID:v.SessionID,UserID:v.UserID.String(),
