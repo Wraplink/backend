@@ -50,7 +50,7 @@ func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
    http.Error(w,"duplicate session ID in batch",http.StatusBadRequest);return
   }
   seen[v.SessionID]=struct{}{}
-  if v.UploadBytes<0 || v.DownloadBytes<0 {
+  if v.UserID==uuid.Nil || v.SubscriptionID==uuid.Nil || v.UploadBytes<0 || v.DownloadBytes<0 {
    http.Error(w,"negative usage counters",http.StatusBadRequest);return
   }
   if err:=validate(Session{
@@ -63,9 +63,6 @@ func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
  }
  ids:=make([]uuid.UUID,0,len(body.Sessions))
  for _,v:=range body.Sessions {
-  if v.ConnectedAt.After(now.Add(5*time.Second)) || v.LastActivityAt.After(now.Add(5*time.Second)) {
-   http.Error(w,"invalid timestamps",http.StatusBadRequest);return
-  }
   id,err:=h.Repository.UpsertSession(r.Context(),PersistentSession{
    EdgeNodeID:agentID,AgentSessionID:v.SessionID,UserID:v.UserID,SubscriptionID:v.SubscriptionID,
    ClientIP:v.ClientIP,Mode:v.Mode,Protocol:v.Protocol,ConnectedAt:v.ConnectedAt,
