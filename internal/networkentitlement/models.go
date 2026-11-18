@@ -46,6 +46,7 @@ type Entitlement struct {
 	PlanCode       string         `json:"planCode"`
 	ConnectionMode ConnectionMode `json:"connectionMode"`
 	DataLimitBytes int64          `json:"dataLimitBytes"`
+ UnlimitedBandwidth bool `json:"unlimitedBandwidth"`
 	UsedBytes      int64          `json:"usedBytes"`
 	RemainingBytes int64          `json:"remainingBytes"`
 	StartsAt       time.Time      `json:"startsAt"`
@@ -61,6 +62,7 @@ type SnapshotItem struct {
 	PlanCode       string         `json:"planCode"`
 	ConnectionMode ConnectionMode `json:"connectionMode"`
 	DataLimitBytes int64          `json:"dataLimitBytes"`
+ UnlimitedBandwidth bool `json:"unlimitedBandwidth"`
 	UsedBytes      int64          `json:"usedBytes"`
 	RemainingBytes int64          `json:"remainingBytes"`
 	ExpiresAt      time.Time      `json:"expiresAt"`
