@@ -33,6 +33,31 @@ type PersistentSession struct {
  DownloadBytes int64
  State Status
 }
+// ResolveSNIOwner derives attribution from active backend entitlements rather
+// than trusting user/subscription identifiers supplied by an agent. A shared
+// client IP can correspond to multiple users; ambiguous ownership fails closed.
+func (r *Repository) ResolveSNIOwner(ctx context.Context, clientIP string) (uuid.UUID, uuid.UUID, error) {
+ var owners []struct{ user, subscription uuid.UUID }
+ rows, err := r.DB.Query(ctx, `
+ SELECT DISTINCT e.user_id,e.subscription_id
+ FROM network_entitlements e
+ JOIN user_subscriptions sub ON sub.id=e.subscription_id AND sub.user_id=e.user_id
+ WHERE e.client_ip=$1::inet AND e.status='active'
+ AND sub.status='active' AND sub.starts_at<=now() AND sub.expires_at>now()
+ AND (sub.unlimited_bandwidth OR sub.used_bytes<sub.data_limit_bytes)
+ LIMIT 2`, clientIP)
+ if err != nil {return uuid.Nil,uuid.Nil,err}
+ defer rows.Close()
+ for rows.Next() {
+  var owner struct{ user, subscription uuid.UUID }
+  if err:=rows.Scan(&owner.user,&owner.subscription);err!=nil{return uuid.Nil,uuid.Nil,err}
+  owners=append(owners,owner)
+ }
+ if err:=rows.Err();err!=nil{return uuid.Nil,uuid.Nil,err}
+ if len(owners)!=1 {return uuid.Nil,uuid.Nil,errors.New("SNI session ownership is absent or ambiguous")}
+ return owners[0].user,owners[0].subscription,nil
+}
+
 func (r *Repository) UpsertSession(ctx context.Context,s PersistentSession) (uuid.UUID,error) {
  if s.AgentID=="" || s.UserID==uuid.Nil || s.SubscriptionID==uuid.Nil || s.AgentSessionID=="" || len(s.AgentSessionID)>256 || s.UploadBytes<0 || s.DownloadBytes<0 {return uuid.Nil,errors.New("invalid session")}
  if err:=validate(Session{AgentID:s.AgentID,SessionID:s.AgentSessionID,UserID:s.UserID.String(),SubscriptionID:s.SubscriptionID.String(),ClientIP:s.ClientIP,Mode:s.Mode,Protocol:s.Protocol,ConnectedAt:s.ConnectedAt,LastActivityAt:s.LastActivityAt},s.LastReportAt);err!=nil {return uuid.Nil,err}
