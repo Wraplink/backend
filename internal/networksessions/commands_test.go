@@ -2,6 +2,8 @@ package networksessions
 
 import (
  "testing"
+ "sync"
+ "strconv"
  "time"
 )
 func command(now time.Time) DisconnectCommand {
@@ -31,3 +33,39 @@ func TestCommandExpiry(t *testing.T) {
  c,err:=s.Expire(c.ID,now.Add(time.Minute));if err!=nil || c.Status!=CommandExpired {t.Fatalf("expiry: %+v %v",c,err)}
  if _,err:=s.Resolve(c.ID,"agent-1",CommandSucceeded,now.Add(2*time.Minute));err==nil {t.Fatal("expired command acknowledged")}
 }
+
+func TestConcurrentCommandIdempotency(t *testing.T) {
+ now:=time.Now().UTC()
+ store:=NewCommandStore()
+ const workers=32
+ results:=make(chan DisconnectCommand,workers)
+ failures:=make(chan error,workers)
+ var wg sync.WaitGroup
+ for i:=0;i<workers;i++ {
+  wg.Add(1)
+  go func(i int) {
+   defer wg.Done()
+   request:=command(now)
+   request.ID= "command-"+stringID(i)
+   result,err:=store.Submit(request)
+   if err!=nil {failures<-err;return}
+   results<-result
+  }(i)
+ }
+ wg.Wait()
+ close(results)
+ close(failures)
+ for err:=range failures {t.Fatalf("concurrent submit: %v",err)}
+ var first string
+ count:=0
+ for result:=range results {
+  if first=="" {first=result.ID}
+  if result.ID!=first || result.Status!=CommandPending {
+   t.Fatalf("inconsistent idempotent result: %+v",result)
+  }
+  count++
+ }
+ if count!=workers {t.Fatalf("got %d successful submissions, want %d",count,workers)}
+}
+
+func stringID(n int) string {return strconv.Itoa(n)}
