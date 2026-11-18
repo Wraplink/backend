@@ -55,7 +55,8 @@ func NewRouter(
 	passwordResetRateLimitMiddleware func(http.Handler) http.Handler,
 	cors *security.CORS,
 	logger *slog.Logger,
- onlineHandlers ...*networksessions.AdminHandler,
+ onlineHandler *networksessions.AdminHandler,
+ agentHandler *networksessions.AgentHandler,
 ) http.Handler {
 	r := chi.NewRouter()
 
@@ -95,7 +96,12 @@ func NewRouter(
 		)
 	}
 
-	if dnsRegistryHandler.Enabled() {
+	if agentHandler!=nil {
+  r.Post("/api/v1/internal/network/sessions/report",agentHandler.Report)
+  r.Get("/api/v1/internal/network/sessions/commands",agentHandler.Commands)
+  r.Post("/api/v1/internal/network/sessions/commands/{commandID}/ack",agentHandler.Acknowledge)
+ }
+ if dnsRegistryHandler.Enabled() {
 		r.Post(
 			"/api/v1/internal/network/dns-controls/register",
 			dnsRegistryHandler.Register,
@@ -126,8 +132,8 @@ func NewRouter(
         r.Get("/dns-queries",dnsRegistryHandler.AdminDNSQueries)
         r.Delete("/dns-queries",dnsRegistryHandler.AdminClearDNSQueries)
         r.Get("/agents", dnsRegistryHandler.AdminAgents)
-        if len(onlineHandlers)>0 && onlineHandlers[0]!=nil {
-          online:=onlineHandlers[0]
+        if onlineHandler!=nil {
+          online:=onlineHandler
           r.Get("/sessions",online.ListSessions)
           r.Post("/sessions/{sessionID}/disconnect",online.Disconnect)
           r.Get("/disconnect-commands/{commandID}",online.CommandStatus)
