@@ -117,7 +117,7 @@ func (r *Repository) Acknowledge(ctx context.Context,agentID string,commandID uu
  if outcome==CommandSucceeded {
   // Only a still-active, exact session can be marked disconnected.
   // A stale acknowledgement must not claim success after the session changed.
-  tag,updateErr:=tx.Exec(ctx,`UPDATE network_sessions SET state='disconnected',disconnected_at=now() WHERE id=$1 AND agent_id=$2 AND state='online'`,sessionID,agentID)
+  tag,updateErr:=tx.Exec(ctx,`UPDATE network_sessions SET state='disconnected',disconnected_at=now() WHERE id=$1 AND agent_id=$2 AND state='online' AND mode='sni' AND protocol='tcp'`,sessionID,agentID)
   if updateErr!=nil{return updateErr}
   if tag.RowsAffected()!=1 {return errors.New("session no longer active; acknowledgement rejected")}
  }
