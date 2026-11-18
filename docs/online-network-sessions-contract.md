@@ -40,9 +40,10 @@ A raw IP alone is not universally sufficient to identify a user.
 
 Reports are observations of individual agent-local connections, not web logins
 or DNS queries. Session IDs must not be reused. Reported counters must be
-nonnegative and monotonic; timestamps must be valid and ordered. Backend
-currently processes reports individually, so **a batch can partially persist
-before a later observation fails**. Atomic batch semantics remain outstanding.
+nonnegative and monotonic; timestamps must be valid and ordered. Backend validates the complete payload before opening a database transaction.
+Ownership lookups and session upserts then run in the same PostgreSQL
+transaction; a rejected observation rolls back all writes from that batch.
+Database integration tests must still verify rollback and concurrency behavior.
 
 Edge Agent PR #66 contains an opt-in authenticated polling client and periodic
 active SNI session snapshot reporting. Lifecycle end events, durable delivery,
