@@ -62,7 +62,19 @@ func (h *AgentHandler) Commands(w http.ResponseWriter,r *http.Request) {
  agentID,ok:=h.agentID(w,r);if !ok{return}
  commands,err:=h.Repository.PendingForAgent(r.Context(),agentID,100)
  if err!=nil {http.Error(w,"commands unavailable",http.StatusInternalServerError);return}
- writeJSON(w,http.StatusOK,map[string]any{"commands":commands})
+ // Expose only the fields required to terminate the agent-local session.
+ // Administrator identity, reason and idempotency key stay server-side.
+ type disconnectInstruction struct {
+  CommandID uuid.UUID `json:"commandId"`
+  SessionID string `json:"agentSessionId"`
+ }
+ instructions:=make([]disconnectInstruction,0,len(commands))
+ for _,command:=range commands {
+  instructions=append(instructions,disconnectInstruction{
+   CommandID:command.ID,SessionID:command.AgentSessionID,
+  })
+ }
+ writeJSON(w,http.StatusOK,map[string]any{"commands":instructions})
 }
 func (h *AgentHandler) Acknowledge(w http.ResponseWriter,r *http.Request) {
  agentID,ok:=h.agentID(w,r);if !ok{return}
