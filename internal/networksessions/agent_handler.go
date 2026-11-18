@@ -75,15 +75,18 @@ func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
    http.Error(w,"invalid session",http.StatusBadRequest);return
   }
  }
+ tx,err:=h.Repository.DB.Begin(r.Context())
+ if err!=nil {http.Error(w,"session transaction unavailable",http.StatusInternalServerError);return}
+ defer tx.Rollback(r.Context())
  ids:=make([]uuid.UUID,0,len(body.Sessions))
  for _,v:=range body.Sessions {
   // SNI identity is determined by backend entitlements, never by agent input.
   if v.Mode=="sni" {
-   userID,subscriptionID,err:=h.Repository.ResolveSNIOwner(r.Context(),v.ClientIP)
+   userID,subscriptionID,err:=resolveSNIOwner(r.Context(),tx,v.ClientIP)
    if err!=nil {http.Error(w,"SNI ownership is ambiguous or unavailable",http.StatusConflict);return}
    v.UserID,v.SubscriptionID=userID,subscriptionID
   }
-  id,err:=h.Repository.UpsertSession(r.Context(),PersistentSession{
+  id,err:=upsertSession(r.Context(),tx,PersistentSession{
    AgentID:agentID,AgentSessionID:v.SessionID,UserID:v.UserID,SubscriptionID:v.SubscriptionID,
    ClientIP:v.ClientIP,Mode:v.Mode,Protocol:v.Protocol,ConnectedAt:v.ConnectedAt,
    LastActivityAt:v.LastActivityAt,LastReportAt:now,UploadBytes:v.UploadBytes,DownloadBytes:v.DownloadBytes,
@@ -91,6 +94,7 @@ func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
   if err!=nil {http.Error(w,"session rejected",http.StatusConflict);return}
   ids=append(ids,id)
  }
+ if err:=tx.Commit(r.Context());err!=nil {http.Error(w,"session transaction failed",http.StatusConflict);return}
  writeJSON(w,http.StatusOK,map[string]any{"sessionIds":ids})
 }
 func (h *AgentHandler) Commands(w http.ResponseWriter,r *http.Request) {
