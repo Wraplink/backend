@@ -6,6 +6,7 @@ import (
 	"backend/internal/dnsregistry"
  "backend/internal/dnsdomains"
 	"backend/internal/networkaccess"
+ "backend/internal/networksessions"
  "backend/internal/routeinventory"
 	"backend/internal/networkentitlement"
 	"backend/internal/payments"
@@ -54,6 +55,7 @@ func NewRouter(
 	passwordResetRateLimitMiddleware func(http.Handler) http.Handler,
 	cors *security.CORS,
 	logger *slog.Logger,
+ onlineHandlers ...*networksessions.AdminHandler,
 ) http.Handler {
 	r := chi.NewRouter()
 
@@ -124,6 +126,12 @@ func NewRouter(
         r.Get("/dns-queries",dnsRegistryHandler.AdminDNSQueries)
         r.Delete("/dns-queries",dnsRegistryHandler.AdminClearDNSQueries)
         r.Get("/agents", dnsRegistryHandler.AdminAgents)
+        if len(onlineHandlers)>0 && onlineHandlers[0]!=nil {
+          online:=onlineHandlers[0]
+          r.Get("/sessions",online.ListSessions)
+          r.Post("/sessions/{sessionID}/disconnect",online.Disconnect)
+          r.Get("/disconnect-commands/{commandID}",online.CommandStatus)
+        }
         r.Delete("/nodes/{type}/{id}", dnsRegistryHandler.AdminRemoveNode)
         r.Get("/route-agent-ips",routeInventoryHandler.AdminInventory)
 		r.Get("/domains", dnsRegistryHandler.AdminPolicies)
