@@ -97,3 +97,15 @@ func (r *Repository) ExpirePending(ctx context.Context,olderThan time.Time) (int
  if err!=nil{return 0,err}
  return tag.RowsAffected(),nil
 }
+
+// GetCommand returns a command for an authenticated administrator to inspect.
+// Authorization of the caller is mandatory before invoking this method.
+func (r *Repository) GetCommand(ctx context.Context,id uuid.UUID) (PersistentCommand,error) {
+ if id==uuid.Nil {return PersistentCommand{},errors.New("invalid command ID")}
+ var c PersistentCommand
+ err:=r.DB.QueryRow(ctx,`
+ SELECT id,network_session_id,edge_node_id,actor_user_id,reason,idempotency_key,state,created_at,updated_at,acknowledged_at,error_code
+ FROM network_disconnect_commands WHERE id=$1`,id).
+ Scan(&c.ID,&c.NetworkSessionID,&c.EdgeNodeID,&c.ActorUserID,&c.Reason,&c.IdempotencyKey,&c.State,&c.CreatedAt,&c.UpdatedAt,&c.AcknowledgedAt,&c.ErrorCode)
+ return c,err
+}
