@@ -1,75 +1,88 @@
 # Online network sessions — implementation and release gate
 
-## Current implementation (PR #109)
+## Status (Backend PR #109 / Edge Agent PR #66)
 
-The backend includes persistent network-session records, agent report and disconnect-command handlers, admin session endpoints, and database migration `000094_network_sessions`. The agent handlers are mounted only when `WRAPLINK_NETWORK_SESSIONS_ENABLED=true`; the default is disabled pending secure credential provisioning and verified end-to-end reporting. Consequently, these APIs are **not usable in production**. The Edge Agent PR #66 contains SNI socket tracking and a separately configurable command polling client, and the client is wired into agent startup only when `WRAPLINK_SESSION_AGENT_TOKEN` is set and no authenticated session reporting exists.
+**Not production-ready.** Keep `WRAPLINK_NETWORK_SESSIONS_ENABLED=false`.
+Backend PR #109 owns persistence, agent authentication, ownership validation,
+admin APIs and disconnect commands. Edge Agent PR #66 is developed separately;
+do not treat the two PRs as an integrated or tested release.
 
-Do not interpret passing CI or a mergeable PR as proof of an end-to-end Online Users feature.
+Migration `000094_network_sessions` now stores `agent_id TEXT` and references
+`network_agent_health(id)`. The authenticated agent identity is the stable
+registered health ID, **not** `edge_nodes.id`. Route-capable agents additionally
+require a valid `edge_nodes` assignment for route session reporting.
 
-## Identity and authorization blocker
+## Authentication and authorization
 
-The current `AuthenticateAgent` implementation resolves `X-Network-Agent-ID` through `edge_nodes.code` and requires a corresponding `network_agent_health.id` and separately provisioned `network_session_agent_credentials` token hash. SNI-only agents may have a health record without an `edge_nodes` row. Such agents cannot authenticate. Do **not** weaken this check or reuse a fleet-wide registration token.
+- Agent endpoints require `X-Network-Agent-ID` and a unique per-agent
+  `Authorization: Bearer` token.
+- Backend verifies an enabled `network_session_agent_credentials` entry,
+  SHA-256 token digest (constant-time comparison), and a recent online
+  `network_agent_health` record.
+- The shared network-control/registration key is **not** a session-control token.
+- Provision and rotate credentials explicitly. Never log plaintext tokens.
+- SNI-only agents do not require an `edge_nodes` row. Route sessions require
+  a matching active assignment.
+- Admin endpoints must remain inside the existing authenticated admin router.
 
-Before enabling agent routes:
-1. Define a canonical, persistent identity for **both** SNI-only and route-capable agents, with a safe migration/backfill strategy.
-2. Provision and rotate a unique per-agent credential bound to that identity; store only a hash and never return secrets in logs.
-3. Bind every reported session to the authenticated agent, and derive or validate user/subscription ownership from backend entitlements. An agent-reported UUID must not grant access or become trusted attribution by itself.
-4. Align the backend and Edge Agent endpoint paths and JSON acknowledgement schema, and add negative authentication and cross-agent command tests.
+## Session reporting
 
-## Verified existing identity model (migration 000015 and 000046)
+`POST /api/v1/internal/network/sessions/report` accepts 1–100 observations,
+with fields `sessionId`, `clientIp`, `mode`, `protocol`,
+`connectedAt`, `lastActivityAt`, `uploadBytes`, and `downloadBytes`.
 
-The existing registration endpoint `internal/dnsregistry/agents.go` writes the
-agent-provided `agent_id` into `network_agent_health.id` (TEXT primary key).
-It does **not** insert an `edge_nodes` row. Migration 000015 creates
-`edge_nodes.id` (UUID) and `edge_nodes.code` (unique TEXT), independently.
-Therefore a fresh SNI-only agent can register and heartbeat successfully
-without ever acquiring the UUID required by migration 000094. This is a
-confirmed schema mismatch, not merely a hypothetical offline-agent case.
+SNI reports **must omit** `userId` and `subscriptionId`. Backend resolves
+both from active entitlements and active eligible subscriptions for the client
+IP; zero or multiple distinct matching subscriptions cause rejection. This
+fails closed for shared-IP/NAT ambiguity. Route reports currently require
+identifiers and independently validate the matching active route assignment.
+A raw IP alone is not universally sufficient to identify a user.
 
-**Chosen compatibility direction for the next implementation:** retain
-`edge_nodes` and its UUID foreign keys for route assignments; use the stable
-registration ID from `network_agent_health.id` as the common session-control
-identity. Session-control credentials must be separately provisioned against
-that registered ID, never minted from the shared `X-Network-Control-Key`.
-Require a live health record plus a matching enabled credential and a
-constant-time digest check. Any route session must additionally resolve and
-validate the matching `edge_nodes.code` assignment; SNI sessions must not
-require a route node. Do not automatically create route-capable `edge_nodes`
-records from untrusted registration requests.
+Reports are observations of individual agent-local connections, not web logins
+or DNS queries. Session IDs must not be reused. Reported counters must be
+nonnegative and monotonic; timestamps must be valid and ordered. Backend
+currently processes reports individually, so **a batch can partially persist
+before a later observation fails**. Atomic batch semantics remain outstanding.
 
-Migration 000094 and repository methods **have not yet been refactored** to
-this model. They still reference `edge_node_id UUID`, so agent endpoints must
-remain unmounted until schema, SQL, authorization and tests change together.
+Edge Agent PR #66 contains an opt-in authenticated polling client and periodic
+active SNI session snapshot reporting. Lifecycle end events, durable delivery,
+counter reconciliation, and end-to-end testing remain outstanding.
 
-## Network session semantics
+## Disconnect commands
 
-An online network session is an agent-observed, individually enforceable connection, **not** a web login, DNS query, or subscription. Agent-local session IDs must not be recycled for new connections. Stale heartbeats mean `unknown`, not `disconnected`. Distinguish unique users from connection counts; a raw client IP does not reliably establish a user identity behind NAT.
-
-## Intended APIs
-
-Agent endpoints currently implemented in handler code, but **disabled in router**:
-- `POST /api/v1/internal/network/sessions/report`
-- `GET /api/v1/internal/network/sessions/commands`
+- `GET /api/v1/internal/network/sessions/commands` retrieves commands scoped
+  to the authenticated agent.
 - `POST /api/v1/internal/network/sessions/commands/{commandID}/ack`
+  acknowledges `succeeded` or `failed`.
+- Admin `POST /api/v1/admin/network/sessions/{id}/disconnect` creates an
+  auditable, idempotent command; command status distinguishes `pending`,
+  `succeeded`, `failed`, and `expired`.
+- One pending command per network session is enforced by a partial unique index.
+  Expired pending commands are cleaned up before a new submission.
+- An administrator request is **not** a successful disconnect. Only the
+  authenticated agent's acknowledgement can mark that exact session disconnected.
+- SNI can close a specific socket. IP-only route DNAT cannot safely disconnect
+  one user behind shared NAT; do not claim support for targeted route termination.
 
-These paths are registered only when the backend feature gate is enabled. The agent client currently polls the commands endpoint and posts acknowledgements; it does not report sessions.
+## Release checklist
 
-Admin contract:
-- `GET /api/v1/admin/network/sessions`: paginated observed sessions with status.
-- `POST /api/v1/admin/network/sessions/{id}/disconnect`: create an auditable, idempotent disconnect command and return pending status.
-- Command status must distinguish `pending`, `succeeded`, `failed`, and `expired`. Never report success until the agent confirms termination.
+1. Verify migration upgrade and rollback on an isolated database.
+2. Provision unique agent credentials and verify negative auth, rotation and
+   SNI-only registration compatibility.
+3. Run unit, integration and concurrent-disconnect tests.
+4. Verify SNI report attribution with unique, absent, and ambiguous entitlement
+   ownership; verify quota and entitlement revocation.
+5. Test live connect → report → admin list → targeted disconnect → agent ACK →
+   persisted status, without disrupting other sessions.
+6. Verify reporting failure recovery, agent restarts, expired commands, and
+   late ACK handling.
+7. Verify admin authorization/audit and default Persian, `/fa`, `/en` routes.
+8. Only then enable the feature gate deliberately in production.
 
-## Enforcement and rollout
+## Deployment
 
-SNI: close only the identified socket. Preventing immediate reconnection requires a separate entitlement or deny policy; socket closure alone does not provide it.
-
-Route: IP-only DNAT cannot identify individual users sharing a source IP. Reject unsupported per-user disconnect rather than interrupt unrelated traffic. UDP needs flow-specific termination. A disconnected/offline agent must not produce a false success.
-
-Before production release, verify agent credential provisioning, registration compatibility, session lifecycle reporting, command delivery and acknowledgement, ownership validation, expiry and retries, admin authorization/auditing, default Persian plus `/fa` and `/en` routes, and a complete live end-to-end test. Deploy behind an explicit feature gate; do not expose unprovisioned endpoints.
-
-
-## Deployment environment gate
-
-Set `WRAPLINK_NETWORK_SESSIONS_ENABLED=false` by default in the central platform `.env`. The platform `compose.yml` forwards this variable to the Backend process. Set to exactly `true` only after migration `000094_network_sessions`, per-agent credential provisioning, authenticated report validation, and end-to-end testing. Recreate Backend after changing it. The flag does not turn on Edge Agent reporting.
-
-Remote Edge Agents use a separate `WRAPLINK_SESSION_AGENT_TOKEN` to opt into disconnect polling. Never reuse fleet-wide control or registration credentials. The token must match the provisioned SHA-256 digest associated with the agent's `network_agent_health.id`. Keep the token out of shared platform environment files.
+The platform forwards `WRAPLINK_NETWORK_SESSIONS_ENABLED` to Backend.
+Default must remain `false`. Remote Edge Agents use their own
+`WRAPLINK_SESSION_AGENT_TOKEN`; do not put these per-agent tokens in the
+shared platform environment. Changing the backend gate requires recreating
+the backend service.
