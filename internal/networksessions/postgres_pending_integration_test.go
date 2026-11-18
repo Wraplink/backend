@@ -50,6 +50,16 @@ func TestPostgresOnlyOnePendingDisconnectPerSession(t *testing.T) {
  VALUES($1,$2,$3,'integration test',$4)`,sessionID,agentID,userID,key)
   return err
  }
+ // A second report for the same agent-local session must not create a
+ // second database identity, even when the reporter repeats its payload.
+ if _,err:=tx.Exec(ctx,"SAVEPOINT duplicate_session");err!=nil {t.Fatal(err)}
+ _,err=tx.Exec(ctx,`INSERT INTO network_sessions(agent_id,agent_session_id,user_id,subscription_id,client_ip,mode,protocol,connected_at,last_activity_at,last_report_at)
+ VALUES($1,$2,$3,$4,'192.0.2.10','sni','tcp',$5,$5,$5)`,agentID,"test-session-"+suffix,userID,subscriptionID,now)
+ var duplicateSessionErr *pgconn.PgError
+ if !errors.As(err,&duplicateSessionErr) || duplicateSessionErr.Code!="23505" {
+  t.Fatalf("expected unique session identity violation, got %v",err)
+ }
+ if _,err:=tx.Exec(ctx,"ROLLBACK TO SAVEPOINT duplicate_session");err!=nil {t.Fatal(err)}
  if err:=insert("first-"+suffix);err!=nil {t.Fatal(err)}
  if _,err:=tx.Exec(ctx,"SAVEPOINT duplicate_pending");err!=nil {t.Fatal(err)}
  err=insert("second-"+suffix)
