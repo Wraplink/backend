@@ -30,20 +30,16 @@ func (r *Repository) SubmitDisconnect(ctx context.Context,sessionID,actorID uuid
   return PersistentCommand{},errors.New("invalid disconnect request")
  }
  var c PersistentCommand
+ // A data-modifying CTE cannot reliably read its own inserted row from
+ // the base table in the same statement. RETURNING on the upsert works
+ // for both new commands and idempotent retries.
  err:=r.DB.QueryRow(ctx,`
- WITH target AS (
-  SELECT id,edge_node_id FROM network_sessions WHERE id=$1 AND state='online'
- ), inserted AS (
-  INSERT INTO network_disconnect_commands(network_session_id,edge_node_id,actor_user_id,reason,idempotency_key)
-  SELECT id,edge_node_id,$2,$3,$4 FROM target
-  ON CONFLICT(actor_user_id,idempotency_key) DO NOTHING
-  RETURNING id
- )
- SELECT id,network_session_id,edge_node_id,actor_user_id,reason,idempotency_key,state,created_at,updated_at,acknowledged_at,error_code
- FROM network_disconnect_commands
- WHERE id=(SELECT id FROM inserted)
- OR (actor_user_id=$2 AND idempotency_key=$4)
- ORDER BY (id=(SELECT id FROM inserted)) DESC LIMIT 1
+ INSERT INTO network_disconnect_commands(network_session_id,edge_node_id,actor_user_id,reason,idempotency_key)
+ SELECT id,edge_node_id,$2,$3,$4 FROM network_sessions
+ WHERE id=$1 AND state='online'
+ ON CONFLICT(actor_user_id,idempotency_key)
+ DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key
+ RETURNING id,network_session_id,edge_node_id,actor_user_id,reason,idempotency_key,state,created_at,updated_at,acknowledged_at,error_code
  `,sessionID,actorID,reason,key).Scan(&c.ID,&c.NetworkSessionID,&c.EdgeNodeID,&c.ActorUserID,&c.Reason,&c.IdempotencyKey,&c.State,&c.CreatedAt,&c.UpdatedAt,&c.AcknowledgedAt,&c.ErrorCode)
  if errors.Is(err,pgx.ErrNoRows) {return PersistentCommand{},errors.New("session not online or not found")}
  if err!=nil{return PersistentCommand{},err}
