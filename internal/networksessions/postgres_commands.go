@@ -68,6 +68,7 @@ func (r *Repository) PendingForAgent(ctx context.Context,agentID uuid.UUID,limit
  JOIN network_sessions s ON s.id=c.network_session_id AND s.edge_node_id=c.edge_node_id
  WHERE c.edge_node_id=$1 AND c.state='pending' AND s.state='online'
  AND s.last_report_at >= now() - interval '2 minutes'
+ AND c.created_at >= now() - interval '2 minutes'
  ORDER BY c.created_at,c.id LIMIT $2`,agentID,limit)
  if err!=nil{return nil,err}
  defer rows.Close()
