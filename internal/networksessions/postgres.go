@@ -19,7 +19,7 @@ func NewRepository(db *pgxpool.Pool) (*Repository,error) {
 }
 type PersistentSession struct {
  ID uuid.UUID
- EdgeNodeID uuid.UUID
+ AgentID string
  AgentSessionID string
  UserID uuid.UUID
  SubscriptionID uuid.UUID
@@ -34,8 +34,8 @@ type PersistentSession struct {
  State Status
 }
 func (r *Repository) UpsertSession(ctx context.Context,s PersistentSession) (uuid.UUID,error) {
- if s.EdgeNodeID==uuid.Nil || s.UserID==uuid.Nil || s.SubscriptionID==uuid.Nil || s.AgentSessionID=="" || len(s.AgentSessionID)>256 || s.UploadBytes<0 || s.DownloadBytes<0 {return uuid.Nil,errors.New("invalid session")}
- if err:=validate(Session{AgentID:s.EdgeNodeID.String(),SessionID:s.AgentSessionID,UserID:s.UserID.String(),SubscriptionID:s.SubscriptionID.String(),ClientIP:s.ClientIP,Mode:s.Mode,Protocol:s.Protocol,ConnectedAt:s.ConnectedAt,LastActivityAt:s.LastActivityAt},s.LastReportAt);err!=nil {return uuid.Nil,err}
+ if s.AgentID=="" || s.UserID==uuid.Nil || s.SubscriptionID==uuid.Nil || s.AgentSessionID=="" || len(s.AgentSessionID)>256 || s.UploadBytes<0 || s.DownloadBytes<0 {return uuid.Nil,errors.New("invalid session")}
+ if err:=validate(Session{AgentID:s.AgentID,SessionID:s.AgentSessionID,UserID:s.UserID.String(),SubscriptionID:s.SubscriptionID.String(),ClientIP:s.ClientIP,Mode:s.Mode,Protocol:s.Protocol,ConnectedAt:s.ConnectedAt,LastActivityAt:s.LastActivityAt},s.LastReportAt);err!=nil {return uuid.Nil,err}
  // The primary entitlement model is network_entitlements, shared by SNI
  // and route. Route additionally requires a matching active edge assignment.
  // The quota predicate respects the explicit unlimited_bandwidth flag.
@@ -52,20 +52,20 @@ func (r *Repository) UpsertSession(ctx context.Context,s PersistentSession) (uui
     $5='sni'
     OR ($5='route' AND EXISTS (
      SELECT 1 FROM network_access_assignments a
-     WHERE a.edge_node_id=$1 AND a.user_id=e.user_id
+     WHERE a.edge_node_id=(SELECT id FROM edge_nodes WHERE code=$1 AND enabled) AND a.user_id=e.user_id
       AND a.subscription_id=e.subscription_id AND a.client_ip=e.client_ip
       AND a.state='active'
     ))
    )
  )
- `,s.EdgeNodeID,s.UserID,s.SubscriptionID,s.ClientIP,s.Mode).Scan(&authorized)
+ `,s.AgentID,s.UserID,s.SubscriptionID,s.ClientIP,s.Mode).Scan(&authorized)
  if err!=nil {return uuid.Nil,err}
  if !authorized {return uuid.Nil,errors.New("session has no active matching entitlement")}
  var id uuid.UUID
  err=r.DB.QueryRow(ctx,`
- INSERT INTO network_sessions(edge_node_id,agent_session_id,user_id,subscription_id,client_ip,mode,protocol,connected_at,last_activity_at,last_report_at,upload_bytes,download_bytes)
+ INSERT INTO network_sessions(agent_id,agent_session_id,user_id,subscription_id,client_ip,mode,protocol,connected_at,last_activity_at,last_report_at,upload_bytes,download_bytes)
  VALUES($1,$2,$3,$4,$5::inet,$6,$7,$8,$9,$10,$11,$12)
- ON CONFLICT(edge_node_id,agent_session_id) DO UPDATE SET
+ ON CONFLICT(agent_id,agent_session_id) DO UPDATE SET
  last_activity_at=EXCLUDED.last_activity_at,last_report_at=EXCLUDED.last_report_at,
  upload_bytes=EXCLUDED.upload_bytes,download_bytes=EXCLUDED.download_bytes
  WHERE network_sessions.state='online'
@@ -79,7 +79,7 @@ func (r *Repository) UpsertSession(ctx context.Context,s PersistentSession) (uui
  AND EXCLUDED.last_activity_at>=network_sessions.last_activity_at
  AND EXCLUDED.upload_bytes>=network_sessions.upload_bytes
  AND EXCLUDED.download_bytes>=network_sessions.download_bytes
- RETURNING id`,s.EdgeNodeID,s.AgentSessionID,s.UserID,s.SubscriptionID,s.ClientIP,s.Mode,s.Protocol,s.ConnectedAt,s.LastActivityAt,s.LastReportAt,s.UploadBytes,s.DownloadBytes).Scan(&id)
+ RETURNING id`,s.AgentID,s.AgentSessionID,s.UserID,s.SubscriptionID,s.ClientIP,s.Mode,s.Protocol,s.ConnectedAt,s.LastActivityAt,s.LastReportAt,s.UploadBytes,s.DownloadBytes).Scan(&id)
  if errors.Is(err,pgx.ErrNoRows) {return uuid.Nil,errors.New("session report rejected: stale, revoked or identity mismatch")}
  return id,err
 }
@@ -87,7 +87,7 @@ func (r *Repository) UpsertSession(ctx context.Context,s PersistentSession) (uui
 func (r *Repository) ListOnline(ctx context.Context,now time.Time,ttl time.Duration,limit int) ([]PersistentSession,error) {
  if ttl<=0 || limit<=0 || limit>500 {return nil,errors.New("invalid listing bounds")}
  rows,err:=r.DB.Query(ctx,`
- SELECT id,edge_node_id,agent_session_id,user_id,subscription_id,host(client_ip),mode,protocol,connected_at,last_activity_at,last_report_at,upload_bytes,download_bytes,state
+ SELECT id,agent_id,agent_session_id,user_id,subscription_id,host(client_ip),mode,protocol,connected_at,last_activity_at,last_report_at,upload_bytes,download_bytes,state
  FROM network_sessions
  WHERE state='online' AND last_report_at >= $1
  ORDER BY last_report_at DESC,id DESC LIMIT $2`,now.Add(-ttl),limit)
@@ -96,7 +96,7 @@ func (r *Repository) ListOnline(ctx context.Context,now time.Time,ttl time.Durat
  out:=make([]PersistentSession,0)
  for rows.Next(){
   var s PersistentSession
-  if err:=rows.Scan(&s.ID,&s.EdgeNodeID,&s.AgentSessionID,&s.UserID,&s.SubscriptionID,&s.ClientIP,&s.Mode,&s.Protocol,&s.ConnectedAt,&s.LastActivityAt,&s.LastReportAt,&s.UploadBytes,&s.DownloadBytes,&s.State);err!=nil{return nil,err}
+  if err:=rows.Scan(&s.ID,&s.AgentID,&s.AgentSessionID,&s.UserID,&s.SubscriptionID,&s.ClientIP,&s.Mode,&s.Protocol,&s.ConnectedAt,&s.LastActivityAt,&s.LastReportAt,&s.UploadBytes,&s.DownloadBytes,&s.State);err!=nil{return nil,err}
   out=append(out,s)
  }
  return out,rows.Err()
