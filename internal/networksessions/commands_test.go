@@ -69,3 +69,35 @@ func TestConcurrentCommandIdempotency(t *testing.T) {
 }
 
 func stringID(n int) string {return strconv.Itoa(n)}
+
+func TestConcurrentCommandResolutionHasSingleFinalOutcome(t *testing.T) {
+ now:=time.Now().UTC()
+ store:=NewCommandStore()
+ submitted,err:=store.Submit(command(now))
+ if err!=nil {t.Fatal(err)}
+ const workers=24
+ var wg sync.WaitGroup
+ successes:=make(chan CommandStatus,workers)
+ for i:=0;i<workers;i++ {
+  wg.Add(1)
+  go func(i int) {
+   defer wg.Done()
+   outcome:=CommandSucceeded
+   if i%2==1 {outcome=CommandFailed}
+   resolved,err:=store.Resolve(submitted.ID,submitted.AgentID,outcome,now.Add(time.Second))
+   if err==nil {successes<-resolved.Status}
+  }(i)
+ }
+ wg.Wait()
+ close(successes)
+ final,ok:=store.Get(submitted.ID)
+ if !ok || (final.Status!=CommandSucceeded && final.Status!=CommandFailed) {
+  t.Fatalf("unexpected final command: %+v",final)
+ }
+ count:=0
+ for status:=range successes {
+  if status!=final.Status {t.Fatalf("conflicting successful acknowledgement: %s vs %s",status,final.Status)}
+  count++
+ }
+ if count==0 {t.Fatal("no acknowledgement succeeded")}
+}
