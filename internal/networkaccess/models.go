@@ -39,6 +39,7 @@ type AccessInfo struct {
 	PlanCode       string             `json:"planCode"`
 	Status         string             `json:"status"`
 	DataLimitBytes int64              `json:"dataLimitBytes"`
+ UnlimitedBandwidth bool `json:"unlimitedBandwidth"`
 	UsedBytes      int64              `json:"usedBytes"`
 	RemainingBytes int64              `json:"remainingBytes"`
 	StartsAt       time.Time          `json:"startsAt"`
@@ -71,6 +72,7 @@ type UsageSummary struct {
 	PlanCode       string       `json:"planCode"`
 	Status         string       `json:"status"`
 	DataLimitBytes int64        `json:"dataLimitBytes"`
+ UnlimitedBandwidth bool `json:"unlimitedBandwidth"`
 	UsedBytes      int64        `json:"usedBytes"`
 	RemainingBytes int64        `json:"remainingBytes"`
 	PercentUsed    float64      `json:"percentUsed"`
@@ -94,6 +96,7 @@ type UsageReportResult struct {
 	Applied        bool      `json:"applied"`
 	Status         string    `json:"status"`
 	DataLimitBytes int64     `json:"dataLimitBytes"`
+ UnlimitedBandwidth bool `json:"unlimitedBandwidth"`
 	UsedBytes      int64     `json:"usedBytes"`
 	RemainingBytes int64     `json:"remainingBytes"`
 }

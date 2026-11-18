@@ -94,7 +94,7 @@ func validateAdminPlan(p *AdminPlanInput) error {
  p.Code = strings.ToLower(strings.TrimSpace(p.Code))
  p.Name = strings.TrimSpace(p.Name)
  p.Currency = strings.ToUpper(strings.TrimSpace(p.Currency))
- if !validPlanCode.MatchString(p.Code) || len(p.Name)==0 || len(p.Name)>200 || len(p.Description)>4000 || p.PriceMinor<0 || p.DurationDays<1 || p.DurationDays>3650 || p.DataLimitBytes<0 || p.SortOrder<0 || len(p.Currency)!=3 {
+ if !validPlanCode.MatchString(p.Code) || len(p.Name)==0 || len(p.Name)>200 || len(p.Description)>4000 || p.PriceMinor<0 || p.DurationDays<1 || p.DurationDays>3650 || p.DataLimitBytes<0 || (p.UnlimitedBandwidth && p.DataLimitBytes!=0) || (!p.UnlimitedBandwidth && p.DataLimitBytes==0) || p.SortOrder<0 || len(p.Currency)!=3 {
   return errors.New("invalid plan fields")
  }
  for _, ch := range p.Currency { if ch<'A' || ch>'Z' { return errors.New("invalid currency") } }

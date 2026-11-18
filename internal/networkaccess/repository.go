@@ -21,6 +21,7 @@ type subscriptionState struct {
 	PlanCode       string
 	Status         string
 	DataLimitBytes int64
+	UnlimitedBandwidth bool
 	UsedBytes      int64
 	StartsAt       *time.Time
 	ExpiresAt      *time.Time
@@ -45,6 +46,7 @@ func (r *Repository) CurrentAccess(
 			plan_code,
 			status,
 			data_limit_bytes,
+			unlimited_bandwidth,
 			used_bytes,
 			starts_at,
 			expires_at
@@ -64,6 +66,7 @@ func (r *Repository) CurrentAccess(
 		&state.PlanCode,
 		&state.Status,
 		&state.DataLimitBytes,
+		&state.UnlimitedBandwidth,
 		&state.UsedBytes,
 		&state.StartsAt,
 		&state.ExpiresAt,
@@ -236,6 +239,7 @@ func lockSubscription(
 			plan_code,
 			status,
 			data_limit_bytes,
+			unlimited_bandwidth,
 			used_bytes,
 			starts_at,
 			expires_at
@@ -251,6 +255,7 @@ func lockSubscription(
 		&state.PlanCode,
 		&state.Status,
 		&state.DataLimitBytes,
+		&state.UnlimitedBandwidth,
 		&state.UsedBytes,
 		&state.StartsAt,
 		&state.ExpiresAt,
@@ -309,6 +314,7 @@ func usageReportResult(
 		Applied:        applied,
 		Status:         accessStatus(state, now),
 		DataLimitBytes: state.DataLimitBytes,
+        UnlimitedBandwidth: state.UnlimitedBandwidth,
 		UsedBytes:      state.UsedBytes,
 		RemainingBytes: remaining,
 	}
@@ -321,7 +327,7 @@ func accessStatus(state *subscriptionState, now time.Time) string {
 	if state.Status != "active" || !state.ExpiresAt.After(now) {
 		return AccessStatusExpired
 	}
-	if state.UsedBytes >= state.DataLimitBytes {
+	if !state.UnlimitedBandwidth && state.UsedBytes >= state.DataLimitBytes {
 		return AccessStatusQuotaExhausted
 	}
 	return AccessStatusActive

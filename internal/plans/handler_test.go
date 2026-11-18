@@ -20,6 +20,9 @@ func TestValidateAdminPlan(t *testing.T) {
   {"negative price",func(p *AdminPlanInput){p.PriceMinor=-1},false},
   {"zero duration",func(p *AdminPlanInput){p.DurationDays=0},false},
   {"negative data limit",func(p *AdminPlanInput){p.DataLimitBytes=-1},false},
+  {"finite zero quota",func(p *AdminPlanInput){p.DataLimitBytes=0},false},
+  {"explicit unlimited",func(p *AdminPlanInput){p.DataLimitBytes=0;p.UnlimitedBandwidth=true},true},
+  {"unlimited with finite quota",func(p *AdminPlanInput){p.UnlimitedBandwidth=true},false},
   {"negative sort",func(p *AdminPlanInput){p.SortOrder=-1},false},
   {"invalid currency",func(p *AdminPlanInput){p.Currency="1RR"},false},
  }
