@@ -31,6 +31,7 @@ type Subscription struct {
 	Currency       string     `json:"currency"`
 	DurationDays   int        `json:"durationDays"`
 	DataLimitBytes int64      `json:"dataLimitBytes"`
+ UnlimitedBandwidth bool `json:"unlimitedBandwidth"`
 	UsedBytes      int64      `json:"usedBytes"`
 	RemainingBytes int64      `json:"remainingBytes"`
 	Status         string     `json:"status"`
@@ -52,6 +53,7 @@ type CreatePendingParams struct {
 	Currency       string
 	DurationDays   int
 	DataLimitBytes int64
+ UnlimitedBandwidth bool
 }
 
 type Repository struct {
@@ -81,9 +83,10 @@ func (r *Repository) CreatePending(
 			currency,
 			duration_days,
 			data_limit_bytes,
+            unlimited_bandwidth,
 			status
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 		RETURNING
 			id,
 			order_number,
@@ -96,8 +99,9 @@ func (r *Repository) CreatePending(
 			currency,
 			duration_days,
 			data_limit_bytes,
+            unlimited_bandwidth,
 			used_bytes,
-			GREATEST(data_limit_bytes - used_bytes, 0),
+			CASE WHEN unlimited_bandwidth THEN 0 ELSE GREATEST(data_limit_bytes - used_bytes, 0) END,
 			status,
 			starts_at,
 			expires_at,
@@ -121,6 +125,7 @@ func (r *Repository) CreatePending(
 		params.Currency,
 		params.DurationDays,
 		params.DataLimitBytes,
+        params.UnlimitedBandwidth,
 		StatusPendingPayment,
 	).Scan(
 		&result.ID,
@@ -134,6 +139,7 @@ func (r *Repository) CreatePending(
 		&result.Currency,
 		&result.DurationDays,
 		&result.DataLimitBytes,
+        &result.UnlimitedBandwidth,
 		&result.UsedBytes,
 		&result.RemainingBytes,
 		&result.Status,
@@ -169,8 +175,9 @@ func (r *Repository) ListByUser(
 			currency,
 			duration_days,
 			data_limit_bytes,
+            unlimited_bandwidth,
 			used_bytes,
-			GREATEST(data_limit_bytes - used_bytes, 0),
+			CASE WHEN unlimited_bandwidth THEN 0 ELSE GREATEST(data_limit_bytes - used_bytes, 0) END,
 			status,
 			starts_at,
 			expires_at,
@@ -206,6 +213,7 @@ func (r *Repository) ListByUser(
 			&item.Currency,
 			&item.DurationDays,
 			&item.DataLimitBytes,
+            &item.UnlimitedBandwidth,
 			&item.UsedBytes,
 			&item.RemainingBytes,
 			&item.Status,
@@ -247,8 +255,9 @@ func (r *Repository) Current(
 			currency,
 			duration_days,
 			data_limit_bytes,
+            unlimited_bandwidth,
 			used_bytes,
-			GREATEST(data_limit_bytes - used_bytes, 0),
+			CASE WHEN unlimited_bandwidth THEN 0 ELSE GREATEST(data_limit_bytes - used_bytes, 0) END,
 			status,
 			starts_at,
 			expires_at,
@@ -279,6 +288,7 @@ func (r *Repository) Current(
 		&result.Currency,
 		&result.DurationDays,
 		&result.DataLimitBytes,
+        &result.UnlimitedBandwidth,
 		&result.UsedBytes,
 		&result.RemainingBytes,
 		&result.Status,
