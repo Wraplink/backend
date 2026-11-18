@@ -32,7 +32,8 @@ func (r *Repository) AuthenticateAgent(req *http.Request) (uuid.UUID,error) {
  SELECT e.id,c.token_sha256 FROM edge_nodes e
  JOIN network_session_agent_credentials c ON c.edge_node_id=e.id
  JOIN network_agent_health h ON h.id=e.code
- WHERE e.code=$1 AND e.enabled AND c.enabled AND h.status='online'`,code).Scan(&id,&expected)
+ WHERE e.code=$1 AND e.enabled AND c.enabled
+ AND h.status='online' AND h.last_seen_at >= now() - interval '2 minutes'`,code).Scan(&id,&expected)
  if err!=nil {return uuid.Nil,errors.New("invalid agent credentials")}
  actual:=sha256.Sum256([]byte(token))
  if subtle.ConstantTimeCompare(actual[:],expected)!=1 {return uuid.Nil,errors.New("invalid agent credentials")}
