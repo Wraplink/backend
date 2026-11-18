@@ -36,18 +36,29 @@ type PersistentSession struct {
 func (r *Repository) UpsertSession(ctx context.Context,s PersistentSession) (uuid.UUID,error) {
  if s.EdgeNodeID==uuid.Nil || s.UserID==uuid.Nil || s.SubscriptionID==uuid.Nil || s.AgentSessionID=="" || s.UploadBytes<0 || s.DownloadBytes<0 {return uuid.Nil,errors.New("invalid session")}
  if err:=validate(Session{AgentID:s.EdgeNodeID.String(),SessionID:s.AgentSessionID,UserID:s.UserID.String(),SubscriptionID:s.SubscriptionID.String(),ClientIP:s.ClientIP,Mode:s.Mode,Protocol:s.Protocol,ConnectedAt:s.ConnectedAt,LastActivityAt:s.LastActivityAt},s.LastReportAt);err!=nil {return uuid.Nil,err}
- // Only a live entitlement assigned to this exact edge node and client
- // address may create or refresh a network session. This prevents an agent
- // from inventing online users or attaching traffic to another subscription.
+ // The primary entitlement model is network_entitlements, shared by SNI
+ // and route. Route additionally requires a matching active edge assignment.
+ // The quota predicate respects the explicit unlimited_bandwidth flag.
  var authorized bool
  err:=r.DB.QueryRow(ctx,`
  SELECT EXISTS (
- SELECT 1 FROM network_access_assignments a
- JOIN user_subscriptions s ON s.id=a.subscription_id AND s.user_id=a.user_id
- WHERE a.edge_node_id=$1 AND a.user_id=$2 AND a.subscription_id=$3
- AND a.client_ip=$4::inet AND a.state='active'
- AND s.status='active' AND s.starts_at<=now() AND s.expires_at>now()
- )`,s.EdgeNodeID,s.UserID,s.SubscriptionID,s.ClientIP).Scan(&authorized)
+  SELECT 1 FROM network_entitlements e
+  JOIN user_subscriptions sub ON sub.id=e.subscription_id AND sub.user_id=e.user_id
+  WHERE e.user_id=$2 AND e.subscription_id=$3
+   AND e.client_ip=$4::inet AND e.status='active'
+   AND sub.status='active' AND sub.starts_at<=now() AND sub.expires_at>now()
+   AND (sub.unlimited_bandwidth OR sub.used_bytes<sub.data_limit_bytes)
+   AND (
+    $5='sni'
+    OR ($5='route' AND EXISTS (
+     SELECT 1 FROM network_access_assignments a
+     WHERE a.edge_node_id=$1 AND a.user_id=e.user_id
+      AND a.subscription_id=e.subscription_id AND a.client_ip=e.client_ip
+      AND a.state='active'
+    ))
+   )
+ )
+ `,s.EdgeNodeID,s.UserID,s.SubscriptionID,s.ClientIP,s.Mode).Scan(&authorized)
  if err!=nil {return uuid.Nil,err}
  if !authorized {return uuid.Nil,errors.New("session has no active matching entitlement")}
  var id uuid.UUID
