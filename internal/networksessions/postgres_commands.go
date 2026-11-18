@@ -62,6 +62,9 @@ func (r *Repository) SubmitDisconnect(ctx context.Context,sessionID,actorID uuid
 // PendingForAgent is called only after authenticating the edge agent.
 func (r *Repository) PendingForAgent(ctx context.Context,agentID uuid.UUID,limit int) ([]PersistentCommand,error) {
  if agentID==uuid.Nil || limit<=0 || limit>100 {return nil,errors.New("invalid agent or limit")}
+ // Materialize expired commands before polling, even without a scheduler.
+ // Scope cleanup to this authenticated agent to bound each request's work.
+ if _,err:=r.DB.Exec(ctx,`UPDATE network_disconnect_commands SET state='expired',updated_at=now() WHERE edge_node_id=$1 AND state='pending' AND created_at < now() - interval '2 minutes'`,agentID);err!=nil{return nil,err}
  rows,err:=r.DB.Query(ctx,`
  SELECT c.id,c.network_session_id,s.agent_session_id,c.edge_node_id,c.actor_user_id,c.reason,c.idempotency_key,c.state,c.created_at,c.updated_at,c.acknowledged_at,c.error_code
  FROM network_disconnect_commands c
