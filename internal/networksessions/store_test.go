@@ -2,6 +2,7 @@ package networksessions
 
 import (
  "testing"
+ "sync"
  "time"
 )
 func sample(now time.Time) Session { return Session{AgentID:"agent-1",SessionID:"session-1",UserID:"user-1",SubscriptionID:"sub-1",ClientIP:"192.0.2.10",Mode:"sni",Protocol:"tcp",ConnectedAt:now.Add(-time.Minute),LastActivityAt:now.Add(-time.Second),UploadBytes:100,DownloadBytes:200} }
@@ -78,5 +79,36 @@ func TestValidateSessionModesAndTimeBounds(t *testing.T) {
    err:=validate(session,now)
    if (err!=nil)!=tc.wantError {t.Fatalf("validate error=%v, wantError=%v",err,tc.wantError)}
   })
+ }
+}
+
+func TestConcurrentSessionReportsNeverRegressCounters(t *testing.T) {
+ now:=time.Now().UTC()
+ store,err:=NewStore(time.Minute)
+ if err!=nil {t.Fatal(err)}
+ initial:=sample(now)
+ if err:=store.Observe(initial,now);err!=nil {t.Fatal(err)}
+ const workers=32
+ var wg sync.WaitGroup
+ for i:=1;i<=workers;i++ {
+  wg.Add(1)
+  go func(i int) {
+   defer wg.Done()
+   observation:=initial
+   observation.UploadBytes+=uint64(i)
+   observation.DownloadBytes+=uint64(i)
+   observation.LastActivityAt=now.Add(time.Duration(i)*time.Millisecond)
+   _=store.Observe(observation,now.Add(time.Duration(i)*time.Millisecond))
+  }(i)
+ }
+ wg.Wait()
+ got,ok:=store.Get(initial.AgentID,initial.SessionID,now.Add(time.Second))
+ if !ok {t.Fatal("session missing")}
+ if got.UploadBytes!=initial.UploadBytes+workers ||
+  got.DownloadBytes!=initial.DownloadBytes+workers {
+  t.Fatalf("counters regressed: upload=%d download=%d",got.UploadBytes,got.DownloadBytes)
+ }
+ if !got.LastActivityAt.Equal(now.Add(workers*time.Millisecond)) {
+  t.Fatalf("activity regressed: %v",got.LastActivityAt)
  }
 }
