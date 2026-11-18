@@ -48,6 +48,7 @@ func (r *Repository) SubmitDisconnect(ctx context.Context,sessionID,actorID uuid
  INSERT INTO network_disconnect_commands(network_session_id,edge_node_id,actor_user_id,reason,idempotency_key)
  SELECT id,edge_node_id,$2,$3,$4 FROM network_sessions
  WHERE id=$1 AND state='online'
+ AND last_report_at >= now() - interval '2 minutes'
  ON CONFLICT(actor_user_id,idempotency_key)
  DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key
  RETURNING id,network_session_id,edge_node_id,actor_user_id,reason,idempotency_key,state,created_at,updated_at,acknowledged_at,error_code
@@ -66,6 +67,7 @@ func (r *Repository) PendingForAgent(ctx context.Context,agentID uuid.UUID,limit
  FROM network_disconnect_commands c
  JOIN network_sessions s ON s.id=c.network_session_id AND s.edge_node_id=c.edge_node_id
  WHERE c.edge_node_id=$1 AND c.state='pending' AND s.state='online'
+ AND s.last_report_at >= now() - interval '2 minutes'
  ORDER BY c.created_at,c.id LIMIT $2`,agentID,limit)
  if err!=nil{return nil,err}
  defer rows.Close()
