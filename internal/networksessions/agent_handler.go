@@ -4,6 +4,7 @@ import (
  "encoding/json"
  "io"
  "net/http"
+ "net/netip"
  "time"
 
  "github.com/google/uuid"
@@ -26,6 +27,12 @@ func (h *AgentHandler) agentID(w http.ResponseWriter,r *http.Request)(string,boo
 func validReportIdentity(mode string,userID,subscriptionID uuid.UUID) bool {
  if mode=="sni" {return userID==uuid.Nil && subscriptionID==uuid.Nil}
  return userID!=uuid.Nil && subscriptionID!=uuid.Nil
+}
+// validReportedClientIP rejects noncanonical network identities before any
+// entitlement lookup or persistence. Reports must carry a single host IP.
+func validReportedClientIP(value string) bool {
+ ip,err:=netip.ParseAddr(value)
+ return err==nil && !ip.Is4In6() && ip.Zone()=="" && ip.String()==value
 }
 func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
  agentID,ok:=h.agentID(w,r);if !ok{return}
@@ -57,7 +64,7 @@ func (h *AgentHandler) Report(w http.ResponseWriter,r *http.Request) {
    http.Error(w,"duplicate session ID in batch",http.StatusBadRequest);return
   }
   seen[v.SessionID]=struct{}{}
-  if v.UploadBytes<0 || v.DownloadBytes<0 || !validReportIdentity(v.Mode,v.UserID,v.SubscriptionID) {
+  if v.UploadBytes<0 || v.DownloadBytes<0 || !validReportIdentity(v.Mode,v.UserID,v.SubscriptionID) || !validReportedClientIP(v.ClientIP) {
    http.Error(w,"invalid usage counters or identity fields",http.StatusBadRequest);return
   }
   if err:=validate(Session{
