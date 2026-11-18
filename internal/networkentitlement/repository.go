@@ -22,6 +22,7 @@ type subscriptionState struct {
 	ID             uuid.UUID
 	PlanCode       string
 	DataLimitBytes int64
+ UnlimitedBandwidth bool
 	UsedBytes      int64
 	StartsAt       time.Time
 	ExpiresAt      time.Time
@@ -139,6 +140,7 @@ func (r *Repository) activateOnce(
         existing.Status = "active"
 		existing.PlanCode = subscription.PlanCode
 		existing.DataLimitBytes = subscription.DataLimitBytes
+        existing.UnlimitedBandwidth = subscription.UnlimitedBandwidth
 		existing.UsedBytes = subscription.UsedBytes
 		existing.RemainingBytes = remainingBytes(
 			subscription.DataLimitBytes,
@@ -209,6 +211,7 @@ func (r *Repository) activateOnce(
 
 	result.PlanCode = subscription.PlanCode
 	result.DataLimitBytes = subscription.DataLimitBytes
+    result.UnlimitedBandwidth = subscription.UnlimitedBandwidth
 	result.UsedBytes = subscription.UsedBytes
 	result.RemainingBytes = remainingBytes(
 		subscription.DataLimitBytes,
@@ -444,6 +447,7 @@ func lockUsableSubscription(
 			id,
 			plan_code,
 			data_limit_bytes,
+            unlimited_bandwidth,
 			used_bytes,
 			starts_at,
 			expires_at
@@ -452,7 +456,7 @@ func lockUsableSubscription(
 		  AND status = 'active'
 		  AND starts_at <= now()
 		  AND expires_at > now()
-		  AND (data_limit_bytes = 0 OR used_bytes < data_limit_bytes)
+		  AND (unlimited_bandwidth OR used_bytes < data_limit_bytes)
 		ORDER BY starts_at DESC
 		LIMIT 1
 		FOR UPDATE
@@ -463,6 +467,7 @@ func lockUsableSubscription(
 		&state.ID,
 		&state.PlanCode,
 		&state.DataLimitBytes,
+        &state.UnlimitedBandwidth,
 		&state.UsedBytes,
 		&state.StartsAt,
 		&state.ExpiresAt,
