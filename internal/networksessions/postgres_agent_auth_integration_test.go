@@ -49,6 +49,13 @@ func TestAgentReportAuthenticationPostgres(t *testing.T) {
  if got:=call(agentID,token,`{"sessions":[]}`);got!=http.StatusBadRequest {t.Fatalf("empty batch: %d",got)}
  if got:=call(agentID,token,`{"sessions":[],"unexpected":true}`);got!=http.StatusBadRequest {t.Fatalf("unknown field: %d",got)}
  if got:=call(agentID,token,`{"sessions":[{"sessionId":"x","clientIp":"not-an-ip","mode":"sni","protocol":"tcp"}]}`);got!=http.StatusBadRequest {t.Fatalf("invalid report: %d",got)}
+ // An authenticated SNI report with no active entitlement must fail
+ // closed: the agent cannot choose an owner for an arbitrary client IP.
+ now:=time.Now().UTC().Format(time.RFC3339Nano)
+ report:=`{"sessions":[{"sessionId":"unauthorized-owner","clientIp":"192.0.2.44","mode":"sni","protocol":"tcp","connectedAt":"`+now+`","lastActivityAt":"`+now+`","uploadBytes":0,"downloadBytes":0}]}`
+ if got:=call(agentID,token,report);got!=http.StatusConflict {
+  t.Fatalf("SNI report without entitlement must be rejected: %d",got)
+ }
  var count int
  if err:=db.QueryRow(ctx,`SELECT count(*) FROM network_sessions WHERE agent_id=$1`,agentID).Scan(&count);err!=nil {t.Fatal(err)}
  if count!=0 {t.Fatalf("invalid reports created %d sessions",count)}
