@@ -2,6 +2,7 @@ package networksessions
 
 import (
  "context"
+ "github.com/go-chi/chi/v5"
  "crypto/sha256"
  "net/http"
  "net/http/httptest"
@@ -114,6 +115,36 @@ func TestPostgresConcurrentPendingDisconnects(t *testing.T) {
  var attributedUser,attributedSubscription uuid.UUID
  if err:=db.QueryRow(ctx,`SELECT user_id,subscription_id FROM network_sessions WHERE agent_id=$1 AND agent_session_id=$2`,agent,"http-success-"+suffix).Scan(&attributedUser,&attributedSubscription);err!=nil {t.Fatal(err)}
  if attributedUser!=userID || attributedSubscription!=subscriptionID {t.Fatal("authenticated SNI report attribution mismatch")}
+ // Submit an administrator command, poll as the authenticated agent,
+ // then acknowledge the exact agent-local SNI session.
+ var httpSessionID uuid.UUID
+ if err:=db.QueryRow(ctx,`SELECT id FROM network_sessions WHERE agent_id=$1 AND agent_session_id=$2`,agent,"http-success-"+suffix).Scan(&httpSessionID);err!=nil {t.Fatal(err)}
+ repository:=&Repository{DB:db}
+ command,err:=repository.SubmitDisconnect(ctx,httpSessionID,userID,"integration disconnect","http-"+suffix)
+ if err!=nil {t.Fatalf("submit disconnect: %v",err)}
+ pollReq:=httptest.NewRequest(http.MethodGet,"/api/v1/internal/network/sessions/commands",nil)
+ pollReq.Header.Set("X-Network-Agent-ID",agent)
+ pollReq.Header.Set("Authorization","Bearer "+token)
+ pollRec:=httptest.NewRecorder()
+ (&AgentHandler{Repository:repository}).Commands(pollRec,pollReq)
+ if pollRec.Code!=http.StatusOK {t.Fatalf("agent poll: %d: %s",pollRec.Code,pollRec.Body.String())}
+ if !strings.Contains(pollRec.Body.String(),command.ID.String()) || !strings.Contains(pollRec.Body.String(),"http-success-"+suffix) {
+  t.Fatalf("poll response missing command or target session: %s",pollRec.Body.String())
+ }
+ ackReq:=httptest.NewRequest(http.MethodPost,"/api/v1/internal/network/sessions/commands/"+command.ID.String()+"/ack",strings.NewReader(`{"status":"succeeded"}`))
+ ackReq.Header.Set("X-Network-Agent-ID",agent)
+ ackReq.Header.Set("Authorization","Bearer "+token)
+ // Chi's URL parameter is normally populated by the production router.
+ ackCtx:=chi.NewRouteContext()
+ ackCtx.URLParams.Add("commandID",command.ID.String())
+ ackReq=ackReq.WithContext(context.WithValue(ackReq.Context(),chi.RouteCtxKey,ackCtx))
+ ackRec:=httptest.NewRecorder()
+ (&AgentHandler{Repository:repository}).Acknowledge(ackRec,ackReq)
+ if ackRec.Code!=http.StatusOK {t.Fatalf("agent acknowledgement: %d: %s",ackRec.Code,ackRec.Body.String())}
+ var sessionState,commandState string
+ if err:=db.QueryRow(ctx,`SELECT state FROM network_sessions WHERE id=$1`,httpSessionID).Scan(&sessionState);err!=nil {t.Fatal(err)}
+ if err:=db.QueryRow(ctx,`SELECT state FROM network_disconnect_commands WHERE id=$1`,command.ID).Scan(&commandState);err!=nil {t.Fatal(err)}
+ if sessionState!="disconnected" || commandState!="succeeded" {t.Fatalf("disconnect state mismatch: session=%s command=%s",sessionState,commandState)}
  reportTx,err:=db.Begin(ctx)
  if err!=nil {t.Fatal(err)}
  defer reportTx.Rollback(context.Background())
