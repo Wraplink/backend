@@ -28,7 +28,7 @@ func TestPostgresConcurrentPendingDisconnects(t *testing.T) {
  suffix:=id.String()
  agent:="concurrent-agent-"+suffix
  ip:=fmt.Sprintf("198.19.%d.%d",id[0],id[1])
- attempts:=int(id[2])<<24|int(id[3])<<16|int(id[4])<<8|int(id[5])
+ attempts:=(int(id[2])<<24|int(id[3])<<16|int(id[4])<<8|int(id[5])) & 0x7fffffff
  var userID,planID,subscriptionID,sessionID uuid.UUID
  tx,err:=db.Begin(ctx)
  if err!=nil {t.Fatal(err)}
