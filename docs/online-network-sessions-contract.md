@@ -45,11 +45,13 @@ or DNS queries. Session IDs must not be reused. Reported counters must be
 nonnegative and monotonic; timestamps must be valid and ordered. Backend validates the complete payload before opening a database transaction.
 Ownership lookups and session upserts then run in the same PostgreSQL
 transaction; a rejected observation rolls back all writes from that batch.
-Database integration tests must still verify rollback and concurrency behavior.
+PostgreSQL integration tests cover transactional rollback, concurrent pending-command uniqueness, agent authentication, SNI ownership attribution, and the authenticated disconnect acknowledgement lifecycle.
 
 The merged Edge Agent contains an opt-in authenticated polling client and periodic
-active SNI session snapshot reporting. Lifecycle end events, durable delivery,
-counter reconciliation, and end-to-end testing remain outstanding.
+active SNI session snapshot reporting (currently every 10 seconds). Lifecycle end
+events, durable delivery, counter reconciliation, and live end-to-end testing
+remain outstanding. The agent requires a configured HTTPS backend URL and an
+agent ID matching the registered `network_agent_health.id`.
 
 ## Disconnect commands
 
