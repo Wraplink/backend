@@ -53,8 +53,9 @@ func TestPostgresConcurrentPendingDisconnects(t *testing.T) {
   cleanupCtx,done:=context.WithTimeout(context.Background(),10*time.Second)
   defer done()
   for _,q:=range []struct{sql string;arg any}{
-   {"DELETE FROM network_disconnect_commands WHERE network_session_id=$1",sessionID},
+   {"DELETE FROM network_disconnect_commands WHERE agent_id=$1",agent},
    {"DELETE FROM network_sessions WHERE agent_id=$1",agent},
+   {"DELETE FROM network_entitlements WHERE subscription_id=$1",subscriptionID},
    {"DELETE FROM network_agent_health WHERE id=$1",agent},
    {"DELETE FROM user_subscriptions WHERE id=$1",subscriptionID},
    {"DELETE FROM plans WHERE id=$1",planID},
