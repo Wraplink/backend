@@ -73,6 +73,15 @@ func TestPostgresOnlyOnePendingDisconnectPerSession(t *testing.T) {
  var pending,total int
  if err:=tx.QueryRow(ctx,`SELECT count(*) FILTER (WHERE state='pending'),count(*) FROM network_disconnect_commands WHERE network_session_id=$1`,sessionID).Scan(&pending,&total);err!=nil {t.Fatal(err)}
  if pending!=1 || total!=2 {t.Fatal(fmt.Sprintf("expected 1 pending of 2 commands, got %d of %d",pending,total))}
+ // A late acknowledgement must not bypass the pending-command state
+ // machine. The partial index should remain occupied until finalization.
+ if _,err:=tx.Exec(ctx,"SAVEPOINT duplicate_pending_after_retry");err!=nil {t.Fatal(err)}
+ err=insert("third-"+suffix)
+ var retryErr *pgconn.PgError
+ if !errors.As(err,&retryErr) || retryErr.Code!="23505" {
+  t.Fatalf("expected pending-command conflict after retry, got %v",err)
+ }
+ if _,err:=tx.Exec(ctx,"ROLLBACK TO SAVEPOINT duplicate_pending_after_retry");err!=nil {t.Fatal(err)}
  // Explicitly roll back and verify no fixture escaped the transaction.
  if err:=tx.Rollback(ctx);err!=nil {t.Fatal(err)}
  var persisted int
