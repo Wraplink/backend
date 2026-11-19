@@ -2,6 +2,10 @@ package networksessions
 
 import (
  "context"
+ "crypto/sha256"
+ "net/http"
+ "net/http/httptest"
+ "strings"
  "errors"
  "fmt"
  "os"
@@ -49,7 +53,7 @@ func TestPostgresConcurrentPendingDisconnects(t *testing.T) {
   defer done()
   for _,q:=range []struct{sql string;arg any}{
    {"DELETE FROM network_disconnect_commands WHERE network_session_id=$1",sessionID},
-   {"DELETE FROM network_sessions WHERE id=$1",sessionID},
+   {"DELETE FROM network_sessions WHERE agent_id=$1",agent},
    {"DELETE FROM network_agent_health WHERE id=$1",agent},
    {"DELETE FROM user_subscriptions WHERE id=$1",subscriptionID},
    {"DELETE FROM plans WHERE id=$1",planID},
@@ -94,6 +98,22 @@ func TestPostgresConcurrentPendingDisconnects(t *testing.T) {
  if _,err:=db.Exec(ctx,`UPDATE user_subscriptions SET starts_at=now()-interval '1 hour', expires_at=now()+interval '1 day' WHERE id=$1`,subscriptionID);err!=nil {t.Fatal(err)}
  if _,err:=db.Exec(ctx,`INSERT INTO network_entitlements(user_id,subscription_id,client_ip,status)
  VALUES($1,$2,$3,'active')`,userID,subscriptionID,ip);err!=nil {t.Fatal(err)}
+ // Exercise the real authenticated HTTP handler using the committed
+ // entitlement fixture, not only the lower-level repository helper.
+ token:="session-report-"+suffix
+ digest:=sha256.Sum256([]byte(token))
+ if _,err:=db.Exec(ctx,`INSERT INTO network_session_agent_credentials(agent_id,token_sha256,enabled) VALUES($1,$2,true)`,agent,digest[:]);err!=nil {t.Fatal(err)}
+ httpNow:=time.Now().UTC().Add(-time.Second).Format(time.RFC3339Nano)
+ payload:=fmt.Sprintf(`{"sessions":[{"sessionId":"http-success-%s","clientIp":"%s","mode":"sni","protocol":"tcp","connectedAt":"%s","lastActivityAt":"%s","uploadBytes":0,"downloadBytes":0}]}`,suffix,ip,httpNow,httpNow)
+ req:=httptest.NewRequest(http.MethodPost,"/api/v1/internal/network/sessions/report",strings.NewReader(payload))
+ req.Header.Set("X-Network-Agent-ID",agent)
+ req.Header.Set("Authorization","Bearer "+token)
+ recorder:=httptest.NewRecorder()
+ (&AgentHandler{Repository:&Repository{DB:db}}).Report(recorder,req)
+ if recorder.Code!=http.StatusOK {t.Fatalf("authenticated SNI report: status %d: %s",recorder.Code,recorder.Body.String())}
+ var attributedUser,attributedSubscription uuid.UUID
+ if err:=db.QueryRow(ctx,`SELECT user_id,subscription_id FROM network_sessions WHERE agent_id=$1 AND agent_session_id=$2`,agent,"http-success-"+suffix).Scan(&attributedUser,&attributedSubscription);err!=nil {t.Fatal(err)}
+ if attributedUser!=userID || attributedSubscription!=subscriptionID {t.Fatal("authenticated SNI report attribution mismatch")}
  reportTx,err:=db.Begin(ctx)
  if err!=nil {t.Fatal(err)}
  defer reportTx.Rollback(context.Background())
