@@ -139,6 +139,15 @@ func TestPostgresConcurrentPendingDisconnects(t *testing.T) {
  ackCtx:=chi.NewRouteContext()
  ackCtx.URLParams.Add("commandID",command.ID.String())
  ackReq=ackReq.WithContext(context.WithValue(ackReq.Context(),chi.RouteCtxKey,ackCtx))
+ // The command belongs only to its provisioned agent. A forged agent
+ // header cannot acknowledge it, even with a valid token for this agent.
+ wrongAck:=httptest.NewRequest(http.MethodPost,"/api/v1/internal/network/sessions/commands/"+command.ID.String()+"/ack",strings.NewReader(`{"status":"succeeded"}`))
+ wrongAck.Header.Set("X-Network-Agent-ID","another-agent")
+ wrongAck.Header.Set("Authorization","Bearer "+token)
+ wrongAck=wrongAck.WithContext(context.WithValue(wrongAck.Context(),chi.RouteCtxKey,ackCtx))
+ wrongRec:=httptest.NewRecorder()
+ (&AgentHandler{Repository:repository}).Acknowledge(wrongRec,wrongAck)
+ if wrongRec.Code!=http.StatusUnauthorized {t.Fatalf("wrong agent acknowledgement: %d",wrongRec.Code)}
  ackRec:=httptest.NewRecorder()
  (&AgentHandler{Repository:repository}).Acknowledge(ackRec,ackReq)
  if ackRec.Code!=http.StatusOK {t.Fatalf("agent acknowledgement: %d: %s",ackRec.Code,ackRec.Body.String())}
