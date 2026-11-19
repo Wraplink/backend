@@ -88,4 +88,30 @@ func TestPostgresConcurrentPendingDisconnects(t *testing.T) {
  var pending int
  if err:=db.QueryRow(ctx,`SELECT count(*) FROM network_disconnect_commands WHERE network_session_id=$1 AND state='pending'`,sessionID).Scan(&pending);err!=nil {t.Fatal(err)}
  if pending!=1 {t.Fatalf("expected exactly one persisted pending command, got %d",pending)}
+ // The HTTP report handler uses the same transaction-scoped upsert helper.
+ // Prove that a successful first write is undone when a later batch member
+ // has no matching entitlement (a failure discovered after validation).
+ if _,err:=db.Exec(ctx,`UPDATE user_subscriptions SET starts_at=now()-interval '1 hour', expires_at=now()+interval '1 day' WHERE id=$1`,subscriptionID);err!=nil {t.Fatal(err)}
+ if _,err:=db.Exec(ctx,`INSERT INTO network_entitlements(user_id,subscription_id,client_ip,status)
+ VALUES($1,$2,$3,'active')`,userID,subscriptionID,ip);err!=nil {t.Fatal(err)}
+ reportTx,err:=db.Begin(ctx)
+ if err!=nil {t.Fatal(err)}
+ defer reportTx.Rollback(context.Background())
+ first:=PersistentSession{
+  AgentID:agent,AgentSessionID:"batch-first-"+suffix,
+  UserID:userID,SubscriptionID:subscriptionID,ClientIP:ip,
+  Mode:"sni",Protocol:"tcp",ConnectedAt:now,LastActivityAt:now,
+  LastReportAt:time.Now().UTC(),UploadBytes:0,DownloadBytes:0,
+ }
+ if _,err:=upsertSession(ctx,reportTx,first);err!=nil {t.Fatalf("first batch write: %v",err)}
+ second:=first
+ second.AgentSessionID="batch-second-"+suffix
+ second.SubscriptionID=uuid.New() // No matching entitlement.
+ if _,err:=upsertSession(ctx,reportTx,second);err==nil {
+  t.Fatal("expected second batch write to reject missing entitlement")
+ }
+ if err:=reportTx.Rollback(ctx);err!=nil {t.Fatal(err)}
+ var rolledBack int
+ if err:=db.QueryRow(ctx,`SELECT count(*) FROM network_sessions WHERE agent_id=$1 AND agent_session_id=$2`,agent,first.AgentSessionID).Scan(&rolledBack);err!=nil {t.Fatal(err)}
+ if rolledBack!=0 {t.Fatal("first batch session persisted despite transaction rollback")}
 }
