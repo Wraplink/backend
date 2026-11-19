@@ -28,12 +28,13 @@ func TestPostgresConcurrentPendingDisconnects(t *testing.T) {
  suffix:=id.String()
  agent:="concurrent-agent-"+suffix
  ip:=fmt.Sprintf("198.19.%d.%d",id[0],id[1])
+ attempts:=int(id[2])<<24|int(id[3])<<16|int(id[4])<<8|int(id[5])
  var userID,planID,subscriptionID,sessionID uuid.UUID
  tx,err:=db.Begin(ctx)
  if err!=nil {t.Fatal(err)}
  defer tx.Rollback(context.Background())
  if err:=tx.QueryRow(ctx,`INSERT INTO users(email,full_name,last_login_ip,failed_login_attempts)
- VALUES($1,'Concurrent Session Test',$2,0) RETURNING id`,"concurrent-"+suffix+"@example.invalid",ip).Scan(&userID);err!=nil {t.Fatal(err)}
+ VALUES($1,'Concurrent Session Test',$2,$3) RETURNING id`,"concurrent-"+suffix+"@example.invalid",ip,attempts).Scan(&userID);err!=nil {t.Fatal(err)}
  if err:=tx.QueryRow(ctx,`INSERT INTO plans(code,name,price_minor,currency,duration_days,data_limit_bytes)
  VALUES($1,'Concurrent Session Test',0,'USD',1,1024) RETURNING id`,"concurrent-"+suffix).Scan(&planID);err!=nil {t.Fatal(err)}
  if err:=tx.QueryRow(ctx,`INSERT INTO user_subscriptions(user_id,plan_id,plan_code,plan_name,price_minor,currency,duration_days,data_limit_bytes,status)
@@ -43,7 +44,7 @@ func TestPostgresConcurrentPendingDisconnects(t *testing.T) {
  if err:=tx.QueryRow(ctx,`INSERT INTO network_sessions(agent_id,agent_session_id,user_id,subscription_id,client_ip,mode,protocol,connected_at,last_activity_at,last_report_at)
  VALUES($1,$2,$3,$4,$5,'sni','tcp',$6,$6,$6) RETURNING id`,agent,"concurrent-"+suffix,userID,subscriptionID,ip,now).Scan(&sessionID);err!=nil {t.Fatal(err)}
  if err:=tx.Commit(ctx);err!=nil {t.Fatal(err)}
- t.Cleanup(func(){
+ defer func(){
   cleanupCtx,done:=context.WithTimeout(context.Background(),10*time.Second)
   defer done()
   for _,q:=range []struct{sql string;arg any}{
@@ -56,7 +57,7 @@ func TestPostgresConcurrentPendingDisconnects(t *testing.T) {
   } {
    if _,err:=db.Exec(cleanupCtx,q.sql,q.arg);err!=nil {t.Errorf("fixture cleanup: %v",err)}
   }
- })
+ }()
  const workers=12
  var wg sync.WaitGroup
  outcomes:=make(chan error,workers)
