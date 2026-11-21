@@ -20,6 +20,7 @@ func TestHTTPRequiresAuthenticatedUser(t *testing.T) {
   {"PATCH","/"+uuid.NewString()},{"DELETE","/"+uuid.NewString()},
   {"POST","/"+uuid.NewString()+"/verify"},
   {"GET","/subscriptions/"+uuid.NewString()+"/sync"},
+  {"GET","/subscriptions/"+uuid.NewString()+"/selection"},
   {"POST","/subscriptions/"+uuid.NewString()+"/sync/retry"},
  }{
   r:=httptest.NewRequest(tc.method,tc.path,strings.NewReader("{}"))
@@ -105,5 +106,14 @@ func TestSyncStatusDistinguishesDesiredFromApplied(t *testing.T){
  if err!=nil{t.Fatal(err)}
  if !strings.Contains(string(encoded),`"appliedPublicIpId":null`){
   t.Fatalf("unapplied IP must be null: %s",encoded)
+ }
+}
+
+func TestSubscriptionSelectionNullPreferenceJSON(t *testing.T){
+ selection:=SubscriptionSelection{SubscriptionID:uuid.New()}
+ data,err:=json.Marshal(selection)
+ if err!=nil{t.Fatal(err)}
+ if !strings.Contains(string(data),`"publicIpId":null`) || !strings.Contains(string(data),`"ipAddress":null`){
+  t.Fatalf("missing selection must return null fields: %s",data)
  }
 }
