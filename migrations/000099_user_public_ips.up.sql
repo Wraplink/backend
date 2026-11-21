@@ -35,7 +35,7 @@ CREATE TABLE user_public_ip_events (
  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  public_ip_id UUID REFERENCES user_public_ips(id) ON DELETE SET NULL,
  ip_address INET NOT NULL,
- event_type VARCHAR(32) NOT NULL CHECK (event_type IN ('added','verified','activated','deactivated','removed','renamed')),
+ event_type VARCHAR(32) NOT NULL CHECK (event_type IN ('added','verified','selected','activated','deactivated','removed','renamed')),
  subscription_id UUID,
  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
