@@ -30,7 +30,7 @@ func (s Store) GetSyncStatus(ctx context.Context, userID, subscriptionID uuid.UU
  err := s.Pool.QueryRow(ctx, `
   SELECT subscription.id, sync.desired_public_ip_id,
          sync.applied_public_ip_id, COALESCE(sync.revision,0), COALESCE(sync.applied_revision,0), COALESCE(sync.status,'unconfigured'), sync.updated_at,
-         (sync.status = 'failed' AND COALESCE(sync.last_error,'') LIKE 'sync attempt expired;%')
+         (COALESCE(sync.status,'') = 'failed' AND COALESCE(sync.last_error,'') LIKE 'sync attempt expired;%')
   FROM user_subscriptions AS subscription
   LEFT JOIN subscription_public_ip_sync AS sync
     ON sync.subscription_id = subscription.id
