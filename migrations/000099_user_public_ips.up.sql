@@ -40,3 +40,20 @@ CREATE TABLE user_public_ip_events (
  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX user_public_ip_events_by_user ON user_public_ip_events (user_id, created_at DESC);
+
+-- Durable intent for network reconciliation. A selection is NOT an applied
+-- entitlement until the control plane acknowledges the revision.
+CREATE TABLE subscription_public_ip_sync (
+ subscription_id UUID PRIMARY KEY REFERENCES user_subscriptions(id) ON DELETE CASCADE,
+ desired_public_ip_id UUID NOT NULL REFERENCES user_public_ips(id),
+ revision BIGINT NOT NULL DEFAULT 1 CHECK (revision > 0),
+ applied_revision BIGINT NOT NULL DEFAULT 0 CHECK (applied_revision >= 0),
+ status VARCHAR(16) NOT NULL DEFAULT 'pending'
+  CHECK (status IN ('pending','applying','applied','failed')),
+ last_error TEXT,
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ CONSTRAINT subscription_public_ip_sync_revision CHECK (applied_revision <= revision)
+);
+CREATE INDEX subscription_public_ip_sync_pending
+ ON subscription_public_ip_sync (updated_at)
+ WHERE status IN ('pending','failed');
