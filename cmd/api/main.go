@@ -13,6 +13,7 @@ import (
 	"backend/internal/networkaccess"
  "backend/internal/networksessions"
  "backend/internal/requestcontext"
+ "backend/internal/publicip"
  "github.com/google/uuid"
  "backend/internal/routeinventory"
 	"backend/internal/networkentitlement"
@@ -282,6 +283,19 @@ func main() {
   return id,nil
  }}
 
+ publicIPHandler := &publicip.Handler{
+  Store:publicip.Store{Pool:db},
+  AuthenticatedUserID:func(r *http.Request)(uuid.UUID,bool){
+   return requestcontext.UserID(r.Context())
+  },
+  ObservedClientIP:func(r *http.Request)(string,error){
+   ip:=trustedProxy.ClientIP(r)
+   if ip==nil{return "",publicip.ErrInvalidPublicIPv4}
+   validated,err:=publicip.Parse(ip.String())
+   if err!=nil{return "",err}
+   return validated.String(),nil
+  },
+ }
 	router := httpserver.NewRouter(
 		plansHandler,
         supportHandler,
@@ -316,6 +330,7 @@ func main() {
 		logger,
         onlineHandler,
         &networksessions.AgentHandler{Repository:onlineRepository},
+        publicIPHandler,
 	)
 
 	server := &http.Server{
