@@ -35,3 +35,20 @@ func (s Store) RetryFailedSync(ctx context.Context,subscriptionID uuid.UUID,revi
  if err!=nil{return false,fmt.Errorf("retry failed IP sync: %w",err)}
  return tag.RowsAffected()==1,nil
 }
+
+// RetryFailedSyncForUser retries only a failed revision owned by the
+// authenticated user. The revision guard prevents stale browser requests
+// from requeuing a newer selection.
+func (s Store) RetryFailedSyncForUser(ctx context.Context,userID,subscriptionID uuid.UUID,revision int64)(bool,error){
+ if revision<1{return false,fmt.Errorf("invalid sync revision")}
+ tag,err:=s.Pool.Exec(ctx,`
+  UPDATE subscription_public_ip_sync AS sync
+  SET status='pending',attempt_id=NULL,last_error=NULL,updated_at=now()
+  FROM user_subscriptions AS subscription
+  WHERE sync.subscription_id=subscription.id
+    AND subscription.id=$1 AND subscription.user_id=$2
+    AND sync.revision=$3 AND sync.status='failed'
+ `,subscriptionID,userID,revision)
+ if err!=nil{return false,fmt.Errorf("retry owned IP sync: %w",err)}
+ return tag.RowsAffected()==1,nil
+}
