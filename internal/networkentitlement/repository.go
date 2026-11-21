@@ -105,6 +105,25 @@ func (r *Repository) activateOnce(
 		}
 	}
 
+	// Respect explicit removal of a previously saved public IP. This check
+	// runs after the per-IP advisory lock, shared with publicip.Remove,
+	// so a concurrent deletion cannot slip between validation and activation.
+	// Re-adding the same address creates a new non-removed record and
+	// restores eligibility after the user verifies it through the IP API.
+	var removedSavedIP bool
+	err = tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM user_public_ips
+			WHERE user_id=$1 AND ip_address=$2::inet AND removed_at IS NOT NULL
+		) AND NOT EXISTS (
+			SELECT 1 FROM user_public_ips
+			WHERE user_id=$1 AND ip_address=$2::inet AND removed_at IS NULL
+              AND verified_at IS NOT NULL
+		)
+	`, userID, clientIP.To4().String()).Scan(&removedSavedIP)
+	if err != nil { return nil, fmt.Errorf("check removed public IP: %w", err) }
+	if removedSavedIP { return nil, ErrInvalidClientIP }
+
 	// Promote a reserved plan when the current plan has expired or exhausted its quota.
 	if _, err := tx.Exec(ctx, "SELECT promote_user_subscription($1)", userID); err != nil {
 		return nil, fmt.Errorf("reconcile subscription before connection: %w", err)
