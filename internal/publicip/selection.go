@@ -29,12 +29,13 @@ func (s Store) SelectVerified(ctx context.Context, userID, subscriptionID, addre
  if errors.Is(err, pgx.ErrNoRows) { return ErrSubscriptionNotOwned }
  if err != nil { return fmt.Errorf("load subscription: %w", err) }
 
+ var selectedAddress string
  var verified bool
  err = tx.QueryRow(ctx, `
-  SELECT verified_at IS NOT NULL
+  SELECT host(ip_address), verified_at IS NOT NULL
   FROM user_public_ips
   WHERE id=$1 AND user_id=$2 AND removed_at IS NULL FOR UPDATE
- `, addressID, userID).Scan(&verified)
+ `, addressID, userID).Scan(&selectedAddress, &verified)
  if errors.Is(err, pgx.ErrNoRows) { return ErrNotOwned }
  if err != nil { return fmt.Errorf("load selected IP: %w", err) }
  if !verified { return ErrUnverified }
@@ -46,5 +47,12 @@ func (s Store) SelectVerified(ctx context.Context, userID, subscriptionID, addre
   DO UPDATE SET public_ip_id=EXCLUDED.public_ip_id, updated_at=now()
  `, subscriptionID, userID, addressID)
  if err != nil { return fmt.Errorf("save selected IP: %w", err) }
- return tx.Commit(ctx)
+ _, err = tx.Exec(ctx, `
+  INSERT INTO user_public_ip_events
+    (id, user_id, public_ip_id, ip_address, event_type, subscription_id)
+  VALUES ($1, $2, $3, $4::inet, 'activated', $5)
+ `, uuid.New(), userID, addressID, selectedAddress, subscriptionID)
+ if err != nil { return fmt.Errorf("record IP selection: %w", err) }
+ if err := tx.Commit(ctx); err != nil { return fmt.Errorf("commit IP selection: %w", err) }
+ return nil
 }
