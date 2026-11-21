@@ -54,7 +54,18 @@ CREATE TABLE subscription_public_ip_sync (
   CHECK (status IN ('pending','applying','applied','failed')),
  last_error TEXT,
  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
- CONSTRAINT subscription_public_ip_sync_revision CHECK (applied_revision <= revision)
+ CONSTRAINT subscription_public_ip_sync_revision CHECK (applied_revision <= revision),
+ CONSTRAINT subscription_public_ip_sync_attempt_state CHECK (
+  (status = 'applying' AND attempt_id IS NOT NULL) OR
+  (status <> 'applying' AND attempt_id IS NULL)
+ ),
+ CONSTRAINT subscription_public_ip_sync_applied_identity CHECK (
+  (applied_revision = 0 AND applied_public_ip_id IS NULL) OR
+  (applied_revision > 0 AND applied_public_ip_id IS NOT NULL)
+ ),
+ CONSTRAINT subscription_public_ip_sync_applied_state CHECK (
+  status <> 'applied' OR applied_revision = revision
+ )
 );
 CREATE INDEX subscription_public_ip_sync_pending
  ON subscription_public_ip_sync (updated_at)
