@@ -56,7 +56,7 @@ func (s Store) AckSync(ctx context.Context,job SyncJob) (bool,error) {
   UPDATE subscription_public_ip_sync
   SET applied_revision=$3,status='applied',attempt_id=NULL,last_error=NULL,updated_at=now()
   WHERE subscription_id=$1 AND desired_public_ip_id=$2
-    AND revision=$3 AND status='applying' AND attempt_id=$5
+    AND revision=$3 AND status='applying' AND attempt_id=$4
  `,job.SubscriptionID,job.PublicIPID,job.Revision,job.AttemptID)
  if err!=nil{return false,fmt.Errorf("acknowledge IP sync: %w",err)}
  return tag.RowsAffected()==1,nil
@@ -70,7 +70,7 @@ func (s Store) FailSync(ctx context.Context,job SyncJob,reason string)(bool,erro
   UPDATE subscription_public_ip_sync
   SET status='failed',attempt_id=NULL,last_error=$4,updated_at=now()
   WHERE subscription_id=$1 AND desired_public_ip_id=$2
-    AND revision=$3 AND status='applying'
+    AND revision=$3 AND status='applying' AND attempt_id=$5
  `,job.SubscriptionID,job.PublicIPID,job.Revision,reason,job.AttemptID)
  if err!=nil{return false,fmt.Errorf("fail IP sync: %w",err)}
  return tag.RowsAffected()==1,nil
