@@ -30,6 +30,7 @@ func (h Handler) Routes() http.Handler {
  r.Post("/",h.add)
  r.Get("/history",h.history)
  r.Get("/observed",h.observed)
+ r.Get("/subscriptions/{subscriptionID}/selection",h.subscriptionSelection)
  r.Get("/subscriptions/{subscriptionID}/sync",h.syncStatus)
  r.Post("/subscriptions/{subscriptionID}/sync/retry",h.retrySync)
  r.Patch("/{id}",h.rename)
@@ -150,4 +151,13 @@ func (h Handler) retrySync(w http.ResponseWriter,r *http.Request){
  if err!=nil{writeError(w,err);return}
  if !retried{http.Error(w,"failed revision not found or no longer retryable",http.StatusConflict);return}
  w.WriteHeader(http.StatusAccepted)
+}
+
+func (h Handler) subscriptionSelection(w http.ResponseWriter,r *http.Request){
+ user,ok:=h.user(w,r);if !ok{return}
+ subscriptionID,err:=uuid.Parse(chi.URLParam(r,"subscriptionID"))
+ if err!=nil{http.Error(w,"invalid subscription ID",http.StatusBadRequest);return}
+ selection,err:=h.Store.GetSubscriptionSelection(r.Context(),user,subscriptionID)
+ if err!=nil{writeError(w,err);return}
+ respond(w,http.StatusOK,selection)
 }
