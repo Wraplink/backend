@@ -27,6 +27,8 @@ func (h Handler) Routes() http.Handler {
  r:=chi.NewRouter()
  r.Get("/",h.list)
  r.Post("/",h.add)
+ r.Get("",h.list)
+ r.Post("",h.add)
  r.Get("/history",h.history)
  r.Get("/observed",h.observed)
  r.Patch("/{id}",h.rename)
