@@ -66,6 +66,8 @@ func pathID(w http.ResponseWriter,r *http.Request)(uuid.UUID,bool){
 func writeError(w http.ResponseWriter,err error){
  switch{
  case errors.Is(err,ErrNotOwned):http.Error(w,"IP not found",http.StatusNotFound)
+ case errors.Is(err,ErrSubscriptionNotOwned):http.Error(w,"subscription not found",http.StatusNotFound)
+ case errors.Is(err,ErrUnverified):http.Error(w,"verify this IP before selection",http.StatusConflict)
  case errors.Is(err,ErrActiveAddress):http.Error(w,err.Error(),http.StatusConflict)
  case errors.Is(err,ErrDuplicateAddress):http.Error(w,err.Error(),http.StatusConflict)
  case errors.Is(err,ErrInvalidPublicIPv4),errors.Is(err,ErrInvalidLabel),errors.Is(err,ErrAddressMismatch):http.Error(w,err.Error(),http.StatusBadRequest)
