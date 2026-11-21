@@ -66,3 +66,16 @@ func TestRetrySyncRejectsInvalidRevisionBeforeDatabase(t *testing.T){
   if rec.Code!=http.StatusBadRequest{t.Errorf("body=%s status=%d want 400",body,rec.Code)}
  }
 }
+
+func TestPublicIPDomainErrorStatus(t *testing.T){
+ for _,tc:=range []struct{err error;status int}{
+  {ErrNotOwned,http.StatusNotFound},
+  {ErrSubscriptionNotOwned,http.StatusNotFound},
+  {ErrUnverified,http.StatusConflict},
+  {ErrActiveAddress,http.StatusConflict},
+ }{
+  w:=httptest.NewRecorder()
+  writeError(w,tc.err)
+  if w.Code!=tc.status{t.Errorf("error=%v got=%d want=%d",tc.err,w.Code,tc.status)}
+ }
+}
