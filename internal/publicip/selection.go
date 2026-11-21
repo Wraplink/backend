@@ -11,6 +11,7 @@ import (
 
 var ErrUnverified = errors.New("verify this IP before activation")
 var ErrSubscriptionNotOwned = errors.New("subscription not found")
+var ErrSyncInProgress = errors.New("public IP synchronization is in progress")
 
 // SelectVerified records a verified IP preference for a subscription.
 // IMPORTANT: this does not publish entitlements. Until the network sync
@@ -55,6 +56,9 @@ func (s Store) SelectVerified(ctx context.Context, userID, subscriptionID, addre
  if err==nil && desiredID==addressID {
   return nil
  }
+ // Never supersede an applying revision: its external side effects may
+ // still be in progress even if its database acknowledgement is fenced.
+ if err==nil && syncStatus=="applying" {return ErrSyncInProgress}
 
  _, err = tx.Exec(ctx, `
   INSERT INTO subscription_public_ip_selections (subscription_id, user_id, public_ip_id)
