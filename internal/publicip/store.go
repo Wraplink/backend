@@ -31,6 +31,13 @@ func (s Store) Remove(ctx context.Context, userID, addressID uuid.UUID) error {
  if errors.Is(err, pgx.ErrNoRows) { return ErrNotOwned }
  if err != nil { return fmt.Errorf("load IP: %w", err) }
 
+ // Serialize deletion with networkentitlement.Activate, which uses the
+ // same per-IP PostgreSQL advisory lock before claiming an address.
+ // Without this lock an activation could race the active-entitlement check.
+ if _,err=tx.Exec(ctx,"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",address);err!=nil{
+  return fmt.Errorf("lock IP against concurrent activation: %w",err)
+ }
+
  var active int
  err = tx.QueryRow(ctx, `
   SELECT (SELECT count(*) FROM subscription_public_ip_selections WHERE public_ip_id=$1)
