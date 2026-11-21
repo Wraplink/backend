@@ -19,6 +19,7 @@ func TestHTTPRequiresAuthenticatedUser(t *testing.T) {
   {"PATCH","/"+uuid.NewString()},{"DELETE","/"+uuid.NewString()},
   {"POST","/"+uuid.NewString()+"/verify"},
   {"GET","/subscriptions/"+uuid.NewString()+"/sync"},
+  {"POST","/subscriptions/"+uuid.NewString()+"/sync/retry"},
  }{
   r:=httptest.NewRequest(tc.method,tc.path,strings.NewReader("{}"))
   w:=httptest.NewRecorder()
@@ -53,5 +54,15 @@ func TestHTTPObservedRejectsSpoofedPrivatePeer(t *testing.T) {
  h.Routes().ServeHTTP(w,r)
  if w.Code!=http.StatusUnprocessableEntity{
   t.Fatalf("status=%d want 422",w.Code)
+ }
+}
+
+func TestRetrySyncRejectsInvalidRevisionBeforeDatabase(t *testing.T){
+ h:=Handler{AuthenticatedUserID:func(*http.Request)(uuid.UUID,bool){return uuid.New(),true}}
+ for _,body:=range []string{`{"revision":0}`,`{"revision":-1}`,`{"revision":"invalid"}`}{
+  req:=httptest.NewRequest(http.MethodPost,"/subscriptions/"+uuid.NewString()+"/sync/retry",strings.NewReader(body))
+  rec:=httptest.NewRecorder()
+  h.Routes().ServeHTTP(rec,req)
+  if rec.Code!=http.StatusBadRequest{t.Errorf("body=%s status=%d want 400",body,rec.Code)}
  }
 }
