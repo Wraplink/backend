@@ -18,6 +18,7 @@ func TestHTTPRequiresAuthenticatedUser(t *testing.T) {
   {"GET","/"},{"POST","/"},{"GET","/history"},{"GET","/observed"},
   {"PATCH","/"+uuid.NewString()},{"DELETE","/"+uuid.NewString()},
   {"POST","/"+uuid.NewString()+"/verify"},
+  {"GET","/subscriptions/"+uuid.NewString()+"/sync"},
  }{
   r:=httptest.NewRequest(tc.method,tc.path,strings.NewReader("{}"))
   w:=httptest.NewRecorder()
