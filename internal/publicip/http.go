@@ -31,6 +31,7 @@ func (h Handler) Routes() http.Handler {
  r.Get("/history",h.history)
  r.Get("/observed",h.observed)
  r.Get("/subscriptions/{subscriptionID}/sync",h.syncStatus)
+ r.Post("/subscriptions/{subscriptionID}/sync/retry",h.retrySync)
  r.Patch("/{id}",h.rename)
  r.Delete("/{id}",h.remove)
  r.Post("/{id}/verify",h.verify)
@@ -133,4 +134,17 @@ func (h Handler) syncStatus(w http.ResponseWriter,r *http.Request){
   writeError(w,err);return
  }
  respond(w,http.StatusOK,status)
+}
+
+func (h Handler) retrySync(w http.ResponseWriter,r *http.Request){
+ user,ok:=h.user(w,r);if !ok{return}
+ subscriptionID,err:=uuid.Parse(chi.URLParam(r,"subscriptionID"))
+ if err!=nil{http.Error(w,"invalid subscription ID",http.StatusBadRequest);return}
+ var request struct{Revision int64 `json:"revision"`}
+ if !decode(w,r,&request){return}
+ if request.Revision<1{http.Error(w,"invalid revision",http.StatusBadRequest);return}
+ retried,err:=h.Store.RetryFailedSyncForUser(r.Context(),user,subscriptionID,request.Revision)
+ if err!=nil{writeError(w,err);return}
+ if !retried{http.Error(w,"failed revision not found or no longer retryable",http.StatusConflict);return}
+ w.WriteHeader(http.StatusAccepted)
 }
