@@ -35,6 +35,7 @@ func (s Store) Remove(ctx context.Context, userID, addressID uuid.UUID) error {
  err = tx.QueryRow(ctx, `
   SELECT (SELECT count(*) FROM subscription_public_ip_selections WHERE public_ip_id=$1)
        + (SELECT count(*) FROM subscription_public_ip_sync WHERE applied_public_ip_id=$1)
+       + (SELECT count(*) FROM subscription_public_ip_sync WHERE desired_public_ip_id=$1 AND status IN ('pending','applying','failed'))
  `, addressID).Scan(&active)
  if err != nil { return fmt.Errorf("check active selections: %w", err) }
  if err = CanRemove(true, removed, active); err != nil { return err }
