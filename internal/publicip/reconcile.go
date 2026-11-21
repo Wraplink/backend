@@ -16,6 +16,7 @@ type SyncJob struct {
  PublicIPID uuid.UUID
  IPAddress string
  Revision int64
+ AttemptID uuid.UUID
 }
 
 // ClaimSync reserves one pending job. A separate lease/retry mechanism is
@@ -37,11 +38,12 @@ func (s Store) ClaimSync(ctx context.Context) (SyncJob, bool, error) {
  `).Scan(&job.SubscriptionID,&job.PublicIPID,&job.IPAddress,&job.Revision)
  if errors.Is(err,pgx.ErrNoRows){return SyncJob{},false,nil}
  if err!=nil{return SyncJob{},false,fmt.Errorf("select IP sync job: %w",err)}
+ job.AttemptID=uuid.New()
  _,err=tx.Exec(ctx,`
   UPDATE subscription_public_ip_sync
-  SET status='applying', updated_at=now()
+  SET status='applying', attempt_id=$3, updated_at=now()
   WHERE subscription_id=$1 AND revision=$2
- `,job.SubscriptionID,job.Revision)
+ `,job.SubscriptionID,job.Revision,job.AttemptID)
  if err!=nil{return SyncJob{},false,fmt.Errorf("claim IP sync job: %w",err)}
  if err=tx.Commit(ctx);err!=nil{return SyncJob{},false,fmt.Errorf("commit IP sync claim: %w",err)}
  return job,true,nil
@@ -52,10 +54,10 @@ func (s Store) ClaimSync(ctx context.Context) (SyncJob, bool, error) {
 func (s Store) AckSync(ctx context.Context,job SyncJob) (bool,error) {
  tag,err:=s.Pool.Exec(ctx,`
   UPDATE subscription_public_ip_sync
-  SET applied_revision=$3,status='applied',last_error=NULL,updated_at=now()
+  SET applied_revision=$3,status='applied',attempt_id=NULL,last_error=NULL,updated_at=now()
   WHERE subscription_id=$1 AND desired_public_ip_id=$2
-    AND revision=$3 AND status='applying'
- `,job.SubscriptionID,job.PublicIPID,job.Revision)
+    AND revision=$3 AND status='applying' AND attempt_id=$5
+ `,job.SubscriptionID,job.PublicIPID,job.Revision,job.AttemptID)
  if err!=nil{return false,fmt.Errorf("acknowledge IP sync: %w",err)}
  return tag.RowsAffected()==1,nil
 }
@@ -66,10 +68,10 @@ func (s Store) FailSync(ctx context.Context,job SyncJob,reason string)(bool,erro
  if len(reason)>1024 {reason=reason[:1024]}
  tag,err:=s.Pool.Exec(ctx,`
   UPDATE subscription_public_ip_sync
-  SET status='failed',last_error=$4,updated_at=now()
+  SET status='failed',attempt_id=NULL,last_error=$4,updated_at=now()
   WHERE subscription_id=$1 AND desired_public_ip_id=$2
     AND revision=$3 AND status='applying'
- `,job.SubscriptionID,job.PublicIPID,job.Revision,reason)
+ `,job.SubscriptionID,job.PublicIPID,job.Revision,reason,job.AttemptID)
  if err!=nil{return false,fmt.Errorf("fail IP sync: %w",err)}
  return tag.RowsAffected()==1,nil
 }
