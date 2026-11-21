@@ -15,6 +15,7 @@ import (
 type SyncStatus struct {
  SubscriptionID uuid.UUID `json:"subscriptionId"`
  DesiredPublicIPID uuid.UUID `json:"desiredPublicIpId"`
+ AppliedPublicIPID *uuid.UUID `json:"appliedPublicIpId"`
  Revision int64 `json:"revision"`
  AppliedRevision int64 `json:"appliedRevision"`
  Status string `json:"status"`
@@ -27,13 +28,13 @@ func (s Store) GetSyncStatus(ctx context.Context, userID, subscriptionID uuid.UU
  var result SyncStatus
  err := s.Pool.QueryRow(ctx, `
   SELECT sync.subscription_id, sync.desired_public_ip_id,
-         sync.revision, sync.applied_revision, sync.status, sync.updated_at
+         sync.applied_public_ip_id, sync.revision, sync.applied_revision, sync.status, sync.updated_at
   FROM subscription_public_ip_sync AS sync
   JOIN user_subscriptions AS subscription
     ON subscription.id = sync.subscription_id
   WHERE subscription.id=$1 AND subscription.user_id=$2
  `, subscriptionID, userID).Scan(
-  &result.SubscriptionID, &result.DesiredPublicIPID,
+  &result.SubscriptionID, &result.DesiredPublicIPID, &result.AppliedPublicIPID,
   &result.Revision, &result.AppliedRevision, &result.Status, &result.UpdatedAt,
  )
  if errors.Is(err, pgx.ErrNoRows) { return SyncStatus{}, ErrSubscriptionNotOwned }
