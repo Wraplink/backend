@@ -14,13 +14,13 @@ import (
 // selection is not proof that DNS Control or any Edge Agent applied it.
 type SyncStatus struct {
  SubscriptionID uuid.UUID `json:"subscriptionId"`
- DesiredPublicIPID uuid.UUID `json:"desiredPublicIpId"`
+ DesiredPublicIPID *uuid.UUID `json:"desiredPublicIpId"`
  AppliedPublicIPID *uuid.UUID `json:"appliedPublicIpId"`
  Revision int64 `json:"revision"`
  AppliedRevision int64 `json:"appliedRevision"`
  Status string `json:"status"`
  RequiresReconciliation bool `json:"requiresReconciliation"`
- UpdatedAt time.Time `json:"updatedAt"`
+ UpdatedAt *time.Time `json:"updatedAt"`
 }
 
 // GetSyncStatus reads a subscription's reconciliation status, scoped to owner.
@@ -28,12 +28,12 @@ type SyncStatus struct {
 func (s Store) GetSyncStatus(ctx context.Context, userID, subscriptionID uuid.UUID) (SyncStatus, error) {
  var result SyncStatus
  err := s.Pool.QueryRow(ctx, `
-  SELECT sync.subscription_id, sync.desired_public_ip_id,
-         sync.applied_public_ip_id, sync.revision, sync.applied_revision, sync.status, sync.updated_at,
+  SELECT subscription.id, sync.desired_public_ip_id,
+         sync.applied_public_ip_id, COALESCE(sync.revision,0), COALESCE(sync.applied_revision,0), COALESCE(sync.status,'unconfigured'), sync.updated_at,
          (sync.status = 'failed' AND COALESCE(sync.last_error,'') LIKE 'sync attempt expired;%')
-  FROM subscription_public_ip_sync AS sync
-  JOIN user_subscriptions AS subscription
-    ON subscription.id = sync.subscription_id
+  FROM user_subscriptions AS subscription
+  LEFT JOIN subscription_public_ip_sync AS sync
+    ON sync.subscription_id = subscription.id
   WHERE subscription.id=$1 AND subscription.user_id=$2
  `, subscriptionID, userID).Scan(
   &result.SubscriptionID, &result.DesiredPublicIPID, &result.AppliedPublicIPID,
