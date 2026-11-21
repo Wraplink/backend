@@ -31,7 +31,15 @@ func (s Store) ClaimSync(ctx context.Context) (SyncJob, bool, error) {
          host(ip.ip_address), sync.revision
   FROM subscription_public_ip_sync sync
   JOIN user_public_ips ip ON ip.id=sync.desired_public_ip_id
+  JOIN subscription_public_ip_selections selection
+    ON selection.subscription_id=sync.subscription_id
+   AND selection.public_ip_id=sync.desired_public_ip_id
+   AND selection.user_id=ip.user_id
+  JOIN user_subscriptions subscription
+    ON subscription.id=sync.subscription_id
+   AND subscription.user_id=ip.user_id
   WHERE sync.status='pending' AND ip.removed_at IS NULL
+    AND ip.verified_at IS NOT NULL
   ORDER BY sync.updated_at
   LIMIT 1
   FOR UPDATE OF sync SKIP LOCKED
