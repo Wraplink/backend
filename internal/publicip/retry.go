@@ -15,7 +15,7 @@ func (s Store) RequeueStaleSync(ctx context.Context, timeout time.Duration) (int
  if timeout < time.Minute {return 0,fmt.Errorf("sync timeout must be at least one minute")}
  tag,err:=s.Pool.Exec(ctx,`
   UPDATE subscription_public_ip_sync
-  SET status='pending', updated_at=now(),
+  SET status='pending', attempt_id=NULL, updated_at=now(),
       last_error='previous sync attempt expired; awaiting reconciliation'
   WHERE status='applying' AND updated_at < now()-($1::bigint * interval '1 microsecond')
  `,timeout.Microseconds())
@@ -29,7 +29,7 @@ func (s Store) RetryFailedSync(ctx context.Context,subscriptionID uuid.UUID,revi
  if revision<1 {return false,fmt.Errorf("invalid sync revision")}
  tag,err:=s.Pool.Exec(ctx,`
   UPDATE subscription_public_ip_sync
-  SET status='pending',last_error=NULL,updated_at=now()
+  SET status='pending',attempt_id=NULL,last_error=NULL,updated_at=now()
   WHERE subscription_id=$1 AND revision=$2 AND status='failed'
  `,subscriptionID,revision)
  if err!=nil{return false,fmt.Errorf("retry failed IP sync: %w",err)}
