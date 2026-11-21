@@ -118,6 +118,7 @@ func (r *Repository) activateOnce(
 		) AND NOT EXISTS (
 			SELECT 1 FROM user_public_ips
 			WHERE user_id=$1 AND ip_address=$2::inet AND removed_at IS NULL
+              AND verified_at IS NOT NULL
 		)
 	`, userID, clientIP.To4().String()).Scan(&removedSavedIP)
 	if err != nil { return nil, fmt.Errorf("check removed public IP: %w", err) }
