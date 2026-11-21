@@ -11,6 +11,7 @@ import (
 	"backend/internal/networkentitlement"
 	"backend/internal/payments"
 	"backend/internal/plans"
+ "backend/internal/publicip"
 	"backend/internal/security"
 	"backend/internal/subscriptions"
  "backend/internal/support"
@@ -59,9 +60,11 @@ func NewRouter(
  extras ...any,
 ) http.Handler {
  var onlineHandler *networksessions.AdminHandler
+ var publicIPHandler *publicip.Handler
  var agentHandler *networksessions.AgentHandler
  for _,extra:=range extras {
   switch h:=extra.(type) {
+  case *publicip.Handler: publicIPHandler=h
   case *networksessions.AdminHandler: onlineHandler=h
   case *networksessions.AgentHandler: agentHandler=h
   }
@@ -130,6 +133,12 @@ func NewRouter(
         r.Post("/api/v1/internal/network/dns-queries/batch", dnsRegistryHandler.IngestDNSQueries)
 	}
 
+ if publicIPHandler!=nil {
+  r.Route("/api/v1/me/public-ips",func(r chi.Router){
+   r.Use(requireAuthMiddleware)
+   r.Mount("/",publicIPHandler.Routes())
+  })
+ }
 	r.Route("/api/v1/admin/dns/domains",func(r chi.Router){
  r.Use(requireAuthMiddleware)
  r.Use(paymentsHandler.AccessAdminMiddleware)
