@@ -47,6 +47,20 @@ func (s Store) SelectVerified(ctx context.Context, userID, subscriptionID, addre
   DO UPDATE SET public_ip_id=EXCLUDED.public_ip_id, updated_at=now()
  `, subscriptionID, userID, addressID)
  if err != nil { return fmt.Errorf("save selected IP: %w", err) }
+ // Enqueue desired state in the same transaction as the preference change.
+ // The network reconciler must only acknowledge a revision after DNS and edge
+ // nodes have applied the new entitlement. Never revoke an old IP here.
+ _, err = tx.Exec(ctx, `
+  INSERT INTO subscription_public_ip_sync
+   (subscription_id, desired_public_ip_id, revision, applied_revision, status)
+  VALUES ($1, $2, 1, 0, 'pending')
+  ON CONFLICT (subscription_id) DO UPDATE
+  SET desired_public_ip_id=EXCLUDED.desired_public_ip_id,
+      revision=subscription_public_ip_sync.revision+1,
+      status='pending', last_error=NULL, updated_at=now()
+ `, subscriptionID, addressID)
+ if err != nil { return fmt.Errorf("enqueue IP sync: %w", err) }
+
  _, err = tx.Exec(ctx, `
   INSERT INTO user_public_ip_events
     (id, user_id, public_ip_id, ip_address, event_type, subscription_id)
