@@ -8,7 +8,6 @@ import (
 
  "github.com/google/uuid"
  "github.com/jackc/pgx/v5"
- "github.com/jackc/pgx/v5/pgconn"
 )
 
 // Add saves an address without granting any network access. Verification and
@@ -23,15 +22,25 @@ func (s Store) Add(ctx context.Context, userID uuid.UUID, rawIP, label string) (
  if err != nil { return uuid.Nil, fmt.Errorf("begin add IP: %w", err) }
  defer tx.Rollback(ctx)
  id := uuid.New()
- _, err = tx.Exec(ctx, `
+ // Idempotent save: concurrent requests for the same user/IP return the
+ // existing identifier rather than producing duplicate records or events.
+ err = tx.QueryRow(ctx, `
   INSERT INTO user_public_ips (id, user_id, ip_address, label)
   VALUES ($1, $2, $3::inet, $4)
- `, id, userID, ip.String(), label)
- if err != nil {
-  var pgErr *pgconn.PgError
-  if errors.As(err, &pgErr) && pgErr.Code == "23505" { return uuid.Nil, ErrDuplicateAddress }
-  return uuid.Nil, fmt.Errorf("save IP: %w", err)
+  ON CONFLICT (user_id, ip_address) WHERE removed_at IS NULL
+  DO NOTHING
+  RETURNING id
+ `, id, userID, ip.String(), label).Scan(&id)
+ if errors.Is(err, pgx.ErrNoRows) {
+  err = tx.QueryRow(ctx, `
+   SELECT id FROM user_public_ips
+   WHERE user_id=$1 AND ip_address=$2::inet AND removed_at IS NULL
+  `, userID, ip.String()).Scan(&id)
+  if err != nil { return uuid.Nil, fmt.Errorf("load existing IP: %w", err) }
+  if err := tx.Commit(ctx); err != nil { return uuid.Nil, fmt.Errorf("commit existing IP: %w", err) }
+  return id, nil
  }
+ if err != nil { return uuid.Nil, fmt.Errorf("save IP: %w", err) }
  _, err = tx.Exec(ctx, `
   INSERT INTO user_public_ip_events (id, user_id, public_ip_id, ip_address, event_type)
   VALUES ($1, $2, $3, $4::inet, 'added')
