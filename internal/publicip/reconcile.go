@@ -54,7 +54,7 @@ func (s Store) ClaimSync(ctx context.Context) (SyncJob, bool, error) {
 func (s Store) AckSync(ctx context.Context,job SyncJob) (bool,error) {
  tag,err:=s.Pool.Exec(ctx,`
   UPDATE subscription_public_ip_sync
-  SET applied_revision=$3,status='applied',attempt_id=NULL,last_error=NULL,updated_at=now()
+  SET applied_revision=$3,applied_public_ip_id=$2,status='applied',attempt_id=NULL,last_error=NULL,updated_at=now()
   WHERE subscription_id=$1 AND desired_public_ip_id=$2
     AND revision=$3 AND status='applying' AND attempt_id=$4
  `,job.SubscriptionID,job.PublicIPID,job.Revision,job.AttemptID)
