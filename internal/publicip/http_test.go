@@ -74,6 +74,7 @@ func TestPublicIPDomainErrorStatus(t *testing.T){
   {ErrSubscriptionNotOwned,http.StatusNotFound},
   {ErrUnverified,http.StatusConflict},
   {ErrActiveAddress,http.StatusConflict},
+  {ErrSyncInProgress,http.StatusConflict},
  }{
   w:=httptest.NewRecorder()
   writeError(w,tc.err)
