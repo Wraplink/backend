@@ -8,15 +8,16 @@ import (
  "github.com/google/uuid"
 )
 
-// RequeueStaleSync reclaims jobs abandoned by a crashed worker. This operation
-// is safe only when downstream entitlement application is idempotent and a
-// successful apply is confirmed before AckSync is called.
+// RequeueStaleSync quarantines expired applying jobs as failed instead of
+// automatically replaying an operation with uncertain external side effects.
+// A running downstream operation may still finish after its lease expires;
+// the control plane must enforce revision fencing before retry is enabled.
 func (s Store) RequeueStaleSync(ctx context.Context, timeout time.Duration) (int64,error) {
  if timeout < time.Minute {return 0,fmt.Errorf("sync timeout must be at least one minute")}
  tag,err:=s.Pool.Exec(ctx,`
   UPDATE subscription_public_ip_sync
-  SET status='pending', attempt_id=NULL, updated_at=now(),
-      last_error='previous sync attempt expired; awaiting reconciliation'
+  SET status='failed', attempt_id=NULL, updated_at=now(),
+      last_error='sync attempt expired; verify downstream state before retry'
   WHERE status='applying' AND updated_at < now()-($1::bigint * interval '1 microsecond')
  `,timeout.Microseconds())
  if err!=nil{return 0,fmt.Errorf("requeue stale IP sync jobs: %w",err)}
