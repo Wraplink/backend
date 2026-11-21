@@ -57,7 +57,7 @@ func (s Store) SelectVerified(ctx context.Context, userID, subscriptionID, addre
   ON CONFLICT (subscription_id) DO UPDATE
   SET desired_public_ip_id=EXCLUDED.desired_public_ip_id,
       revision=subscription_public_ip_sync.revision+1,
-      status='pending', last_error=NULL, updated_at=now()
+      status='pending', attempt_id=NULL, last_error=NULL, updated_at=now()
  `, subscriptionID, addressID)
  if err != nil { return fmt.Errorf("enqueue IP sync: %w", err) }
 
