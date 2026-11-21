@@ -31,6 +31,7 @@ func (h Handler) Routes() http.Handler {
  r.Post("",h.add)
  r.Get("/history",h.history)
  r.Get("/observed",h.observed)
+ r.Get("/subscriptions/{subscriptionID}/sync",h.syncStatus)
  r.Patch("/{id}",h.rename)
  r.Delete("/{id}",h.remove)
  r.Post("/{id}/verify",h.verify)
@@ -117,4 +118,16 @@ func (h Handler) verify(w http.ResponseWriter,r *http.Request){
  if err!=nil{http.Error(w,"client public IPv4 unavailable",http.StatusUnprocessableEntity);return}
  if err=h.Store.VerifyObserved(r.Context(),user,id,strings.TrimSpace(ip));err!=nil{writeError(w,err);return}
  w.WriteHeader(http.StatusNoContent)
+}
+
+func (h Handler) syncStatus(w http.ResponseWriter,r *http.Request){
+ user,ok:=h.user(w,r);if !ok{return}
+ subscriptionID,err:=uuid.Parse(chi.URLParam(r,"subscriptionID"))
+ if err!=nil {http.Error(w,"invalid subscription ID",http.StatusBadRequest);return}
+ status,err:=h.Store.GetSyncStatus(r.Context(),user,subscriptionID)
+ if err!=nil {
+  if errors.Is(err,ErrSubscriptionNotOwned) {http.Error(w,"subscription not found",http.StatusNotFound);return}
+  writeError(w,err);return
+ }
+ respond(w,http.StatusOK,status)
 }
