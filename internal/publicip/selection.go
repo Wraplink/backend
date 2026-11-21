@@ -50,7 +50,7 @@ func (s Store) SelectVerified(ctx context.Context, userID, subscriptionID, addre
  _, err = tx.Exec(ctx, `
   INSERT INTO user_public_ip_events
     (id, user_id, public_ip_id, ip_address, event_type, subscription_id)
-  VALUES ($1, $2, $3, $4::inet, 'activated', $5)
+  VALUES ($1, $2, $3, $4::inet, 'selected', $5)
  `, uuid.New(), userID, addressID, selectedAddress, subscriptionID)
  if err != nil { return fmt.Errorf("record IP selection: %w", err) }
  if err := tx.Commit(ctx); err != nil { return fmt.Errorf("commit IP selection: %w", err) }
