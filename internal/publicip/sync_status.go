@@ -19,6 +19,7 @@ type SyncStatus struct {
  Revision int64 `json:"revision"`
  AppliedRevision int64 `json:"appliedRevision"`
  Status string `json:"status"`
+ RequiresReconciliation bool `json:"requiresReconciliation"`
  UpdatedAt time.Time `json:"updatedAt"`
 }
 
@@ -28,7 +29,8 @@ func (s Store) GetSyncStatus(ctx context.Context, userID, subscriptionID uuid.UU
  var result SyncStatus
  err := s.Pool.QueryRow(ctx, `
   SELECT sync.subscription_id, sync.desired_public_ip_id,
-         sync.applied_public_ip_id, sync.revision, sync.applied_revision, sync.status, sync.updated_at
+         sync.applied_public_ip_id, sync.revision, sync.applied_revision, sync.status, sync.updated_at,
+         (sync.status = 'failed' AND COALESCE(sync.last_error,'') LIKE 'sync attempt expired;%')
   FROM subscription_public_ip_sync AS sync
   JOIN user_subscriptions AS subscription
     ON subscription.id = sync.subscription_id
@@ -36,6 +38,7 @@ func (s Store) GetSyncStatus(ctx context.Context, userID, subscriptionID uuid.UU
  `, subscriptionID, userID).Scan(
   &result.SubscriptionID, &result.DesiredPublicIPID, &result.AppliedPublicIPID,
   &result.Revision, &result.AppliedRevision, &result.Status, &result.UpdatedAt,
+  &result.RequiresReconciliation,
  )
  if errors.Is(err, pgx.ErrNoRows) { return SyncStatus{}, ErrSubscriptionNotOwned }
  if err != nil { return SyncStatus{}, fmt.Errorf("read IP sync status: %w", err) }
