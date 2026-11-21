@@ -40,6 +40,22 @@ func (s Store) SelectVerified(ctx context.Context, userID, subscriptionID, addre
  if err != nil { return fmt.Errorf("load selected IP: %w", err) }
  if !verified { return ErrUnverified }
 
+ // Repeated requests for the same desired address must not supersede an
+ // in-flight attempt or generate a new revision. A failed attempt remains
+ // failed until an explicit retry; do not silently hide its error.
+ var desiredID uuid.UUID
+ var syncStatus string
+ err = tx.QueryRow(ctx,`
+  SELECT desired_public_ip_id,status FROM subscription_public_ip_sync
+  WHERE subscription_id=$1 FOR UPDATE
+ `,subscriptionID).Scan(&desiredID,&syncStatus)
+ if err!=nil && !errors.Is(err,pgx.ErrNoRows) {
+  return fmt.Errorf("load existing IP sync: %w",err)
+ }
+ if err==nil && desiredID==addressID {
+  return nil
+ }
+
  _, err = tx.Exec(ctx, `
   INSERT INTO subscription_public_ip_selections (subscription_id, user_id, public_ip_id)
   VALUES ($1,$2,$3)
