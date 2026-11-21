@@ -1,6 +1,7 @@
 package publicip
 
 import (
+ "encoding/json"
  "net/http"
  "net/http/httptest"
  "net/netip"
@@ -77,5 +78,31 @@ func TestPublicIPDomainErrorStatus(t *testing.T){
   w:=httptest.NewRecorder()
   writeError(w,tc.err)
   if w.Code!=tc.status{t.Errorf("error=%v got=%d want=%d",tc.err,w.Code,tc.status)}
+ }
+}
+
+func TestSyncStatusDistinguishesDesiredFromApplied(t *testing.T){
+ desired:=uuid.New()
+ previous:=uuid.New()
+ status:=SyncStatus{
+  SubscriptionID:uuid.New(),
+  DesiredPublicIPID:desired,
+  AppliedPublicIPID:&previous,
+  Revision:2,
+  AppliedRevision:1,
+  Status:"pending",
+ }
+ encoded,err:=json.Marshal(status)
+ if err!=nil{t.Fatal(err)}
+ var body map[string]any
+ if err:=json.Unmarshal(encoded,&body);err!=nil{t.Fatal(err)}
+ if body["desiredPublicIpId"]!=desired.String() || body["appliedPublicIpId"]!=previous.String(){
+  t.Fatalf("status must distinguish desired from applied: %s",encoded)
+ }
+ status.AppliedPublicIPID=nil
+ encoded,err=json.Marshal(status)
+ if err!=nil{t.Fatal(err)}
+ if !strings.Contains(string(encoded),`"appliedPublicIpId":null`){
+  t.Fatalf("unapplied IP must be null: %s",encoded)
  }
 }
