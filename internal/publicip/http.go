@@ -19,6 +19,7 @@ type Handler struct {
  Store Store
  AuthenticatedUserID func(*http.Request) (uuid.UUID, bool)
  TrustedProxyPrefixes []netip.Prefix
+ ObservedClientIP func(*http.Request) (string,error)
 }
 
 // Routes returns a router for mounting below /api/v1/me/public-ips.
@@ -105,16 +106,20 @@ func (h Handler) history(w http.ResponseWriter,r *http.Request){
  if err!=nil{writeError(w,err);return}
  respond(w,http.StatusOK,map[string]any{"items":items})
 }
+func (h Handler) clientIP(r *http.Request)(string,error){
+ if h.ObservedClientIP!=nil{return h.ObservedClientIP(r)}
+ return TrustedClientIPv4(r,h.TrustedProxyPrefixes)
+}
 func (h Handler) observed(w http.ResponseWriter,r *http.Request){
  if _,ok:=h.user(w,r);!ok{return}
- ip,err:=TrustedClientIPv4(r,h.TrustedProxyPrefixes)
+ ip,err:=h.clientIP(r)
  if err!=nil{http.Error(w,"client public IPv4 unavailable",http.StatusUnprocessableEntity);return}
  respond(w,http.StatusOK,map[string]string{"ipAddress":ip})
 }
 func (h Handler) verify(w http.ResponseWriter,r *http.Request){
  user,ok:=h.user(w,r);if !ok{return}
  id,ok:=pathID(w,r);if !ok{return}
- ip,err:=TrustedClientIPv4(r,h.TrustedProxyPrefixes)
+ ip,err:=h.clientIP(r)
  if err!=nil{http.Error(w,"client public IPv4 unavailable",http.StatusUnprocessableEntity);return}
  if err=h.Store.VerifyObserved(r.Context(),user,id,strings.TrimSpace(ip));err!=nil{writeError(w,err);return}
  w.WriteHeader(http.StatusNoContent)
