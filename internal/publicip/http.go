@@ -20,8 +20,6 @@ type Handler struct {
  AuthenticatedUserID func(*http.Request) (uuid.UUID, bool)
  TrustedProxyPrefixes []netip.Prefix
  ObservedClientIP func(*http.Request) (string,error)
- // SelectionEnabled must remain false until DNS and edge acknowledgement are wired.
- SelectionEnabled bool
 }
 
 // Routes returns a router for mounting below /api/v1/me/public-ips.
@@ -169,19 +167,10 @@ func (h Handler) subscriptionSelection(w http.ResponseWriter,r *http.Request){
  
 // selectSubscriptionIP only queues a desired verified address. It never
 // claims activation. Keep disabled until the real network reconciler exists.
+// selectSubscriptionIP is intentionally unavailable until a concrete,
+// authenticated DNS+edge reconciler can apply and acknowledge selected IPs.
+// A stored preference alone must never be presented as activation.
 func (h Handler) selectSubscriptionIP(w http.ResponseWriter,r *http.Request){
- user,ok:=h.user(w,r);if !ok{return}
- if !h.SelectionEnabled {
-  http.Error(w,"public IP activation is not available",http.StatusServiceUnavailable)
-  return
- }
- subscriptionID,err:=uuid.Parse(chi.URLParam(r,"subscriptionID"))
- if err!=nil{http.Error(w,"invalid subscription ID",http.StatusBadRequest);return}
- var request struct{PublicIPID uuid.UUID `json:"publicIpId"`}
- if !decode(w,r,&request){return}
- if request.PublicIPID==uuid.Nil{http.Error(w,"publicIpId is required",http.StatusBadRequest);return}
- if err:=h.Store.SelectVerified(r.Context(),user,subscriptionID,request.PublicIPID);err!=nil{writeError(w,err);return}
- status,err:=h.Store.GetSyncStatus(r.Context(),user,subscriptionID)
- if err!=nil{writeError(w,err);return}
- respond(w,http.StatusAccepted,status)
+ if _,ok:=h.user(w,r);!ok{return}
+ http.Error(w,"public IP activation is not available",http.StatusServiceUnavailable)
 }
