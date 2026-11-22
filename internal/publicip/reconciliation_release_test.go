@@ -23,9 +23,21 @@ func TestReconciliationReleaseRejectsIncompleteEvidenceBeforeDB(t *testing.T) {
   {SubscriptionID:valid.SubscriptionID,PublicIPID:valid.PublicIPID,Revision:2,OldAttemptFenced:true},
  }
  for i,e:=range cases {
-  released,err:=store.RequeueReconciledSync(context.Background(),e)
+  released,err:=store.RequeueReconciledSync(context.Background(),nil,e)
   if released || !errors.Is(err,ErrReconciliationEvidenceRequired) {
    t.Errorf("case %d: released=%v err=%v",i,released,err)
   }
+ }
+}
+
+func TestReconciliationReleaseRequiresVerifierBeforeDB(t *testing.T) {
+ store:=Store{}
+ evidence:=ReconciliationEvidence{
+  SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:1,
+  OldAttemptFenced:true,RequiredNodesChecked:true,
+ }
+ released,err:=store.RequeueReconciledSync(context.Background(),nil,evidence)
+ if released || !errors.Is(err,ErrNoReconciliationVerifier){
+  t.Fatalf("released=%v err=%v; want missing verifier",released,err)
  }
 }
