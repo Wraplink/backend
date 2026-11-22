@@ -38,8 +38,22 @@ func (s Store) ReconcileOne(ctx context.Context, applier EntitlementApplier) (bo
   if !recorded{return true,fmt.Errorf("apply IP: %w; quarantine not recorded because revision or attempt changed",err)}
   return true,fmt.Errorf("apply IP: %w",err)
  }
- acknowledged,err:=s.AckSync(ctx,job)
- if err!=nil{return true,err}
+ // A successful network operation may outlive the worker request context.
+ // Use a bounded independent context for the database acknowledgement too.
+ // Never turn a database acknowledgement failure into a network retry.
+ ackCtx,ackCancel:=context.WithTimeout(context.WithoutCancel(ctx),5*time.Second)
+ defer ackCancel()
+ acknowledged,err:=s.AckSync(ackCtx,job)
+ if err!=nil{
+  // AckSync might have committed before returning an ambiguous error.
+  // Quarantine only the still-applying matching attempt; never overwrite an
+  // already-applied row or a superseding revision.
+  quarantineCtx,quarantineCancel:=context.WithTimeout(context.WithoutCancel(ctx),5*time.Second)
+  defer quarantineCancel()
+  _,quarantineErr:=s.FailSync(quarantineCtx,job,"network applied but database acknowledgement uncertain; reconcile before retry")
+  if quarantineErr!=nil{return true,fmt.Errorf("acknowledge IP: %v; quarantine: %w",err,quarantineErr)}
+  return true,fmt.Errorf("acknowledge IP: %w",err)
+ }
  if !acknowledged{
   // A newer selection superseded the revision while the network request
   // was in flight. The new revision must be reconciled before reporting
