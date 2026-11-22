@@ -61,3 +61,37 @@ func TestReconciliationReleaseRejectsFailedVerificationBeforeDB(t *testing.T) {
   t.Fatalf("released=%v verified=%v err=%v",released,verifier.called,err)
  }
 }
+
+func TestReconciliationReleaseCancelledBeforeVerification(t *testing.T) {
+ store:=Store{}
+ verifier:=&rejectingReconciliationVerifier{}
+ evidence:=ReconciliationEvidence{
+  SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:4,
+  OldAttemptFenced:true,RequiredNodesChecked:true,
+ }
+ ctx,cancel:=context.WithCancel(context.Background())
+ cancel()
+ released,err:=store.RequeueReconciledSync(ctx,verifier,evidence)
+ if released || verifier.called || !errors.Is(err,context.Canceled) {
+  t.Fatalf("released=%v verifierCalled=%v err=%v",released,verifier.called,err)
+ }
+}
+
+type cancellingReconciliationVerifier struct { cancel context.CancelFunc }
+func (v cancellingReconciliationVerifier) VerifyReconciliation(_ context.Context,_ ReconciliationEvidence) error {
+ v.cancel()
+ return nil
+}
+
+func TestReconciliationReleaseCancelledAfterVerification(t *testing.T) {
+ store:=Store{} // Must not reach DB after verifier cancels context.
+ ctx,cancel:=context.WithCancel(context.Background())
+ evidence:=ReconciliationEvidence{
+  SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:5,
+  OldAttemptFenced:true,RequiredNodesChecked:true,
+ }
+ released,err:=store.RequeueReconciledSync(ctx,cancellingReconciliationVerifier{cancel:cancel},evidence)
+ if released || !errors.Is(err,context.Canceled) {
+  t.Fatalf("released=%v err=%v",released,err)
+ }
+}
