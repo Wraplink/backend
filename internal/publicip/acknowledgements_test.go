@@ -40,3 +40,16 @@ func TestValidateNetworkAcknowledgements(t *testing.T) {
   })
  }
 }
+
+func TestValidateNetworkAcknowledgementsRequiresClaimedAttempt(t *testing.T) {
+ job:=SyncJob{SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:12}
+ report:=NodeAcknowledgement{
+  NodeID:"dns-local-01",SubscriptionID:job.SubscriptionID,
+  PublicIPID:job.PublicIPID,Revision:job.Revision,
+  AttemptID:uuid.New(),Applied:true,
+ }
+ err:=ValidateNetworkAcknowledgements(job,[]string{"dns-local-01"},[]NodeAcknowledgement{report})
+ if !errors.Is(err,ErrIncompleteNetworkAcknowledgement){
+  t.Fatalf("unclaimed attempt accepted: %v",err)
+ }
+}
