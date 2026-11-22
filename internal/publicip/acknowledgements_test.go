@@ -8,8 +8,8 @@ import (
 )
 
 func TestValidateNetworkAcknowledgements(t *testing.T) {
- job:=SyncJob{SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:7}
- dns:=NodeAcknowledgement{NodeID:"dns-local-01",SubscriptionID:job.SubscriptionID,PublicIPID:job.PublicIPID,Revision:job.Revision,Applied:true}
+ job:=SyncJob{SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:7,AttemptID:uuid.New()}
+ dns:=NodeAcknowledgement{NodeID:"dns-local-01",SubscriptionID:job.SubscriptionID,PublicIPID:job.PublicIPID,Revision:job.Revision,AttemptID:job.AttemptID,Applied:true}
  edge:=dns
  edge.NodeID="edge-eu-01"
  required:=[]string{"dns-local-01","edge-eu-01"}
@@ -29,6 +29,7 @@ func TestValidateNetworkAcknowledgements(t *testing.T) {
   {"stale revision",required,[]NodeAcknowledgement{dns,func()NodeAcknowledgement{x:=edge;x.Revision--;return x}()},true},
   {"future revision",required,[]NodeAcknowledgement{dns,func()NodeAcknowledgement{x:=edge;x.Revision++;return x}()},true},
   {"wrong subscription",required,[]NodeAcknowledgement{dns,func()NodeAcknowledgement{x:=edge;x.SubscriptionID=uuid.New();return x}()},true},
+  {"wrong attempt",required,[]NodeAcknowledgement{dns,func()NodeAcknowledgement{x:=edge;x.AttemptID=uuid.New();return x}()},true},
   {"wrong IP",required,[]NodeAcknowledgement{dns,func()NodeAcknowledgement{x:=edge;x.PublicIPID=uuid.New();return x}()},true},
  }
  for _,tc:=range cases {
