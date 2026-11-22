@@ -18,8 +18,9 @@ var ErrNoEntitlementApplier = errors.New("public IP entitlement applier is not c
 var ErrSyncAcknowledgementRejected = errors.New("public IP synchronization acknowledgement rejected")
 
 // ReconcileOne processes a single pending request. No network operation is
-// performed if an applier is absent. A failed apply remains visible as failed
-// and is eligible for an explicit retry. The worker does not infer success.
+// performed if an applier is absent. An uncertain apply is quarantined as
+// needs_reconciliation and must not be automatically retried. The worker
+// does not infer success.
 func (s Store) ReconcileOne(ctx context.Context, applier EntitlementApplier) (bool,error) {
  if applier==nil{return false,ErrNoEntitlementApplier}
  job,found,err:=s.ClaimSync(ctx)
