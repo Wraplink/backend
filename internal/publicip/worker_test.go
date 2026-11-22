@@ -3,6 +3,7 @@ package publicip
 import (
  "context"
  "errors"
+ "fmt"
  "testing"
  "time"
 )
@@ -20,5 +21,12 @@ func TestStaleSyncRejectsUnsafeTimeout(t *testing.T){
  for _,timeout:=range []time.Duration{0,-time.Second,30*time.Second}{
   count,err:=store.RequeueStaleSync(context.Background(),timeout)
   if err==nil || count!=0{t.Fatalf("timeout=%v count=%d err=%v",timeout,count,err)}
+ }
+}
+
+func TestRejectedAcknowledgementHasTypedError(t *testing.T){
+ wrapped:=fmt.Errorf("worker: %w",ErrSyncAcknowledgementRejected)
+ if !errors.Is(wrapped,ErrSyncAcknowledgementRejected){
+  t.Fatal("rejected acknowledgement must remain identifiable")
  }
 }
