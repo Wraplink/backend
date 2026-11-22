@@ -76,6 +76,7 @@ func TestPublicIPDomainErrorStatus(t *testing.T){
   {ErrUnverified,http.StatusConflict},
   {ErrActiveAddress,http.StatusConflict},
   {ErrSyncInProgress,http.StatusConflict},
+  {ErrSyncRequiresReconciliation,http.StatusConflict},
  }{
   w:=httptest.NewRecorder()
   writeError(w,tc.err)
