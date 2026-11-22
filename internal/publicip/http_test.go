@@ -88,7 +88,7 @@ func TestSyncStatusDistinguishesDesiredFromApplied(t *testing.T){
  previous:=uuid.New()
  status:=SyncStatus{
   SubscriptionID:uuid.New(),
-  DesiredPublicIPID:desired,
+  DesiredPublicIPID:&desired,
   AppliedPublicIPID:&previous,
   Revision:2,
   AppliedRevision:1,
@@ -115,5 +115,14 @@ func TestSubscriptionSelectionNullPreferenceJSON(t *testing.T){
  if err!=nil{t.Fatal(err)}
  if !strings.Contains(string(data),`"publicIpId":null`) || !strings.Contains(string(data),`"ipAddress":null`){
   t.Fatalf("missing selection must return null fields: %s",data)
+ }
+}
+
+func TestSyncStatusUnconfiguredJSON(t *testing.T){
+ status:=SyncStatus{SubscriptionID:uuid.New(),Status:"unconfigured"}
+ data,err:=json.Marshal(status)
+ if err!=nil{t.Fatal(err)}
+ for _,expected:=range []string{`"desiredPublicIpId":null`,`"appliedPublicIpId":null`,`"requiresReconciliation":false`,`"updatedAt":null`,`"status":"unconfigured"`} {
+  if !strings.Contains(string(data),expected){t.Fatalf("missing %s: %s",expected,data)}
  }
 }
