@@ -28,9 +28,15 @@ func (s Store) ReconcileOne(ctx context.Context, applier EntitlementApplier) (bo
  if err!=nil{return false,err}
  if !found{return false,nil}
  if err=applier.ApplyPublicIP(ctx,job);err!=nil{
-  // The request context may already be canceled or timed out. Persist the\n  // uncertain network outcome using a bounded independent context so it\n  // cannot remain indefinitely in applying solely due to cancellation.\n  recordCtx,cancel:=context.WithTimeout(context.WithoutCancel(ctx),5*time.Second)\n  defer cancel()\n  recorded,recordErr:=s.FailSync(recordCtx,job,"sync outcome uncertain; verify downstream state before retry")
+  // The request context may already be canceled or timed out. Persist the
+  // uncertain network outcome using a bounded independent context so it
+  // cannot remain indefinitely in applying solely due to cancellation.
+  recordCtx,cancel:=context.WithTimeout(context.WithoutCancel(ctx),5*time.Second)
+  defer cancel()
+  recorded,recordErr:=s.FailSync(recordCtx,job,"sync outcome uncertain; verify downstream state before retry")
   if recordErr!=nil{return true,fmt.Errorf("apply IP: %v; record failure: %w",err,recordErr)}
-  if !recorded{return true,fmt.Errorf("apply IP: %w; quarantine not recorded because revision or attempt changed",err)}\n  return true,fmt.Errorf("apply IP: %w",err)
+  if !recorded{return true,fmt.Errorf("apply IP: %w; quarantine not recorded because revision or attempt changed",err)}
+  return true,fmt.Errorf("apply IP: %w",err)
  }
  acknowledged,err:=s.AckSync(ctx,job)
  if err!=nil{return true,err}
