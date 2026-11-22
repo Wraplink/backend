@@ -12,6 +12,7 @@ import (
 var ErrUnverified = errors.New("verify this IP before activation")
 var ErrSubscriptionNotOwned = errors.New("subscription not found")
 var ErrSyncInProgress = errors.New("public IP synchronization is in progress")
+var ErrSyncRequiresReconciliation = errors.New("previous public IP sync requires network reconciliation")
 
 // SelectVerified records a verified IP preference for a subscription.
 // IMPORTANT: this does not publish entitlements. Until the network sync
@@ -46,13 +47,17 @@ func (s Store) SelectVerified(ctx context.Context, userID, subscriptionID, addre
  // failed until an explicit retry; do not silently hide its error.
  var desiredID uuid.UUID
  var syncStatus string
+ var requiresReconciliation bool
  err = tx.QueryRow(ctx,`
-  SELECT desired_public_ip_id,status FROM subscription_public_ip_sync
+  SELECT desired_public_ip_id,status,
+    (status='failed' AND COALESCE(last_error,'') LIKE 'sync attempt expired;%')
+  FROM subscription_public_ip_sync
   WHERE subscription_id=$1 FOR UPDATE
- `,subscriptionID).Scan(&desiredID,&syncStatus)
+ `,subscriptionID).Scan(&desiredID,&syncStatus,&requiresReconciliation)
  if err!=nil && !errors.Is(err,pgx.ErrNoRows) {
   return fmt.Errorf("load existing IP sync: %w",err)
  }
+ if err==nil && requiresReconciliation {return ErrSyncRequiresReconciliation}
  if err==nil && desiredID==addressID {
   return nil
  }
