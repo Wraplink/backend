@@ -80,3 +80,26 @@ func TestSameRequiredNodes(t *testing.T){
   if sameRequiredNodes([]string{"dns","edge"},nodes){t.Fatalf("accepted %v",nodes)}
  }
 }
+
+type cancellingMembershipSource struct {
+ cancel context.CancelFunc
+ report NodeAcknowledgement
+ calls int
+}
+func (s *cancellingMembershipSource) RequiredNodes(_ context.Context,_ SyncJob)([]string,error){
+ s.calls++
+ if s.calls==2{s.cancel()}
+ return []string{"dns-local-01"},nil
+}
+func (s *cancellingMembershipSource) AppliedReports(_ context.Context,_ SyncJob)([]NodeAcknowledgement,error){
+ return []NodeAcknowledgement{s.report},nil
+}
+func TestAcknowledgedApplierRejectsCancellationAfterMembershipCheck(t *testing.T){
+ job:=SyncJob{SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:11}
+ ctx,cancel:=context.WithCancel(context.Background())
+ source:=&cancellingMembershipSource{cancel:cancel,report:NodeAcknowledgement{
+  NodeID:"dns-local-01",SubscriptionID:job.SubscriptionID,PublicIPID:job.PublicIPID,Revision:job.Revision,Applied:true,
+ }}
+ err:=(AcknowledgedEntitlementApplier{Apply:&stubNetworkApplier{},Source:source}).ApplyPublicIP(ctx,job)
+ if !errors.Is(err,context.Canceled)||source.calls!=2{t.Fatalf("err=%v calls=%d",err,source.calls)}
+}
