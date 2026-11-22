@@ -14,6 +14,7 @@ type NodeAcknowledgement struct {
  SubscriptionID uuid.UUID
  PublicIPID uuid.UUID
  Revision int64
+ AttemptID uuid.UUID
  Applied bool
 }
 
@@ -25,7 +26,7 @@ var ErrIncompleteNetworkAcknowledgement = errors.New("required network acknowled
 // reports. It does not fetch, authenticate, or persist reports; those are
 // mandatory responsibilities of the future control-plane integration.
 func ValidateNetworkAcknowledgements(job SyncJob, required []string, reports []NodeAcknowledgement) error {
- if job.SubscriptionID==uuid.Nil || job.PublicIPID==uuid.Nil || job.Revision<1 || len(required)==0 {
+ if job.SubscriptionID==uuid.Nil || job.PublicIPID==uuid.Nil || job.Revision<1 || job.AttemptID==uuid.Nil || len(required)==0 {
   return ErrIncompleteNetworkAcknowledgement
  }
  expected:=make(map[string]struct{},len(required))
@@ -40,7 +41,8 @@ func ValidateNetworkAcknowledgements(job SyncJob, required []string, reports []N
   if _,duplicate:=seen[report.NodeID];duplicate{return fmt.Errorf("%w: duplicate node %q",ErrIncompleteNetworkAcknowledgement,report.NodeID)}
   seen[report.NodeID]=struct{}{}
   if !report.Applied || report.SubscriptionID!=job.SubscriptionID ||
-    report.PublicIPID!=job.PublicIPID || report.Revision!=job.Revision {
+    report.PublicIPID!=job.PublicIPID || report.Revision!=job.Revision ||
+    report.AttemptID!=job.AttemptID {
    return fmt.Errorf("%w: node %q has not applied expected revision",ErrIncompleteNetworkAcknowledgement,report.NodeID)
   }
  }
