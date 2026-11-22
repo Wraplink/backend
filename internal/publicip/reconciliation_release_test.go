@@ -41,3 +41,23 @@ func TestReconciliationReleaseRequiresVerifierBeforeDB(t *testing.T) {
   t.Fatalf("released=%v err=%v; want missing verifier",released,err)
  }
 }
+
+type rejectingReconciliationVerifier struct { called bool }
+func (v *rejectingReconciliationVerifier) VerifyReconciliation(_ context.Context,_ ReconciliationEvidence) error {
+ v.called=true
+ return errNetworkNotReconciled
+}
+var errNetworkNotReconciled=errors.New("required edge node has not acknowledged revision")
+
+func TestReconciliationReleaseRejectsFailedVerificationBeforeDB(t *testing.T) {
+ store:=Store{} // A rejected verification must never access the DB.
+ verifier:=&rejectingReconciliationVerifier{}
+ evidence:=ReconciliationEvidence{
+  SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:4,
+  OldAttemptFenced:true,RequiredNodesChecked:true,
+ }
+ released,err:=store.RequeueReconciledSync(context.Background(),verifier,evidence)
+ if released || !verifier.called || !errors.Is(err,errNetworkNotReconciled){
+  t.Fatalf("released=%v verified=%v err=%v",released,verifier.called,err)
+ }
+}
