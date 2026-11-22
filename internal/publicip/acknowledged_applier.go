@@ -51,5 +51,6 @@ func (a AcknowledgedEntitlementApplier) ApplyPublicIP(ctx context.Context,job Sy
  current,err:=a.Source.RequiredNodes(ctx,job)
  if err!=nil{return fmt.Errorf("recheck required nodes: %w",err)}
  if !sameRequiredNodes(required,current){return ErrRequiredNodesChanged}
+ if err:=ctx.Err();err!=nil{return err}
  return nil
 }
