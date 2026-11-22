@@ -19,7 +19,7 @@ func (s stubAcknowledgementSource) RequiredNodes(_ context.Context,_ SyncJob)([]
 func (s stubAcknowledgementSource) AppliedReports(_ context.Context,_ SyncJob)([]NodeAcknowledgement,error){return s.reports,nil}
 
 func TestAcknowledgedApplierFailsClosed(t *testing.T){
- job:=SyncJob{SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:1}
+ job:=SyncJob{SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:1,AttemptID:uuid.New()}
  apply:=&stubNetworkApplier{}
  if err:=(AcknowledgedEntitlementApplier{Apply:apply}).ApplyPublicIP(context.Background(),job);!errors.Is(err,ErrNoAcknowledgementSource){
   t.Fatalf("missing source: %v",err)
@@ -35,8 +35,8 @@ func TestAcknowledgedApplierFailsClosed(t *testing.T){
 }
 
 func TestAcknowledgedApplierRequiresExactAppliedReports(t *testing.T){
- job:=SyncJob{SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:3}
- report:=NodeAcknowledgement{NodeID:"dns-local-01",SubscriptionID:job.SubscriptionID,PublicIPID:job.PublicIPID,Revision:3,Applied:true}
+ job:=SyncJob{SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:3,AttemptID:uuid.New()}
+ report:=NodeAcknowledgement{NodeID:"dns-local-01",SubscriptionID:job.SubscriptionID,PublicIPID:job.PublicIPID,Revision:3,AttemptID:job.AttemptID,Applied:true}
  apply:=&stubNetworkApplier{}
  source:=stubAcknowledgementSource{required:[]string{"dns-local-01","edge-eu-01"},reports:[]NodeAcknowledgement{report}}
  adapter:=AcknowledgedEntitlementApplier{Apply:apply,Source:source}
@@ -63,10 +63,10 @@ func (s *changingNodeSource) AppliedReports(_ context.Context,_ SyncJob)([]NodeA
  return []NodeAcknowledgement{s.report},nil
 }
 func TestAcknowledgedApplierRejectsMembershipChanges(t *testing.T){
- job:=SyncJob{SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:9}
+ job:=SyncJob{SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:9,AttemptID:uuid.New()}
  source:=&changingNodeSource{report:NodeAcknowledgement{
   NodeID:"dns-local-01",SubscriptionID:job.SubscriptionID,
-  PublicIPID:job.PublicIPID,Revision:job.Revision,Applied:true,
+  PublicIPID:job.PublicIPID,Revision:job.Revision,AttemptID:job.AttemptID,Applied:true,
  }}
  apply:=&stubNetworkApplier{}
  err:=(AcknowledgedEntitlementApplier{Apply:apply,Source:source}).ApplyPublicIP(context.Background(),job)
@@ -95,10 +95,10 @@ func (s *cancellingMembershipSource) AppliedReports(_ context.Context,_ SyncJob)
  return []NodeAcknowledgement{s.report},nil
 }
 func TestAcknowledgedApplierRejectsCancellationAfterMembershipCheck(t *testing.T){
- job:=SyncJob{SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:11}
+ job:=SyncJob{SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:11,AttemptID:uuid.New()}
  ctx,cancel:=context.WithCancel(context.Background())
  source:=&cancellingMembershipSource{cancel:cancel,report:NodeAcknowledgement{
-  NodeID:"dns-local-01",SubscriptionID:job.SubscriptionID,PublicIPID:job.PublicIPID,Revision:job.Revision,Applied:true,
+  NodeID:"dns-local-01",SubscriptionID:job.SubscriptionID,PublicIPID:job.PublicIPID,Revision:job.Revision,AttemptID:job.AttemptID,Applied:true,
  }}
  err:=(AcknowledgedEntitlementApplier{Apply:&stubNetworkApplier{},Source:source}).ApplyPublicIP(ctx,job)
  if !errors.Is(err,context.Canceled)||source.calls!=2{t.Fatalf("err=%v calls=%d",err,source.calls)}
