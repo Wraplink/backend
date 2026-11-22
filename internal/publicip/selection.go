@@ -50,7 +50,7 @@ func (s Store) SelectVerified(ctx context.Context, userID, subscriptionID, addre
  var requiresReconciliation bool
  err = tx.QueryRow(ctx,`
   SELECT desired_public_ip_id,status,
-    (status='failed' AND COALESCE(last_error,'') LIKE 'sync attempt expired;%')
+    (status='failed' AND (COALESCE(last_error,'') LIKE 'sync attempt expired;%' OR COALESCE(last_error,'') LIKE 'sync outcome uncertain;%'))
   FROM subscription_public_ip_sync
   WHERE subscription_id=$1 FOR UPDATE
  `,subscriptionID).Scan(&desiredID,&syncStatus,&requiresReconciliation)
