@@ -51,7 +51,7 @@ CREATE TABLE subscription_public_ip_sync (
  applied_public_ip_id UUID REFERENCES user_public_ips(id),
  attempt_id UUID,
  status VARCHAR(16) NOT NULL DEFAULT 'pending'
-  CHECK (status IN ('pending','applying','applied','failed')),
+  CHECK (status IN ('pending','applying','applied','failed','needs_reconciliation')),
  last_error TEXT,
  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  CONSTRAINT subscription_public_ip_sync_revision CHECK (applied_revision <= revision),
