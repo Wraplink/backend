@@ -69,6 +69,7 @@ func writeError(w http.ResponseWriter,err error){
  case errors.Is(err,ErrNotOwned):http.Error(w,"IP not found",http.StatusNotFound)
  case errors.Is(err,ErrSubscriptionNotOwned):http.Error(w,"subscription not found",http.StatusNotFound)
  case errors.Is(err,ErrUnverified):http.Error(w,"verify this IP before selection",http.StatusConflict)
+ case errors.Is(err,ErrSyncRequiresReconciliation):http.Error(w,"public IP synchronization requires network reconciliation",http.StatusConflict)
  case errors.Is(err,ErrSyncInProgress):http.Error(w,"public IP synchronization is in progress",http.StatusConflict)
  case errors.Is(err,ErrActiveAddress):http.Error(w,err.Error(),http.StatusConflict)
  case errors.Is(err,ErrDuplicateAddress):http.Error(w,err.Error(),http.StatusConflict)
