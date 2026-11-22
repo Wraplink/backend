@@ -15,6 +15,7 @@ type EntitlementApplier interface {
 }
 
 var ErrNoEntitlementApplier = errors.New("public IP entitlement applier is not configured")
+var ErrSyncAcknowledgementRejected = errors.New("public IP synchronization acknowledgement rejected")
 
 // ReconcileOne processes a single pending request. No network operation is
 // performed if an applier is absent. A failed apply remains visible as failed
@@ -35,7 +36,7 @@ func (s Store) ReconcileOne(ctx context.Context, applier EntitlementApplier) (bo
   // A newer selection superseded the revision while the network request
   // was in flight. The new revision must be reconciled before reporting
   // the subscription as applied.
-  return true,fmt.Errorf("IP sync revision superseded during application")
+  return true,fmt.Errorf("%w: revision or ownership changed during application",ErrSyncAcknowledgementRejected)
  }
  return true,nil
 }
