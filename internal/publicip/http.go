@@ -20,6 +20,8 @@ type Handler struct {
  AuthenticatedUserID func(*http.Request) (uuid.UUID, bool)
  TrustedProxyPrefixes []netip.Prefix
  ObservedClientIP func(*http.Request) (string,error)
+ // SelectionEnabled must remain false until DNS and edge acknowledgement are wired.
+ SelectionEnabled bool
 }
 
 // Routes returns a router for mounting below /api/v1/me/public-ips.
@@ -31,6 +33,7 @@ func (h Handler) Routes() http.Handler {
  r.Get("/history",h.history)
  r.Get("/observed",h.observed)
  r.Get("/subscriptions/{subscriptionID}/selection",h.subscriptionSelection)
+ r.Put("/subscriptions/{subscriptionID}/selection",h.selectSubscriptionIP)
  r.Get("/subscriptions/{subscriptionID}/sync",h.syncStatus)
  r.Post("/subscriptions/{subscriptionID}/sync/retry",h.retrySync)
  r.Patch("/{id}",h.rename)
@@ -161,4 +164,24 @@ func (h Handler) subscriptionSelection(w http.ResponseWriter,r *http.Request){
  selection,err:=h.Store.GetSubscriptionSelection(r.Context(),user,subscriptionID)
  if err!=nil{writeError(w,err);return}
  respond(w,http.StatusOK,selection)
+}
+
+ 
+// selectSubscriptionIP only queues a desired verified address. It never
+// claims activation. Keep disabled until the real network reconciler exists.
+func (h Handler) selectSubscriptionIP(w http.ResponseWriter,r *http.Request){
+ user,ok:=h.user(w,r);if !ok{return}
+ if !h.SelectionEnabled {
+  http.Error(w,"public IP activation is not available",http.StatusServiceUnavailable)
+  return
+ }
+ subscriptionID,err:=uuid.Parse(chi.URLParam(r,"subscriptionID"))
+ if err!=nil{http.Error(w,"invalid subscription ID",http.StatusBadRequest);return}
+ var request struct{PublicIPID uuid.UUID `json:"publicIpId"`}
+ if !decode(w,r,&request){return}
+ if request.PublicIPID==uuid.Nil{http.Error(w,"publicIpId is required",http.StatusBadRequest);return}
+ if err:=h.Store.SelectVerified(r.Context(),user,subscriptionID,request.PublicIPID);err!=nil{writeError(w,err);return}
+ status,err:=h.Store.GetSyncStatus(r.Context(),user,subscriptionID)
+ if err!=nil{writeError(w,err);return}
+ respond(w,http.StatusAccepted,status)
 }
