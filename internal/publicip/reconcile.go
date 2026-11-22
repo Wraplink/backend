@@ -84,7 +84,7 @@ func (s Store) FailSync(ctx context.Context,job SyncJob,reason string)(bool,erro
  if len(reason)>1024 {reason=reason[:1024]}
  tag,err:=s.Pool.Exec(ctx,`
   UPDATE subscription_public_ip_sync
-  SET status='failed',attempt_id=NULL,last_error=$4,updated_at=now()
+  SET status='needs_reconciliation',attempt_id=NULL,last_error=$4,updated_at=now()
   WHERE subscription_id=$1 AND desired_public_ip_id=$2
     AND revision=$3 AND status='applying' AND attempt_id=$5
  `,job.SubscriptionID,job.PublicIPID,job.Revision,reason,job.AttemptID)
