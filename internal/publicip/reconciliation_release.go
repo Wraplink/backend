@@ -39,7 +39,9 @@ func (s Store) RequeueReconciledSync(ctx context.Context, verifier NetworkReconc
   return false,ErrReconciliationEvidenceRequired
  }
  if verifier==nil{return false,ErrNoReconciliationVerifier}
+ if err:=ctx.Err();err!=nil{return false,err}
  if err:=verifier.VerifyReconciliation(ctx,evidence);err!=nil{return false,fmt.Errorf("verify network reconciliation: %w",err)}
+ if err:=ctx.Err();err!=nil{return false,err}
  tag,err:=s.Pool.Exec(ctx,`
   UPDATE subscription_public_ip_sync AS sync
   SET status='pending',attempt_id=NULL,last_error=NULL,updated_at=now()
