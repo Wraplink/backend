@@ -131,7 +131,7 @@ func TestSyncStatusUnconfiguredJSON(t *testing.T){
 func TestSyncStatusReconciliationFlagJSON(t *testing.T){
  status:=SyncStatus{
   SubscriptionID:uuid.New(),
-  Status:"failed",
+  Status:"needs_reconciliation",
   Revision:3,
   RequiresReconciliation:true,
  }
