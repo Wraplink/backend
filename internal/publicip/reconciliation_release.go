@@ -21,14 +21,25 @@ type ReconciliationEvidence struct {
  RequiredNodesChecked bool
 }
 
+// NetworkReconciliationVerifier must independently inspect the required DNS and
+// edge nodes and fence any previous attempt. A caller-provided evidence struct
+// is not sufficient to authorize release.
+type NetworkReconciliationVerifier interface {
+ VerifyReconciliation(ctx context.Context, evidence ReconciliationEvidence) error
+}
+
+var ErrNoReconciliationVerifier = errors.New("network reconciliation verifier is not configured")
+
 // RequeueReconciledSync only releases a quarantined revision after a trusted
 // verifier has checked all required nodes and fenced stale operations.
-// This method does not perform verification and must not be exposed via HTTP.
-func (s Store) RequeueReconciledSync(ctx context.Context, evidence ReconciliationEvidence) (bool,error) {
+// The verifier is mandatory; never expose this method via user-facing HTTP.
+func (s Store) RequeueReconciledSync(ctx context.Context, verifier NetworkReconciliationVerifier, evidence ReconciliationEvidence) (bool,error) {
  if evidence.SubscriptionID==uuid.Nil || evidence.PublicIPID==uuid.Nil ||
     evidence.Revision<1 || !evidence.OldAttemptFenced || !evidence.RequiredNodesChecked {
   return false,ErrReconciliationEvidenceRequired
  }
+ if verifier==nil{return false,ErrNoReconciliationVerifier}
+ if err:=verifier.VerifyReconciliation(ctx,evidence);err!=nil{return false,fmt.Errorf("verify network reconciliation: %w",err)}
  tag,err:=s.Pool.Exec(ctx,`
   UPDATE subscription_public_ip_sync AS sync
   SET status='pending',attempt_id=NULL,last_error=NULL,updated_at=now()
