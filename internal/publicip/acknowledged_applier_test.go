@@ -49,3 +49,34 @@ func TestAcknowledgedApplierRequiresExactAppliedReports(t *testing.T){
  adapter.Source=source
  if err:=adapter.ApplyPublicIP(context.Background(),job);err!=nil{t.Fatalf("all nodes applied: %v",err)}
 }
+
+type changingNodeSource struct {
+ calls int
+ report NodeAcknowledgement
+}
+func (s *changingNodeSource) RequiredNodes(_ context.Context,_ SyncJob)([]string,error){
+ s.calls++
+ if s.calls==1{return []string{"dns-local-01"},nil}
+ return []string{"dns-local-01","edge-eu-01"},nil
+}
+func (s *changingNodeSource) AppliedReports(_ context.Context,_ SyncJob)([]NodeAcknowledgement,error){
+ return []NodeAcknowledgement{s.report},nil
+}
+func TestAcknowledgedApplierRejectsMembershipChanges(t *testing.T){
+ job:=SyncJob{SubscriptionID:uuid.New(),PublicIPID:uuid.New(),Revision:9}
+ source:=&changingNodeSource{report:NodeAcknowledgement{
+  NodeID:"dns-local-01",SubscriptionID:job.SubscriptionID,
+  PublicIPID:job.PublicIPID,Revision:job.Revision,Applied:true,
+ }}
+ apply:=&stubNetworkApplier{}
+ err:=(AcknowledgedEntitlementApplier{Apply:apply,Source:source}).ApplyPublicIP(context.Background(),job)
+ if !errors.Is(err,ErrRequiredNodesChanged) || !apply.called || source.calls!=2{
+  t.Fatalf("err=%v applied=%v membershipReads=%d",err,apply.called,source.calls)
+ }
+}
+func TestSameRequiredNodes(t *testing.T){
+ if !sameRequiredNodes([]string{"dns","edge"},[]string{"edge","dns"}){t.Fatal("order must not matter")}
+ for _,nodes:=range [][]string{{"dns","dns"},{"dns","other"},{""},{"dns"}}{
+  if sameRequiredNodes([]string{"dns","edge"},nodes){t.Fatalf("accepted %v",nodes)}
+ }
+}
