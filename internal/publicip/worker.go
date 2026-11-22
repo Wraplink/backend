@@ -26,7 +26,7 @@ func (s Store) ReconcileOne(ctx context.Context, applier EntitlementApplier) (bo
  if err!=nil{return false,err}
  if !found{return false,nil}
  if err=applier.ApplyPublicIP(ctx,job);err!=nil{
-  _,recordErr:=s.FailSync(ctx,job,err.Error())
+  _,recordErr:=s.FailSync(ctx,job,"sync outcome uncertain; verify downstream state before retry")
   if recordErr!=nil{return true,fmt.Errorf("apply IP: %v; record failure: %w",err,recordErr)}
   return true,fmt.Errorf("apply IP: %w",err)
  }
