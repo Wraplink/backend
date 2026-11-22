@@ -10,7 +10,9 @@ An attempt additionally has a unique `attempt_id`. A revision is monotonically
 increasing per subscription. The control plane must reject a revision lower
 than the highest durable revision already accepted for that subscription,
 including after process restart. A repeated identical revision must be
-idempotent. A repeated revision with a different IP is a conflict.
+idempotent. Every applied-state acknowledgement must also carry the exact
+\`attempt_id\` for the active attempt; an acknowledgement from an earlier
+attempt must not satisfy a later attempt even if the desired revision matches. A repeated revision with a different IP is a conflict.
 
 ## Apply and acknowledge
 
@@ -24,7 +26,7 @@ idempotent. A repeated revision with a different IP is a conflict.
    enforcement state. Heartbeat, registration, and configuration download are
    insufficient.
 5. The backend may acknowledge the revision only after all required nodes
-   report the exact subscription, IP, revision, and successful enforcement.
+   report the exact subscription, IP, revision, attempt ID, and successful enforcement.
    An absent or unreachable node means unconfirmed, not success.
 6. Retire the previous address only after the new address is confirmed and
    the control plane can safely remove the previous entitlement.
