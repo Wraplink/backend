@@ -126,3 +126,20 @@ func TestSyncStatusUnconfiguredJSON(t *testing.T){
   if !strings.Contains(string(data),expected){t.Fatalf("missing %s: %s",expected,data)}
  }
 }
+
+func TestSyncStatusReconciliationFlagJSON(t *testing.T){
+ status:=SyncStatus{
+  SubscriptionID:uuid.New(),
+  Status:"failed",
+  Revision:3,
+  RequiresReconciliation:true,
+ }
+ data,err:=json.Marshal(status)
+ if err!=nil{t.Fatal(err)}
+ if !strings.Contains(string(data),`"requiresReconciliation":true`){
+  t.Fatalf("expired synchronization must expose reconciliation flag: %s",data)
+ }
+ if strings.Contains(string(data),"lastError") || strings.Contains(string(data),"last_error"){
+  t.Fatalf("internal error details must not be exposed: %s",data)
+ }
+}
