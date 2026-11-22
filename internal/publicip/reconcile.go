@@ -65,6 +65,14 @@ func (s Store) AckSync(ctx context.Context,job SyncJob) (bool,error) {
   SET applied_revision=$3,applied_public_ip_id=$2,status='applied',attempt_id=NULL,last_error=NULL,updated_at=now()
   WHERE subscription_id=$1 AND desired_public_ip_id=$2
     AND revision=$3 AND status='applying' AND attempt_id=$4
+    AND EXISTS (
+      SELECT 1 FROM subscription_public_ip_selections selection
+      JOIN user_public_ips ip ON ip.id=selection.public_ip_id
+      JOIN user_subscriptions subscription ON subscription.id=selection.subscription_id
+      WHERE selection.subscription_id=$1 AND selection.public_ip_id=$2
+        AND selection.user_id=subscription.user_id AND ip.user_id=subscription.user_id
+        AND ip.removed_at IS NULL AND ip.verified_at IS NOT NULL
+    )
  `,job.SubscriptionID,job.PublicIPID,job.Revision,job.AttemptID)
  if err!=nil{return false,fmt.Errorf("acknowledge IP sync: %w",err)}
  return tag.RowsAffected()==1,nil
