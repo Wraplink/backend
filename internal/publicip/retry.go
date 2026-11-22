@@ -32,7 +32,8 @@ func (s Store) RetryFailedSync(ctx context.Context,subscriptionID uuid.UUID,revi
   UPDATE subscription_public_ip_sync
   SET status='pending',attempt_id=NULL,last_error=NULL,updated_at=now()
   WHERE subscription_id=$1 AND revision=$2 AND status='failed'
-    AND COALESCE(last_error,'') NOT LIKE 'sync attempt expired;%'\n    AND COALESCE(last_error,'') NOT LIKE 'sync outcome uncertain;%'
+    AND COALESCE(last_error,'') NOT LIKE 'sync attempt expired;%'
+    AND COALESCE(last_error,'') NOT LIKE 'sync outcome uncertain;%'
  `,subscriptionID,revision)
  if err!=nil{return false,fmt.Errorf("retry failed IP sync: %w",err)}
  return tag.RowsAffected()==1,nil
@@ -50,7 +51,8 @@ func (s Store) RetryFailedSyncForUser(ctx context.Context,userID,subscriptionID 
   WHERE sync.subscription_id=subscription.id
     AND subscription.id=$1 AND subscription.user_id=$2
     AND sync.revision=$3 AND sync.status='failed'
-    AND COALESCE(sync.last_error,'') NOT LIKE 'sync attempt expired;%'\n    AND COALESCE(sync.last_error,'') NOT LIKE 'sync outcome uncertain;%'
+    AND COALESCE(sync.last_error,'') NOT LIKE 'sync attempt expired;%'
+    AND COALESCE(sync.last_error,'') NOT LIKE 'sync outcome uncertain;%'
  `,subscriptionID,userID,revision)
  if err!=nil{return false,fmt.Errorf("retry owned IP sync: %w",err)}
  return tag.RowsAffected()==1,nil
