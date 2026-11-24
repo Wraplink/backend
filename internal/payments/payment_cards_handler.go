@@ -36,7 +36,7 @@ func (h *Handler) ListPaymentCards(w http.ResponseWriter,r *http.Request) {
 }
 
 func (h *Handler) AdminListPaymentCards(w http.ResponseWriter,r *http.Request) {
- if _,ok:=h.reviewAdmin(w,r);!ok{return}
+ if !h.requireSection(w,r,PermissionPaymentMethods){return}
  rows,err:=h.service.repository.db.Query(r.Context(),"SELECT id,card_number,cardholder_name,bank_name,active FROM payment_cards ORDER BY created_at DESC")
  if err!=nil {writeJSONError(w,500,"could not load cards");return};defer rows.Close()
  cards:=make([]paymentCard,0)
@@ -46,7 +46,7 @@ func (h *Handler) AdminListPaymentCards(w http.ResponseWriter,r *http.Request) {
 }
 
 func (h *Handler) AdminCreatePaymentCard(w http.ResponseWriter,r *http.Request) {
- if _,ok:=h.reviewAdmin(w,r);!ok{return}
+ if !h.requireSection(w,r,PermissionPaymentMethods){return}
  var body struct{CardNumber string `json:"cardNumber"`;CardholderName string `json:"cardholderName"`;BankName string `json:"bankName"`}
  d:=json.NewDecoder(http.MaxBytesReader(w,r.Body,4096));d.DisallowUnknownFields()
  if d.Decode(&body)!=nil {writeJSONError(w,400,"invalid card");return}
@@ -61,7 +61,7 @@ func (h *Handler) AdminCreatePaymentCard(w http.ResponseWriter,r *http.Request) 
 }
 
 func (h *Handler) AdminSetPaymentCardActive(w http.ResponseWriter,r *http.Request) {
- if _,ok:=h.reviewAdmin(w,r);!ok{return}
+ if !h.requireSection(w,r,PermissionPaymentMethods){return}
  id,err:=uuid.Parse(chi.URLParam(r,"cardID"));if err!=nil{writeJSONError(w,400,"invalid card ID");return}
  var body struct{Active bool `json:"active"`}
  d:=json.NewDecoder(http.MaxBytesReader(w,r.Body,1024));d.DisallowUnknownFields()

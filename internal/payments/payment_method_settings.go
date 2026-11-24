@@ -17,7 +17,7 @@ func (h *Handler) ListPaymentMethods(w http.ResponseWriter,r *http.Request) {
 }
 
 func (h *Handler) AdminSetPaymentMethod(w http.ResponseWriter,r *http.Request) {
- if _,ok:=h.reviewAdmin(w,r);!ok{return}
+ if !h.requireSection(w,r,PermissionPaymentMethods){return}
  method:=chi.URLParam(r,"method")
  if method!="card"&&method!="isp"&&method!="crypto"{writeJSONError(w,400,"invalid payment method");return}
  var body struct{Enabled *bool `json:"enabled"`}

@@ -31,7 +31,6 @@ func(h *Handler) PublicContact(w http.ResponseWriter,r *http.Request){
 }
 
 func(h *Handler) AdminContactMessages(w http.ResponseWriter,r *http.Request){
- if _,ok:=h.admin(w,r);!ok{return}
  q:=strings.TrimSpace(r.URL.Query().Get("search"))
  if len(q)>200{fail(w,400,"search too long");return}
  page:=1;limit:=20

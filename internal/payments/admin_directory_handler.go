@@ -15,9 +15,9 @@ func adminPageLimit(r *http.Request) int {
  return n
 }
 
-// AdminUsers provides a read-only, bounded user directory for access administrators.
+// AdminUsers provides a read-only, bounded user directory for authorized staff.
 func (h *Handler) AdminUsers(w http.ResponseWriter,r *http.Request){
- if _,ok:=h.requireAccessAdmin(w,r);!ok{return}
+ if !h.requireSection(w,r,PermissionUsers){return}
  search:=strings.TrimSpace(r.URL.Query().Get("search"))
  if len(search)>200 {writeJSONError(w,400,"search too long");return}
  rows,err:=h.service.repository.db.Query(r.Context(),`SELECT id,email,full_name,account_status,email_verified,created_at
@@ -36,7 +36,7 @@ func (h *Handler) AdminUsers(w http.ResponseWriter,r *http.Request){
 
 // AdminOrders returns subscription and payment state without exposing credentials or receipts.
 func (h *Handler) AdminOrders(w http.ResponseWriter,r *http.Request){
- if _,ok:=h.requireAccessAdmin(w,r);!ok{return}
+ if !h.requireSection(w,r,PermissionOrders){return}
  rows,err:=h.service.repository.db.Query(r.Context(),`SELECT s.id,s.user_id,u.email,s.status,s.price_minor,s.currency,s.created_at,
  COALESCE((SELECT c.status FROM card_transfer_receipts c WHERE c.subscription_id=s.id),'')
  FROM user_subscriptions s JOIN users u ON u.id=s.user_id
