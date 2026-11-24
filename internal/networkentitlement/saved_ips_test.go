@@ -13,6 +13,7 @@ import (
 
 	"backend/internal/requestcontext"
 	"backend/internal/security"
+	"backend/internal/starterpolicy"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -56,26 +57,24 @@ func TestSavedIPLifecyclePostgres(t *testing.T) {
 	defer pool.Close()
 
 	userID, otherID, planID := uuid.New(), uuid.New(), uuid.New()
-	_, err = pool.Exec(ctx, `INSERT INTO users (id, failed_login_attempts, last_login_ip, email, full_name)
-		VALUES ($1, 181001, '192.0.2.158', $3, 'Saved IP test'), ($2, 181002, '192.0.2.159', $4, 'Saved IP test')`,
+	_, err = pool.Exec(ctx, `INSERT INTO users (id, failed_login_attempts, last_login_ip, email, full_name, email_verified)
+		VALUES ($1, 181001, '192.0.2.158', $3, 'Saved IP test', true), ($2, 181002, '192.0.2.159', $4, 'Saved IP test', true)`,
 		userID, otherID, userID.String()+"@example.invalid", otherID.String()+"@example.invalid")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM free_plan_claims WHERE user_id = $1", userID)
 		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id IN ($1, $2)", userID, otherID)
 		_, _ = pool.Exec(ctx, "DELETE FROM plans WHERE id = $1", planID)
 	}()
-	_, err = pool.Exec(ctx, `INSERT INTO plans (id, code, name, price_minor, currency, duration_days, data_limit_bytes)
-		VALUES ($1, $2, 'Saved IP test', 0, 'USD', 30, 1000000)`, planID, planID.String())
+	_, err = pool.Exec(ctx, `INSERT INTO plans (id, code, name, price_minor, currency, duration_days, data_limit_bytes, unlimited_bandwidth)
+		VALUES ($1, $2, 'Saved IP test', 0, 'USD', 30, 0, true)`, planID, planID.String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = pool.Exec(ctx, `INSERT INTO user_subscriptions
-		(id, user_id, plan_id, plan_code, plan_name, price_minor, currency, duration_days, data_limit_bytes, status, starts_at, expires_at)
-		VALUES ($1, $2, $3, $4, 'Saved IP test', 0, 'USD', 30, 1000000, 'active', now() - interval '1 hour', now() + interval '1 hour')`,
-		uuid.New(), userID, planID, planID.String())
-	if err != nil {
+	store := starterpolicy.MarketFreeStore{DB: pool}
+	if _, err := store.Claim(ctx, userID, planID.String()); err != nil {
 		t.Fatal(err)
 	}
 
