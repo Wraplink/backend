@@ -42,6 +42,7 @@ func (r *Repository) Activate(
 	ctx context.Context,
 	userID uuid.UUID,
 	clientIP net.IP,
+	approvalID uuid.UUID,
 ) (*Entitlement, error) {
 	const maxAttempts = 3
 	var result *Entitlement
@@ -50,7 +51,7 @@ func (r *Repository) Activate(
 		if err = ctx.Err(); err != nil {
 			return nil, err
 		}
-		result, err = r.activateOnce(ctx, userID, clientIP)
+		result, err = r.activateOnce(ctx, userID, clientIP, approvalID)
 		if err == nil || !isRetryableTransactionError(err) || attempt == maxAttempts-1 {
 			return result, err
 		}
@@ -74,6 +75,7 @@ func (r *Repository) activateOnce(
 	ctx context.Context,
 	userID uuid.UUID,
 	clientIP net.IP,
+	approvalID uuid.UUID,
 ) (*Entitlement, error) {
 	if clientIP == nil || clientIP.To4() == nil {
 		return nil, ErrInvalidClientIP
@@ -102,6 +104,12 @@ func (r *Repository) activateOnce(
 	for _, ip := range ips {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", ip); err != nil {
 			return nil, fmt.Errorf("lock entitlement IP: %w", err)
+		}
+	}
+
+	if approvalID != uuid.Nil {
+		if err := consumeIPApproval(ctx, tx, userID, approvalID, clientIP.To4().String()); err != nil {
+			return nil, err
 		}
 	}
 

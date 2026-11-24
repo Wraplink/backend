@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/netip"
 	"strings"
 
 	"backend/internal/requestcontext"
 	"backend/internal/security"
+
+	"github.com/google/uuid"
 )
 
 type Handler struct {
@@ -50,7 +53,7 @@ func (h *Handler) Activate(
 	}
 
 	clientIP := h.trustedProxy.ClientIP(r)
-	if clientIP == nil || clientIP.To4() == nil || clientIP.IsPrivate() || clientIP.IsLoopback() || clientIP.IsUnspecified() || clientIP.IsLinkLocalUnicast() {
+	if !isPublicIPv4(clientIP) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"code": "PUBLIC_IPV4_REQUIRED", "error": "A public IPv4 client address is required."})
 		return
 	}
@@ -64,10 +67,19 @@ func (h *Handler) Activate(
 		return
 	}
 
+	h.activate(w, r, userID, clientIP, uuid.Nil)
+}
+
+func isPublicIPv4(ip net.IP) bool {
+	return ip.To4() != nil && ip.IsGlobalUnicast() && !ip.IsPrivate()
+}
+
+func (h *Handler) activate(w http.ResponseWriter, r *http.Request, userID uuid.UUID, clientIP net.IP, approvalID uuid.UUID) {
 	result, err := h.service.Activate(
 		r.Context(),
 		userID,
 		clientIP,
+		approvalID,
 	)
 	if err != nil {
 		switch {
@@ -75,6 +87,10 @@ func (h *Handler) Activate(
 			writeJSON(w, http.StatusConflict, map[string]string{"code": "NO_USABLE_SUBSCRIPTION", "error": "No active plan with remaining bandwidth. Purchase another plan to connect."})
 		case errors.Is(err, ErrClientIPInUse):
 			writeJSON(w, http.StatusConflict, map[string]string{"code": "CLIENT_IP_IN_USE", "error": "This public IP is already active on another account."})
+		case errors.Is(err, errIPApprovalUnavailable):
+			writeJSON(w, http.StatusConflict, map[string]string{"code": "IP_APPROVAL_UNAVAILABLE", "error": "This approval is unavailable or expired."})
+		case errors.Is(err, errIPApprovalMismatch):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"code": "CLIENT_IP_MISMATCH", "error": "Approve this request from the requested network."})
 		case errors.Is(err, ErrInvalidClientIP):
 			writeJSONError(w, http.StatusBadRequest, "invalid client IP")
 		default:

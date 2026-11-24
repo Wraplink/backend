@@ -20,6 +20,21 @@ Until the network protocol gains a stronger device identity, only one active acc
 
 Successful activations save the address for the authenticated account. The saved-IP endpoint returns `{"ips":["<IPv4>"]}` in most-recently-used order. Deleting a saved IP returns 204 and removes that address from the selector. The active entitlement and operational records are independent of this list.
 
+## Connecting from a different network
+
+An authenticated client can send `POST /api/v1/me/network/ip-approvals` with
+`{"clientIp":"<IPv4>"}` to create a ten-minute approval. The response contains
+`id`, `clientIp` and `expiresAt`. Each account can have one pending approval.
+Creating a new approval replaces the previous one.
+
+On the requested network, the same authenticated account sends
+`POST /api/v1/me/network/ip-approvals/confirm` with `{"id":"<approval UUID>"}`.
+The backend compares the trusted request IP with the approval's IP.
+It consumes the approval and saves the IP in the same transaction as activation.
+An expired, replaced, or used approval returns `409 IP_APPROVAL_UNAVAILABLE`.
+A request from another public IPv4 returns `400 CLIENT_IP_MISMATCH`.
+The saved-IP response includes `detectedIp` when the current request has a public IPv4.
+
 ## dns-control synchronization
 
 When `NETWORK_CONTROL_SYNC_KEY` is configured, the backend exposes a read-only snapshot:

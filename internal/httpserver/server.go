@@ -261,6 +261,8 @@ func NewRouter(
 		r.Post("/network/entitlement", entitlementHandler.Activate)
 		r.Get("/network/entitlement", entitlementHandler.Current)
 		r.Delete("/network/entitlement", entitlementHandler.Deactivate)
+		r.Post("/network/ip-approvals", entitlementHandler.CreateIPApproval)
+		r.Post("/network/ip-approvals/confirm", entitlementHandler.ConfirmIPApproval)
 		r.Get("/network/saved-ips", entitlementHandler.GetSavedIPs)
 		r.Delete("/network/saved-ips", entitlementHandler.DeleteSavedIP)
 		r.Get("/usage", networkHandler.Usage)

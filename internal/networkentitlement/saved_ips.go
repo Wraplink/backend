@@ -21,7 +21,15 @@ func (h *Handler) GetSavedIPs(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "could not load saved IPs")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string][]string{"ips": ips})
+	result := struct {
+		IPs        []string `json:"ips"`
+		DetectedIP string   `json:"detectedIp,omitempty"`
+	}{IPs: ips}
+	if ip := h.trustedProxy.ClientIP(r); isPublicIPv4(ip) {
+		result.DetectedIP = ip.String()
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handler) DeleteSavedIP(w http.ResponseWriter, r *http.Request) {
