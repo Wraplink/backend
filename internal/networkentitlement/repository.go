@@ -131,6 +131,11 @@ func (r *Repository) activateOnce(
 	}
 
 	clientIPText := clientIP.To4().String()
+	if _, err := tx.Exec(ctx, `INSERT INTO network_saved_ips (user_id, client_ip, last_used_at)
+		VALUES ($1, $2::inet, now()) ON CONFLICT (user_id, client_ip)
+		DO UPDATE SET last_used_at = EXCLUDED.last_used_at`, userID, clientIPText); err != nil {
+		return nil, fmt.Errorf("save connection IP: %w", err)
+	}
 	if existing != nil &&
 		existing.SubscriptionID == subscription.ID &&
 		existing.ClientIP == clientIPText {
