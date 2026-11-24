@@ -261,6 +261,8 @@ func NewRouter(
 		r.Post("/network/entitlement", entitlementHandler.Activate)
 		r.Get("/network/entitlement", entitlementHandler.Current)
 		r.Delete("/network/entitlement", entitlementHandler.Deactivate)
+		r.Get("/network/saved-ips", entitlementHandler.GetSavedIPs)
+		r.Delete("/network/saved-ips", entitlementHandler.DeleteSavedIP)
 		r.Get("/usage", networkHandler.Usage)
 
 		r.Get("/wallet", paymentsHandler.Wallet)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/netip"
 	"strings"
 
 	"backend/internal/requestcontext"
@@ -50,7 +51,16 @@ func (h *Handler) Activate(
 
 	clientIP := h.trustedProxy.ClientIP(r)
 	if clientIP == nil || clientIP.To4() == nil || clientIP.IsPrivate() || clientIP.IsLoopback() || clientIP.IsUnspecified() || clientIP.IsLinkLocalUnicast() {
-		writeJSONError(w, http.StatusBadRequest, "a public IPv4 client address is required; check trusted reverse-proxy configuration")
+		writeJSON(w, http.StatusBadRequest, map[string]string{"code": "PUBLIC_IPV4_REQUIRED", "error": "A public IPv4 client address is required."})
+		return
+	}
+
+	if code := validateSelectedIP(w, r, clientIP.String()); code != "" {
+		message := "Enter a valid IPv4 address."
+		if code == "CLIENT_IP_MISMATCH" {
+			message = "The selected IP does not match the current connection."
+		}
+		writeJSON(w, http.StatusBadRequest, map[string]string{"code": code, "error": message})
 		return
 	}
 
@@ -75,6 +85,38 @@ func (h *Handler) Activate(
 
 	h.recordEvent(r.Context(), userID, "success", "Connection activated")
 	writeJSON(w, http.StatusOK, result)
+}
+
+// An explicit choice must match the address observed by the trusted proxy.
+func validateSelectedIP(w http.ResponseWriter, r *http.Request, detected string) string {
+	if r.Body == nil {
+		return ""
+	}
+	var request struct {
+		ClientIP string `json:"clientIp"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err == io.EOF {
+		return ""
+	} else if err != nil {
+		return "INVALID_CLIENT_IP"
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return "INVALID_CLIENT_IP"
+	}
+	if request.ClientIP == "" {
+		return ""
+	}
+	addr, err := netip.ParseAddr(strings.TrimSpace(request.ClientIP))
+	if err != nil || !addr.Is4() {
+		return "INVALID_CLIENT_IP"
+	}
+	if addr.String() != detected {
+		return "CLIENT_IP_MISMATCH"
+	}
+	return ""
 }
 
 func (h *Handler) Current(
