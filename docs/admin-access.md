@@ -1,6 +1,6 @@
 # WrapLink administrator access
 
-Run database migrations through 000095 before enabling administrator pages.
+Run database migrations through 000097 before enabling administrator pages.
 
 ## Bootstrap
 
@@ -26,7 +26,7 @@ Open **Admin → Permissions** as an access administrator. Copy the staff accoun
 - **Domain policies** covers managed domains and DNS resolution policies.
 - **Users** and **Orders** grant read-only views. Account suspension, restoration, deletion, and permission changes require an access administrator.
 
-Migration 000095 makes the payment-method, support-ticket, and contact-message access previously inherited by payment reviewers into explicit grants. These grants can be revoked individually for existing users. Newly granted payment reviewers receive receipt access alone.
+Migration 000097 makes the payment-method, support-ticket, and contact-message access previously inherited by payment reviewers into explicit grants. These grants can be revoked individually for existing users. Newly granted payment reviewers receive receipt access alone.
 
 ## Endpoints
 
