@@ -24,12 +24,13 @@ func (s *Service) Activate(
 	ctx context.Context,
 	userID uuid.UUID,
 	clientIP net.IP,
+	approvalID uuid.UUID,
 ) (*Entitlement, error) {
 	mode, err := s.repository.GetMode(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	entitlement, err := s.repository.Activate(ctx, userID, clientIP)
+	entitlement, err := s.repository.Activate(ctx, userID, clientIP, approvalID)
 	if err != nil {
 		return nil, err
 	}

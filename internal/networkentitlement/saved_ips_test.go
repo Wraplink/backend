@@ -105,9 +105,15 @@ func TestSavedIPLifecyclePostgres(t *testing.T) {
 	assertHistory := func(user uuid.UUID, expected ...string) {
 		t.Helper()
 		res := call(h.GetSavedIPs, user, http.MethodGet, "/", "", first, http.StatusOK)
-		var history struct{ IPs []string }
+		var history struct {
+			IPs        []string
+			DetectedIP string
+		}
 		if err := json.Unmarshal(res.Body.Bytes(), &history); err != nil {
 			t.Fatal(err)
+		}
+		if history.DetectedIP != first {
+			t.Fatalf("got detected IP %q, want %q", history.DetectedIP, first)
 		}
 		if history.IPs == nil || !slices.Equal(history.IPs, expected) {
 			t.Fatalf("got history %v, want %v", history.IPs, expected)
@@ -128,4 +134,37 @@ func TestSavedIPLifecyclePostgres(t *testing.T) {
 	if active.Status != "active" || active.ClientIP != second {
 		t.Fatalf("deleting the saved address changed the active entitlement: %+v", active)
 	}
+
+	const remote = "192.0.2.162"
+	requestApproval := func() ipApproval {
+		res := call(h.CreateIPApproval, userID, http.MethodPost, "/", `{"clientIp":"`+remote+`"}`, first, http.StatusCreated)
+		var approval ipApproval
+		if err := json.Unmarshal(res.Body.Bytes(), &approval); err != nil {
+			t.Fatal(err)
+		}
+		if approval.ID == uuid.Nil || approval.ClientIP != remote || !approval.ExpiresAt.After(time.Now()) {
+			t.Fatalf("invalid approval response: %+v", approval)
+		}
+		return approval
+	}
+	confirm := func(approval ipApproval, account uuid.UUID, ip string, status int) {
+		t.Helper()
+		call(h.ConfirmIPApproval, account, http.MethodPost, "/", `{"id":"`+approval.ID.String()+`"}`, ip, status)
+	}
+
+	expired := requestApproval()
+	if _, err := pool.Exec(ctx, "UPDATE network_ip_approvals SET expires_at = now() WHERE id = $1", expired.ID); err != nil {
+		t.Fatal(err)
+	}
+	confirm(expired, userID, remote, http.StatusConflict)
+	replaced := requestApproval()
+	approval := requestApproval()
+	confirm(replaced, userID, remote, http.StatusConflict)
+	confirm(approval, otherID, remote, http.StatusConflict)
+	confirm(approval, userID, first, http.StatusBadRequest)
+	assertHistory(userID, first)
+	confirm(approval, userID, remote, http.StatusOK)
+	assertHistory(userID, remote, first)
+	confirm(approval, userID, remote, http.StatusConflict)
+
 }
