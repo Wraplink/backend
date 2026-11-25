@@ -138,3 +138,12 @@ Content-Type: application/json
 Invalid modes return HTTP 400; a valid PUT returns the saved mode. The choice is per user, not a global DNS server mode. The internal entitlement snapshot contains `connectionMode` for each active client IP so dns-control can apply tagged managed domain rules. DNS-control's refresh interval determines propagation delay (normally about 10 seconds). Mode changes do **not** alter the allocated DNS IP addresses, accelerate traffic, or guarantee a specific bypass without suitable provisioned DNS/edge rules.
 
 Deploy in order: apply DB migration, deploy backend, deploy dns-control rule support, then deploy web. Add `connection_modes: ["gaming"]` or `["streaming"]` to eligible managed domain entries in dns-control's configuration; untagged rules remain available in all modes and Smart retains all managed rules.
+
+## Google registration and sign-in
+
+1. Apply database migrations, including `000095_google_auth`.
+2. Create an OAuth client of type **Web application** in Google Auth Platform. Add an authorized redirect URI that points to the backend callback on the public site, such as `https://wraplink.ir/api/v1/auth/google/callback`. The backend needs outbound HTTPS access to `oauth2.googleapis.com` and `openidconnect.googleapis.com`.
+3. Set `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and `GOOGLE_OAUTH_REDIRECT_URI` in the backend environment and restart the backend. The redirect URI must exactly match the Google configuration and use the same API host that the browser uses for authentication. Use HTTPS in production. For local development, use the same hostname for the frontend and API with different ports, such as `http://localhost:3000` and `http://localhost:7080`.
+4. As an access administrator, open **Admin → Authentication** and enable **Allow Google registration and sign-in**. The setting defaults to off.
+
+Google registration requires the current terms and privacy consent and uses the registration CAPTCHA when configured. Google accounts sign in using their Google identity. An email already in use cannot be registered with Google, and password reset is available only for accounts with password credentials. Turning the setting off blocks new Google sign-ins and registrations. Existing sessions continue until they expire or are revoked.

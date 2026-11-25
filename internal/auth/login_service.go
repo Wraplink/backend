@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/google/uuid"
 
 	"backend/internal/password"
 )
@@ -108,6 +107,10 @@ func (s *LoginService) Login(
 		return nil, ErrInvalidCredentials
 	}
 
+	return s.createLoginSession(ctx, account, req)
+}
+
+func (s *LoginService) createLoginSession(ctx context.Context, account *LoginUser, req LoginRequest) (*LoginResult, error) {
 	if err := s.repository.RecordSuccessfulLogin(
 		ctx,
 		account.ID,

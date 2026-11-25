@@ -103,15 +103,16 @@ func (s *PasswordResetService) Request(
 		return nil
 	}
 
-	if err := s.resets.Create(
-		ctx,
-		account.ID,
-		tokenHash,
-	); err != nil {
+	created, err := s.resets.Create(ctx, account.ID, tokenHash)
+	if err != nil {
 		return fmt.Errorf(
 			"create password reset: %w",
 			err,
 		)
+	}
+
+	if !created {
+		return nil
 	}
 
 	if err := s.emailSender.SendPasswordResetEmail(

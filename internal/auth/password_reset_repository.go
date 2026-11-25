@@ -26,34 +26,31 @@ func (r *PasswordResetRepository) Create(
 	ctx context.Context,
 	userID uuid.UUID,
 	tokenHash string,
-) error {
+) (bool, error) {
 	const query = `
 		INSERT INTO password_resets (
 			user_id,
 			token_hash,
 			expires_at
 		)
-		VALUES (
-			$1,
-			$2,
-			now() + interval '30 minutes'
-		)
+		SELECT $1, $2, now() + interval '30 minutes'
+		WHERE EXISTS (SELECT 1 FROM user_credentials WHERE user_id = $1)
 	`
 
-	_, err := r.db.Exec(
+	result, err := r.db.Exec(
 		ctx,
 		query,
 		userID,
 		tokenHash,
 	)
 	if err != nil {
-		return fmt.Errorf(
+		return false, fmt.Errorf(
 			"create password reset token: %w",
 			err,
 		)
 	}
 
-	return nil
+	return result.RowsAffected() == 1, nil
 }
 
 // Confirm consumes the reset token and changes the password

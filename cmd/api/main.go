@@ -233,6 +233,9 @@ func main() {
 	routeInventoryHandler := routeinventory.Handler{DB:db,ControlKey:cfg.Network.ControlSyncKey,OfflineAfter:cfg.Network.ControlNodeOfflineAfter,DNSControlURL:cfg.Network.DNSControlURL,DNSControlToken:cfg.Network.DNSControlToken}
 	dnsDomainsHandler := &dnsdomains.Handler{Store:dnsdomains.Store{DB:db},ControlKey:cfg.Network.ControlSyncKey}
  loginHandler := auth.NewLoginHandler(loginService, cfg.App.Environment == "production")
+	googleHandler := auth.NewGoogleAuthHandler(db, loginService, logger, cfg.App.FrontendURL,
+		os.Getenv("GOOGLE_OAUTH_CLIENT_ID"), os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
+		os.Getenv("GOOGLE_OAUTH_REDIRECT_URI"), cfg.App.Environment == "production")
 	logoutHandler := auth.NewLogoutHandler(logoutService, cfg.App.Environment == "production")
 	resendVerificationHandler := auth.NewResendVerificationHandler(resendVerificationService, resendVerificationEmailLimiter, emailSender)
 	emailVerificationHandler := auth.NewEmailVerificationHandler(emailVerificationService)
@@ -298,6 +301,7 @@ func main() {
         dnsDomainsHandler,
 		registerHandler,
 		loginHandler,
+		googleHandler,
 		refreshHandler,
 		logoutHandler,
 		emailVerificationHandler,
