@@ -101,6 +101,14 @@ func (h *Handler) requireSection(w http.ResponseWriter, r *http.Request, permiss
 	return allowed
 }
 
+func (h *Handler) AccessAdminMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := h.requireAccessAdmin(w, r); ok {
+			next.ServeHTTP(w, r)
+		}
+	})
+}
+
 func (h *Handler) SectionMiddleware(permissions ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

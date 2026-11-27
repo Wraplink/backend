@@ -40,6 +40,7 @@ func NewRouter(
  dnsDomainsHandler *dnsdomains.Handler,
 	registerHandler *auth.RegisterHandler,
 	loginHandler *auth.LoginHandler,
+	googleHandler *auth.GoogleAuthHandler,
 	refreshHandler *auth.RefreshHandler,
 	logoutHandler *auth.LogoutHandler,
 	emailVerificationHandler *auth.EmailVerificationHandler,
@@ -219,9 +220,18 @@ func NewRouter(
   r.Post("/tickets/{ticketID}/messages",supportHandler.MyMessage)
   r.Patch("/tickets/{ticketID}/status",supportHandler.MyStatus)
  })
+	r.Route("/api/v1/admin/auth/google", func(r chi.Router) {
+		r.Use(requireAuthMiddleware, paymentsHandler.AccessAdminMiddleware)
+		r.Get("/settings", googleHandler.AdminSettings)
+		r.Put("/settings", googleHandler.UpdateSettings)
+	})
  r.Route("/api/v1/auth", func(r chi.Router) {
 		r.With(registrationRateLimitMiddleware, captchaMiddleware).Post("/register", registerHandler.Register)
 		r.Post("/login", loginHandler.Login)
+		r.Get("/google", googleHandler.Availability)
+		r.Post("/google/login", googleHandler.StartLogin)
+		r.With(registrationRateLimitMiddleware, captchaMiddleware).Post("/google/register", googleHandler.StartRegistration)
+		r.Get("/google/callback", googleHandler.Callback)
 		r.Post("/verify-email", emailVerificationHandler.Verify)
 		r.With(resendVerificationRateLimitMiddleware, captchaMiddleware).Post("/resend-verification", resendVerificationHandler.Resend)
 		r.Post("/refresh", refreshHandler.Refresh)
