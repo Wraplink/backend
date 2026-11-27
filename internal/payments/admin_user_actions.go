@@ -10,8 +10,7 @@ import (
  "github.com/jackc/pgx/v5"
 )
 
-// AdminUpdateUserStatus suspends, restores, or soft-deletes a user.
-// Soft deletion preserves billing and audit references and cannot be undone here.
+// AdminUpdateUserStatus suspends, restores, or permanently deletes a user.
 func (h *Handler) AdminUpdateUserStatus(w http.ResponseWriter,r *http.Request) {
  actor,ok:=h.requireAccessAdmin(w,r);if !ok{return}
  target,err:=uuid.Parse(chi.URLParam(r,"userID"));if err!=nil{writeJSONError(w,400,"invalid user ID");return}
@@ -39,13 +38,24 @@ func (h *Handler) AdminUpdateUserStatus(w http.ResponseWriter,r *http.Request) {
  if err=tx.QueryRow(r.Context(),"SELECT EXISTS(SELECT 1 FROM access_admins WHERE user_id=$1)",target).Scan(&admin);err!=nil{slog.Error("admin user status database failure","error",err,"target_user_id",target,"action",body.Action);writeJSONError(w,500,"database error");return}
  if admin{writeJSONError(w,403,"access administrator accounts cannot be modified here");return}
  if body.Action=="delete" {
-  // Delete non-cascading references first. The remaining user-owned tables
-  // have ON DELETE CASCADE; all changes occur in the same transaction.
+  // Clear foreign keys that would block deletion of the user or its cascaded records.
+  // Preserve other users’ tickets and wallet receipts by clearing nullable references.
   statements:=[]string{
    "DELETE FROM admin_permission_events WHERE actor_id=$1 OR target_id=$1",
    "DELETE FROM payment_review_events WHERE reviewer_id=$1 OR receipt_id IN (SELECT id FROM card_transfer_receipts WHERE user_id=$1 OR subscription_id IN (SELECT id FROM user_subscriptions WHERE user_id=$1))",
    "DELETE FROM card_transfer_receipts WHERE user_id=$1 OR subscription_id IN (SELECT id FROM user_subscriptions WHERE user_id=$1)",
    "DELETE FROM discount_redemptions WHERE user_id=$1 OR subscription_id IN (SELECT id FROM user_subscriptions WHERE user_id=$1)",
+   "DELETE FROM free_plan_claims WHERE user_id=$1",
+   "DELETE FROM support_messages WHERE sender_id=$1",
+   "DELETE FROM support_tickets WHERE user_id=$1",
+   "UPDATE support_tickets SET order_id=NULL WHERE order_id IN (SELECT id FROM user_subscriptions WHERE user_id=$1)",
+   "DELETE FROM wallet_card_receipts WHERE user_id=$1",
+   "UPDATE wallet_card_receipts SET reviewer_id=NULL WHERE reviewer_id=$1",
+   `DELETE FROM network_disconnect_commands
+    WHERE actor_user_id=$1 OR network_session_id IN (
+     SELECT id FROM network_sessions WHERE user_id=$1
+     OR subscription_id IN (SELECT id FROM user_subscriptions WHERE user_id=$1)
+    )`,
    "DELETE FROM security_events WHERE user_id=$1",
    "DELETE FROM users WHERE id=$1",
   }
