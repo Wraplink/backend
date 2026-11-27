@@ -126,6 +126,7 @@ func (s *EmailVerificationService) Verify(
 			updated_at = now()
 		WHERE id = $1
 		  AND email_verified = FALSE
+		  AND account_status <> 'deleted'
 	`
 
 	result, err := tx.Exec(

@@ -20,15 +20,16 @@ func (h *Handler) AdminUsers(w http.ResponseWriter,r *http.Request){
  if !h.requireSection(w,r,PermissionUsers){return}
  search:=strings.TrimSpace(r.URL.Query().Get("search"))
  if len(search)>200 {writeJSONError(w,400,"search too long");return}
- rows,err:=h.service.repository.db.Query(r.Context(),`SELECT id,email,full_name,account_status,email_verified,created_at
+ rows,err:=h.service.repository.db.Query(r.Context(),`SELECT id,email,full_name,account_status,email_verified,created_at,
+ (account_status='deleted' AND email=$3||id::text)
  FROM users WHERE ($1='' OR email ILIKE '%'||$1||'%' OR full_name ILIKE '%'||$1||'%')
- ORDER BY created_at DESC,id DESC LIMIT $2`,search,adminPageLimit(r))
+ ORDER BY created_at DESC,id DESC LIMIT $2`,search,adminPageLimit(r),releasedEmailPrefix)
  if err!=nil{writeJSONError(w,500,"database error");return};defer rows.Close()
  items:=make([]map[string]any,0)
  for rows.Next(){
-  var id uuid.UUID;var email,name,status string;var verified bool;var created time.Time
-  if err=rows.Scan(&id,&email,&name,&status,&verified,&created);err!=nil{writeJSONError(w,500,"database error");return}
-  items=append(items,map[string]any{"id":id,"email":email,"name":name,"status":status,"emailVerified":verified,"createdAt":created})
+  var id uuid.UUID;var email,name,status string;var verified,released bool;var created time.Time
+  if err=rows.Scan(&id,&email,&name,&status,&verified,&created,&released);err!=nil{writeJSONError(w,500,"database error");return}
+  items=append(items,map[string]any{"id":id,"email":email,"name":name,"status":status,"emailVerified":verified,"emailReleased":released,"createdAt":created})
  }
  if rows.Err()!=nil{writeJSONError(w,500,"database error");return}
  writeJSON(w,200,map[string]any{"users":items})
