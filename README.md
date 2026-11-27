@@ -141,7 +141,7 @@ Deploy in order: apply DB migration, deploy backend, deploy dns-control rule sup
 
 ## Google registration and sign-in
 
-1. Apply database migrations, including `000095_google_auth`.
+1. Apply database migrations, including `000099_google_auth`.
 2. Create an OAuth client of type **Web application** in Google Auth Platform. Add an authorized redirect URI that points to the backend callback on the public site, such as `https://wraplink.ir/api/v1/auth/google/callback`. The backend needs outbound HTTPS access to `oauth2.googleapis.com` and `openidconnect.googleapis.com`.
 3. Set `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and `GOOGLE_OAUTH_REDIRECT_URI` in the backend environment and restart the backend. The redirect URI must exactly match the Google configuration and use the same API host that the browser uses for authentication. Use HTTPS in production. For local development, use the same hostname for the frontend and API with different ports, such as `http://localhost:3000` and `http://localhost:7080`.
 4. As an access administrator, open **Admin → Authentication** and enable **Allow Google registration and sign-in**. The setting defaults to off.

@@ -17,13 +17,6 @@ func NewHandler(db *pgxpool.Pool)*Handler{return &Handler{DB:db}}
 func respond(w http.ResponseWriter,status int,v any){w.Header().Set("Content-Type","application/json");w.WriteHeader(status);_ = json.NewEncoder(w).Encode(v)}
 func fail(w http.ResponseWriter,status int,msg string){respond(w,status,map[string]string{"error":msg})}
 func actor(w http.ResponseWriter,r *http.Request)(uuid.UUID,bool){id,ok:=requestcontext.UserID(r.Context());if !ok{fail(w,401,"authentication required")};return id,ok}
-func (h *Handler) admin(w http.ResponseWriter,r *http.Request)(uuid.UUID,bool){
- id,ok:=actor(w,r);if !ok{return id,false}
- var allowed bool
- if h.DB.QueryRow(r.Context(),"SELECT EXISTS(SELECT 1 FROM access_admins WHERE user_id=$1 UNION SELECT 1 FROM payment_review_admins WHERE user_id=$1)",id).Scan(&allowed)!=nil{fail(w,500,"authorization unavailable");return id,false}
- if !allowed{fail(w,403,"support staff permission required")}
- return id,allowed
-}
 type ticket struct {
  ID uuid.UUID `json:"id"`
  TicketNumber int64 `json:"ticketNumber"`
@@ -42,7 +35,6 @@ type ticket struct {
 }
 func (h *Handler) list(w http.ResponseWriter,r *http.Request,staff bool){
  id,ok:=actor(w,r);if !ok{return}
- if staff {if _,ok=h.admin(w,r);!ok{return}}
  limit:=50;offset:=0
  if raw:=r.URL.Query().Get("offset");raw!=""{n,e:=strconv.Atoi(raw);if e!=nil||n<0||n>1000000{fail(w,400,"invalid offset");return};offset=n}
  if raw:=r.URL.Query().Get("limit");raw!=""{n,e:=strconv.Atoi(raw);if e!=nil||n<1||n>100{fail(w,400,"invalid limit");return};limit=n}
@@ -89,7 +81,6 @@ func(h *Handler) Create(w http.ResponseWriter,r *http.Request){
 }
 func(h *Handler) detail(w http.ResponseWriter,r *http.Request,staff bool){
  actorID,ok:=actor(w,r);if !ok{return}
- if staff {if _,ok=h.admin(w,r);!ok{return}}
  id,e:=uuid.Parse(chi.URLParam(r,"ticketID"));if e!=nil{fail(w,400,"invalid ticket ID");return}
  var t ticket
  e=h.DB.QueryRow(r.Context(),`SELECT t.id,t.ticket_number,t.user_id,u.email,u.full_name,s.order_number,t.subject,t.category,t.priority,t.status,t.created_at,t.updated_at,t.customer_unread,t.staff_unread FROM support_tickets t JOIN users u ON u.id=t.user_id LEFT JOIN user_subscriptions s ON s.id=t.order_id WHERE t.id=$1 AND ($2::boolean OR t.user_id=$3)`,id,staff,actorID).Scan(&t.ID,&t.TicketNumber,&t.UserID,&t.Email,&t.FullName,&t.OrderNumber,&t.Subject,&t.Category,&t.Priority,&t.Status,&t.CreatedAt,&t.UpdatedAt,&t.CustomerUnread,&t.StaffUnread)
@@ -105,7 +96,7 @@ func(h *Handler) detail(w http.ResponseWriter,r *http.Request,staff bool){
 func(h *Handler) MyDetail(w http.ResponseWriter,r *http.Request){h.detail(w,r,false)}
 func(h *Handler) AdminDetail(w http.ResponseWriter,r *http.Request){h.detail(w,r,true)}
 func(h *Handler) message(w http.ResponseWriter,r *http.Request,staff bool){
- id,ok:=actor(w,r);if !ok{return};if staff{if _,ok=h.admin(w,r);!ok{return}}
+ id,ok:=actor(w,r);if !ok{return}
  tid,e:=uuid.Parse(chi.URLParam(r,"ticketID"));if e!=nil{fail(w,400,"invalid ticket ID");return}
  var b struct{Message string `json:"message"`};if json.NewDecoder(http.MaxBytesReader(w,r.Body,12000)).Decode(&b)!=nil{fail(w,400,"invalid request");return};b.Message=strings.TrimSpace(b.Message)
  if len(b.Message)<1||len(b.Message)>10000{fail(w,400,"invalid message");return}
@@ -125,7 +116,7 @@ func(h *Handler) message(w http.ResponseWriter,r *http.Request,staff bool){
 func(h *Handler) MyMessage(w http.ResponseWriter,r *http.Request){h.message(w,r,false)}
 func(h *Handler) AdminMessage(w http.ResponseWriter,r *http.Request){h.message(w,r,true)}
 func(h *Handler) updateStatus(w http.ResponseWriter,r *http.Request,staff bool){
- id,ok:=actor(w,r);if !ok{return};if staff{if _,ok=h.admin(w,r);!ok{return}}
+ id,ok:=actor(w,r);if !ok{return}
  tid,e:=uuid.Parse(chi.URLParam(r,"ticketID"));if e!=nil{fail(w,400,"invalid ticket ID");return}
  var b struct{Status string `json:"status"`};if json.NewDecoder(http.MaxBytesReader(w,r.Body,1024)).Decode(&b)!=nil{fail(w,400,"invalid request");return}
  if staff {if b.Status!="open"&&b.Status!="pending"&&b.Status!="resolved"&&b.Status!="closed"{fail(w,400,"invalid status");return}} else if b.Status!="closed"&&b.Status!="open"{fail(w,403,"invalid customer status");return}

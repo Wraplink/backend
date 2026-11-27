@@ -87,7 +87,7 @@ func NewRouter(
 	r.Get("/api/v1/payment-methods", paymentsHandler.ListPaymentMethods)
 	r.Get("/api/v1/plans", plansHandler.List)
 	r.Get("/api/v1/plans/{code}", plansHandler.Get)
- r.Route("/api/v1/admin/plans",func(r chi.Router){r.Use(requireAuthMiddleware);r.Use(paymentsHandler.AccessAdminMiddleware);r.Get("/",plansHandler.AdminList);r.Put("/",plansHandler.AdminSave);r.Delete("/{code}",plansHandler.AdminRetire)})
+ r.Route("/api/v1/admin/plans",func(r chi.Router){r.Use(requireAuthMiddleware);r.Use(paymentsHandler.SectionMiddleware(payments.PermissionPlans));r.Get("/",plansHandler.AdminList);r.Put("/",plansHandler.AdminSave);r.Delete("/{code}",plansHandler.AdminRetire)})
 
 	if depositHandler.DevelopmentSettlementEnabled() {
 		r.Post("/api/v1/dev/deposits/{depositID}/settle", depositHandler.SettleDevelopment)
@@ -133,32 +133,36 @@ func NewRouter(
 
 	r.Route("/api/v1/admin/dns/domains",func(r chi.Router){
  r.Use(requireAuthMiddleware)
- r.Use(paymentsHandler.AccessAdminMiddleware)
+ r.Use(paymentsHandler.SectionMiddleware(payments.PermissionDomainPolicies))
  dnsDomainsHandler.Routes(r)
  })
  r.Route("/api/v1/admin/network", func(r chi.Router) {
         r.Use(requireAuthMiddleware)
-        r.Use(paymentsHandler.AccessAdminMiddleware)
-        r.Get("/dns-controls", dnsRegistryHandler.AdminNodes)
-        r.Get("/dns-queries",dnsRegistryHandler.AdminDNSQueries)
-        r.Delete("/dns-queries",dnsRegistryHandler.AdminClearDNSQueries)
-        r.Get("/agents", dnsRegistryHandler.AdminAgents)
+        monitor := r.With(paymentsHandler.SectionMiddleware(payments.PermissionNetworkMonitor))
+        manage := r.With(paymentsHandler.SectionMiddleware(payments.PermissionNetworkManage))
+        monitor.Get("/dns-controls", dnsRegistryHandler.AdminNodes)
+        monitor.Get("/dns-queries",dnsRegistryHandler.AdminDNSQueries)
+        manage.Delete("/dns-queries",dnsRegistryHandler.AdminClearDNSQueries)
+        monitor.Get("/agents", dnsRegistryHandler.AdminAgents)
         if onlineHandler!=nil {
           online:=onlineHandler
-          r.Get("/sessions",online.ListSessions)
-          r.Post("/sessions/{sessionID}/disconnect",online.Disconnect)
-          r.Get("/disconnect-commands/{commandID}",online.CommandStatus)
+          monitor.Get("/sessions",online.ListSessions)
+          manage.Post("/sessions/{sessionID}/disconnect",online.Disconnect)
+          manage.Get("/disconnect-commands/{commandID}",online.CommandStatus)
         }
-        r.Delete("/nodes/{type}/{id}", dnsRegistryHandler.AdminRemoveNode)
-        r.Get("/route-agent-ips",routeInventoryHandler.AdminInventory)
+        manage.Delete("/nodes/{type}/{id}", dnsRegistryHandler.AdminRemoveNode)
+        r.With(paymentsHandler.SectionMiddleware(payments.PermissionNetworkMonitor, payments.PermissionDomainPolicies)).Get("/route-agent-ips",routeInventoryHandler.AdminInventory)
+        r.Group(func(r chi.Router) {
+            r.Use(paymentsHandler.SectionMiddleware(payments.PermissionDomainPolicies))
 		r.Get("/domains", dnsRegistryHandler.AdminPolicies)
 		r.Put("/domains", dnsRegistryHandler.PutPolicy)
 		r.Delete("/domains/{domain}", dnsRegistryHandler.DeletePolicy)
+        })
     })
 
     r.Route("/api/v1/admin/starter-policies",func(r chi.Router){
         r.Use(requireAuthMiddleware)
-        r.Use(paymentsHandler.AccessAdminMiddleware)
+        r.Use(paymentsHandler.SectionMiddleware(payments.PermissionStarterPlans))
         admin:=subscriptionsHandler.AdminStarterPolicies()
         r.Get("/",admin.List)
         r.Post("/",admin.Create)
@@ -167,6 +171,7 @@ func NewRouter(
 
 	r.Route("/api/v1/admin/access", func(r chi.Router) {
         r.Use(requireAuthMiddleware)
+        r.Get("/me", paymentsHandler.AdminCapabilities)
         r.Get("/permissions", paymentsHandler.ListAdminPermissions)
         r.Get("/users", paymentsHandler.AdminUsers)
         r.Patch("/users/{userID}/status", paymentsHandler.AdminUpdateUserStatus)
@@ -174,7 +179,7 @@ func NewRouter(
         r.Put("/users/{userID}/permissions/{permission}", paymentsHandler.UpdateAdminPermission)
     })
 
-	r.With(requireAuthMiddleware).Get("/api/v1/admin/contact-messages", supportHandler.AdminContactMessages)
+	r.With(requireAuthMiddleware, paymentsHandler.SectionMiddleware(payments.PermissionContactMessages)).Get("/api/v1/admin/contact-messages", supportHandler.AdminContactMessages)
 	r.Route("/api/v1/admin/payment-reviews", func(r chi.Router) {
         r.Use(requireAuthMiddleware)
         r.Get("/discounts", paymentsHandler.AdminListDiscounts)
@@ -193,7 +198,7 @@ func NewRouter(
     })
 
  r.Route("/api/v1/admin/support",func(r chi.Router){
-  r.Use(requireAuthMiddleware)
+  r.Use(requireAuthMiddleware, paymentsHandler.SectionMiddleware(payments.PermissionSupport))
   r.Get("/tickets",supportHandler.AdminList)
   r.Get("/tickets/{ticketID}",supportHandler.AdminDetail)
   r.Post("/tickets/{ticketID}/messages",supportHandler.AdminMessage)
@@ -271,6 +276,10 @@ func NewRouter(
 		r.Post("/network/entitlement", entitlementHandler.Activate)
 		r.Get("/network/entitlement", entitlementHandler.Current)
 		r.Delete("/network/entitlement", entitlementHandler.Deactivate)
+		r.Post("/network/ip-approvals", entitlementHandler.CreateIPApproval)
+		r.Post("/network/ip-approvals/confirm", entitlementHandler.ConfirmIPApproval)
+		r.Get("/network/saved-ips", entitlementHandler.GetSavedIPs)
+		r.Delete("/network/saved-ips", entitlementHandler.DeleteSavedIP)
 		r.Get("/usage", networkHandler.Usage)
 
 		r.Get("/wallet", paymentsHandler.Wallet)

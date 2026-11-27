@@ -42,6 +42,7 @@ func (r *Repository) Activate(
 	ctx context.Context,
 	userID uuid.UUID,
 	clientIP net.IP,
+	approvalID uuid.UUID,
 ) (*Entitlement, error) {
 	const maxAttempts = 3
 	var result *Entitlement
@@ -50,7 +51,7 @@ func (r *Repository) Activate(
 		if err = ctx.Err(); err != nil {
 			return nil, err
 		}
-		result, err = r.activateOnce(ctx, userID, clientIP)
+		result, err = r.activateOnce(ctx, userID, clientIP, approvalID)
 		if err == nil || !isRetryableTransactionError(err) || attempt == maxAttempts-1 {
 			return result, err
 		}
@@ -74,6 +75,7 @@ func (r *Repository) activateOnce(
 	ctx context.Context,
 	userID uuid.UUID,
 	clientIP net.IP,
+	approvalID uuid.UUID,
 ) (*Entitlement, error) {
 	if clientIP == nil || clientIP.To4() == nil {
 		return nil, ErrInvalidClientIP
@@ -105,6 +107,12 @@ func (r *Repository) activateOnce(
 		}
 	}
 
+	if approvalID != uuid.Nil {
+		if err := consumeIPApproval(ctx, tx, userID, approvalID, clientIP.To4().String()); err != nil {
+			return nil, err
+		}
+	}
+
 	// Promote a reserved plan when the current plan has expired or exhausted its quota.
 	if _, err := tx.Exec(ctx, "SELECT promote_user_subscription($1)", userID); err != nil {
 		return nil, fmt.Errorf("reconcile subscription before connection: %w", err)
@@ -131,6 +139,11 @@ func (r *Repository) activateOnce(
 	}
 
 	clientIPText := clientIP.To4().String()
+	if _, err := tx.Exec(ctx, `INSERT INTO network_saved_ips (user_id, client_ip, last_used_at)
+		VALUES ($1, $2::inet, now()) ON CONFLICT (user_id, client_ip)
+		DO UPDATE SET last_used_at = EXCLUDED.last_used_at`, userID, clientIPText); err != nil {
+		return nil, fmt.Errorf("save connection IP: %w", err)
+	}
 	if existing != nil &&
 		existing.SubscriptionID == subscription.ID &&
 		existing.ClientIP == clientIPText {
