@@ -48,6 +48,7 @@ func NewRouter(
 	passwordResetHandler *auth.PasswordResetHandler,
 	meHandler *user.MeHandler,
 	passwordChangeHandler *auth.PasswordChangeHandler,
+	accountDeleteHandler *auth.AccountDeleteHandler,
 	sessionManagementHandler *auth.SessionManagementHandler,
 	revokeOthersHandler *auth.RevokeOthersHandler,
 	registrationRateLimitMiddleware func(http.Handler) http.Handler,
@@ -245,6 +246,7 @@ func NewRouter(
 
 		r.Get("/", meHandler.Get)
 		r.Patch("/", meHandler.Update)
+		r.Delete("/", accountDeleteHandler.Delete)
         r.Get("/appearance",meHandler.GetAppearance)
         r.Put("/appearance",meHandler.SetAppearance)
 		r.Post("/password", passwordChangeHandler.Change)

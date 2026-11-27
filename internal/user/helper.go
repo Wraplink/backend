@@ -15,6 +15,7 @@ func writeMeResponse(
 		Email:         user.Email,
 		FullName:      user.FullName,
 		EmailVerified: user.EmailVerified,
+		HasPassword:   user.HasPassword,
 		AccountStatus: user.AccountStatus,
 		CreatedAt:     user.CreatedAt.UTC().Format(time.RFC3339),
 		UpdatedAt:     user.UpdatedAt.UTC().Format(time.RFC3339),

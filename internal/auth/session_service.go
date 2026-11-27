@@ -151,6 +151,17 @@ func (s *SessionService) Rotate(
 		return nil, fmt.Errorf("find refresh session: %w", err)
 	}
 
+	// A rotation racing account deletion may leave a replacement session
+	// outside the revocation statement's snapshot. Reject it on reuse.
+	var activeAccount bool
+	err = tx.QueryRow(ctx, "SELECT account_status = 'active' FROM users WHERE id = $1", userID).Scan(&activeAccount)
+	if err != nil {
+		return nil, fmt.Errorf("check refresh account status: %w", err)
+	}
+	if !activeAccount {
+		return nil, ErrInvalidRefreshToken
+	}
+
 	/*
 		An already revoked refresh token means somebody is
 		attempting to reuse an old token.

@@ -243,6 +243,7 @@ func main() {
 	refreshHandler := auth.NewRefreshHandler(refreshService, cfg.App.Environment == "production")
 	passwordResetHandler := auth.NewPasswordResetHandler(passwordResetService)
 	meHandler := user.NewMeHandler(meService)
+	accountDeleteHandler := auth.NewAccountDeleteHandler(db, cfg.App.Environment == "production")
 	passwordChangeHandler := auth.NewPasswordChangeHandler(passwordChangeService, trustedProxy)
 	sessionManagementHandler := auth.NewSessionManagementHandler(sessionManagementService)
 	revokeOthersHandler := auth.NewRevokeOthersHandler(revokeOthersService)
@@ -309,6 +310,7 @@ func main() {
 		passwordResetHandler,
 		meHandler,
 		passwordChangeHandler,
+		accountDeleteHandler,
 		sessionManagementHandler,
 		revokeOthersHandler,
 		registrationRateLimitMiddleware,

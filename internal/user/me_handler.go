@@ -47,6 +47,7 @@ type MeResponse struct {
 	ID            string  `json:"id"`
 	Email         string  `json:"email"`
 	FullName      string  `json:"full_name"`
+	HasPassword   bool `json:"has_password"`
 	EmailVerified bool    `json:"email_verified"`
 	AccountStatus string  `json:"account_status"`
 	LastLoginAt   *string `json:"last_login_at,omitempty"`

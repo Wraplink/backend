@@ -107,6 +107,16 @@ func (r *Repository) activateOnce(
 		}
 	}
 
+	// Serialize activation with account deletion so a request that passed
+	// authentication just before deletion cannot create a new entitlement.
+	var accountStatus string
+	if err := tx.QueryRow(ctx, "SELECT account_status FROM users WHERE id = $1 FOR UPDATE", userID).Scan(&accountStatus); err != nil {
+		return nil, fmt.Errorf("check account status before activation: %w", err)
+	}
+	if accountStatus != "active" {
+		return nil, ErrEntitlementNotFound
+	}
+
 	if approvalID != uuid.Nil {
 		if err := consumeIPApproval(ctx, tx, userID, approvalID, clientIP.To4().String()); err != nil {
 			return nil, err

@@ -25,6 +25,7 @@ type User struct {
 	Email               string
 	FullName            string
 	EmailVerified       bool
+	HasPassword         bool
 	AccountStatus       string
 	FailedLoginAttempts int
 	LockedUntil         *time.Time
@@ -68,7 +69,8 @@ func (r *Repository) FindByID(
 			last_login_at,
 			host(last_login_ip),
 			created_at,
-			updated_at
+			updated_at,
+			EXISTS (SELECT 1 FROM user_credentials WHERE user_id = users.id)
 		FROM users
 		WHERE id = $1
 	`
@@ -87,6 +89,7 @@ func (r *Repository) FindByID(
 		&u.LastLoginIP,
 		&u.CreatedAt,
 		&u.UpdatedAt,
+		&u.HasPassword,
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
