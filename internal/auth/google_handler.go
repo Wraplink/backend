@@ -187,46 +187,50 @@ func (h *GoogleAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	flow, ok := h.readFlow(r, query.Get("state"))
 	if !ok {
-		h.redirect(w, r, googleFlow{}, true)
+		h.redirect(w, r, googleFlow{}, googleFailed)
 		return
 	}
 	h.setFlowCookie(w, "", -1)
 	enabled, err := h.enabled(r.Context())
 	code := query.Get("code")
 	if err != nil || !enabled || !h.configured() || code == "" || query.Get("error") != "" {
-		h.redirect(w, r, flow, true)
+		h.redirect(w, r, flow, googleFailed)
 		return
 	}
 	profile, err := h.fetchGoogleProfile(r.Context(), code, flow.Verifier)
 	if err != nil {
 		h.logger.Warn("Google authorization could not be verified")
-		h.redirect(w, r, flow, true)
+		h.redirect(w, r, flow, googleFailed)
 		return
 	}
 
 	enabled, err = h.enabled(r.Context())
 	if err != nil || !enabled {
-		h.redirect(w, r, flow, true)
+		h.redirect(w, r, flow, googleFailed)
 		return
 	}
 	req := LoginRequest{IPAddress: parseIP(security.RemoteIP(r)), UserAgent: r.UserAgent()}
 	account, err := h.account(r.Context(), profile, flow, req)
+	if errors.Is(err, errGoogleRegistrationRequired) {
+		h.redirect(w, r, flow, googleNeedsRegistration)
+		return
+	}
 	if err != nil {
 		if !errors.Is(err, ErrInvalidCredentials) && !errors.Is(err, ErrInvalidRegistration) && !isUniqueViolation(err) {
 			h.logger.Error("Google account lookup or creation failed")
 		}
-		h.redirect(w, r, flow, true)
+		h.redirect(w, r, flow, googleFailed)
 		return
 	}
 	result, err := h.login.createLoginSession(r.Context(), account, req)
 	if err != nil {
 		h.logger.Error("Google login session creation failed")
-		h.redirect(w, r, flow, true)
+		h.redirect(w, r, flow, googleFailed)
 		return
 	}
 	setRefreshCookieWithPersistence(w, result.RefreshToken, result.RefreshUntil, h.secure, flow.RememberDevice)
 	setRememberDeviceCookie(w, flow.RememberDevice, result.RefreshUntil, h.secure)
-	h.redirect(w, r, flow, false)
+	h.redirect(w, r, flow, googleSignedIn)
 }
 
 func (h *GoogleAuthHandler) flowCookieName() string {
@@ -256,9 +260,17 @@ func (h *GoogleAuthHandler) readFlow(r *http.Request, state string) (googleFlow,
 	return flow, true
 }
 
-func (h *GoogleAuthHandler) redirect(w http.ResponseWriter, r *http.Request, flow googleFlow, failed bool) {
+type googleRedirectOutcome int
+
+const (
+	googleSignedIn googleRedirectOutcome = iota
+	googleFailed
+	googleNeedsRegistration
+)
+
+func (h *GoogleAuthHandler) redirect(w http.ResponseWriter, r *http.Request, flow googleFlow, outcome googleRedirectOutcome) {
 	path := "/auth/login"
-	if failed && flow.Register {
+	if outcome == googleNeedsRegistration || (outcome == googleFailed && flow.Register) {
 		path = "/auth/register"
 	}
 	if flow.Locale == "en" {
@@ -268,12 +280,18 @@ func (h *GoogleAuthHandler) redirect(w http.ResponseWriter, r *http.Request, flo
 	if destination := safeGoogleReturnURL(flow.ReturnURL); destination != "" {
 		query.Set("returnUrl", destination)
 	}
-	if failed {
+	switch outcome {
+	case googleFailed:
 		query.Set("googleError", "1")
+	case googleNeedsRegistration:
+		query.Set("googleSignup", "1")
 	}
 	target := h.frontendURL + path
 	if len(query) != 0 {
 		target += "?" + query.Encode()
+	}
+	if outcome == googleNeedsRegistration {
+		target += "#agreements"
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }

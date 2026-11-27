@@ -57,8 +57,8 @@ func TestSavedIPLifecyclePostgres(t *testing.T) {
 	defer pool.Close()
 
 	userID, otherID, planID := uuid.New(), uuid.New(), uuid.New()
-	_, err = pool.Exec(ctx, `INSERT INTO users (id, failed_login_attempts, last_login_ip, email, full_name, email_verified)
-		VALUES ($1, 181001, '192.0.2.158', $3, 'Saved IP test', true), ($2, 181002, '192.0.2.159', $4, 'Saved IP test', true)`,
+	_, err = pool.Exec(ctx, `INSERT INTO users (id, failed_login_attempts, last_login_ip, email, full_name, email_verified, account_status)
+		VALUES ($1, 181001, '192.0.2.158', $3, 'Saved IP test', true, 'active'), ($2, 181002, '192.0.2.159', $4, 'Saved IP test', true, 'active')`,
 		userID, otherID, userID.String()+"@example.invalid", otherID.String()+"@example.invalid")
 	if err != nil {
 		t.Fatal(err)
