@@ -127,7 +127,7 @@ func TestGoogleRegistrationAndLogin(t *testing.T) {
 		expectedChallenge = query.Get("code_challenge")
 		return cookies[0], query.Get("state")
 	}
-	callback := func(cookie *http.Cookie, state string, failed bool) *http.Cookie {
+	callback := func(cookie *http.Cookie, state string, outcome googleRedirectOutcome) *http.Cookie {
 		t.Helper()
 		query := url.Values{"code": {"test-code"}, "state": {state}}
 		request := httptest.NewRequest(http.MethodGet, googleCallbackPath+"?"+query.Encode(), nil)
@@ -138,12 +138,17 @@ func TestGoogleRegistrationAndLogin(t *testing.T) {
 			t.Fatalf("callback: %d %s", response.Code, response.Body)
 		}
 		location, err := url.Parse(response.Header().Get("Location"))
-		if err != nil || location.Host != "app.example.com" || (location.Query().Get("googleError") == "1") != failed {
+		if err != nil || location.Host != "app.example.com" || (location.Query().Get("googleError") == "1") != (outcome == googleFailed) ||
+			(location.Query().Get("googleSignup") == "1") != (outcome == googleNeedsRegistration) {
 			t.Fatalf("unexpected callback redirect %q", response.Header().Get("Location"))
+		}
+		if outcome == googleNeedsRegistration &&
+			(location.Path != "/en/auth/register" || location.Fragment != "agreements" || location.Query().Get("returnUrl") != "/checkout") {
+			t.Fatalf("registration redirect lost agreements, locale, or destination: %s", location)
 		}
 		for _, cookie := range response.Result().Cookies() {
 			if cookie.Name == refreshCookieName {
-				if failed {
+				if outcome != googleSignedIn {
 					t.Fatal("failed callback created a refresh cookie")
 				}
 				if location.Path != "/en/auth/login" || location.Query().Get("returnUrl") != "/checkout" {
@@ -152,7 +157,7 @@ func TestGoogleRegistrationAndLogin(t *testing.T) {
 				return cookie
 			}
 		}
-		if !failed {
+		if outcome == googleSignedIn {
 			t.Fatal("successful callback did not create a session")
 		}
 		return nil
@@ -164,14 +169,18 @@ func TestGoogleRegistrationAndLogin(t *testing.T) {
 	update(true)
 	start(true, input, http.StatusBadRequest)
 	cookie, state := start(false, input, http.StatusOK)
-	callback(cookie, state, true) // Login cannot create an account.
+	callback(cookie, state, googleNeedsRegistration)
+	var exists bool
+	if err := db.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM users WHERE email = $1)", email).Scan(&exists); err != nil || exists {
+		t.Fatalf("sign-in created an account before agreement acceptance: exists=%v err=%v", exists, err)
+	}
 
 	input.TermsVersion = legal.CurrentTermsVersion
 	input.PrivacyVersion = legal.CurrentPrivacyVersion
 	input.MarketingConsent = true
 	cookie, state = start(true, input, http.StatusOK)
-	callback(cookie, state+"tampered", true)
-	refresh := callback(cookie, state, false)
+	callback(cookie, state+"tampered", googleFailed)
+	refresh := callback(cookie, state, googleSignedIn)
 	if refresh.MaxAge != 0 {
 		t.Fatal("registration unexpectedly persisted the refresh cookie")
 	}
@@ -193,7 +202,7 @@ func TestGoogleRegistrationAndLogin(t *testing.T) {
 
 	input.RememberDevice = true
 	cookie, state = start(false, input, http.StatusOK)
-	refresh = callback(cookie, state, false)
+	refresh = callback(cookie, state, googleSignedIn)
 	if refresh.MaxAge <= 0 {
 		t.Fatal("Google login did not honor remembered-device preference")
 	}
@@ -204,12 +213,14 @@ func TestGoogleRegistrationAndLogin(t *testing.T) {
 
 	cookie, state = start(false, input, http.StatusOK)
 	update(false)
-	callback(cookie, state, true)
+	callback(cookie, state, googleFailed)
 
 	update(true)
 	subject = uuid.NewString()
+	cookie, state = start(false, input, http.StatusOK)
+	callback(cookie, state, googleFailed) // An email already in use does not trigger new registration.
 	cookie, state = start(true, input, http.StatusOK)
-	callback(cookie, state, true) // A different Google subject cannot take over the email.
+	callback(cookie, state, googleFailed) // A different Google subject cannot take over the email.
 }
 
 func TestSafeGoogleReturnURL(t *testing.T) {

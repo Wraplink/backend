@@ -10,6 +10,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+var errGoogleRegistrationRequired = errors.New("Google registration required")
+
 type googleProfile struct {
 	Subject       string `json:"sub"`
 	Email         string `json:"email"`
@@ -41,13 +43,25 @@ func (h *GoogleAuthHandler) account(ctx context.Context, profile googleProfile, 
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}
-	if !flow.Register || flow.TermsVersion != legal.CurrentTermsVersion || flow.PrivacyVersion != legal.CurrentPrivacyVersion {
-		return nil, ErrInvalidCredentials
-	}
-
 	account.Email = user.NormalizeEmail(profile.Email)
+	if validateEmail(account.Email) != nil {
+		return nil, ErrInvalidRegistration
+	}
+	if !flow.Register {
+		var exists bool
+		if err := h.db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE email = $1)`, account.Email).Scan(&exists); err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, ErrInvalidCredentials
+		}
+		return nil, errGoogleRegistrationRequired
+	}
+	if flow.TermsVersion != legal.CurrentTermsVersion || flow.PrivacyVersion != legal.CurrentPrivacyVersion {
+		return nil, ErrInvalidRegistration
+	}
 	account.FullName = strings.TrimSpace(profile.Name)
-	if validateEmail(account.Email) != nil || validateFullName(account.FullName) != nil {
+	if validateFullName(account.FullName) != nil {
 		return nil, ErrInvalidRegistration
 	}
 
