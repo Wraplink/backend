@@ -10,7 +10,10 @@ import (
  "github.com/jackc/pgx/v5"
 )
 
-// AdminUpdateUserStatus suspends, restores, or permanently deletes a user.
+// releasedEmailPrefix cannot form a valid registration email.
+const releasedEmailPrefix = "released:"
+
+// AdminUpdateUserStatus manages account status and releases deleted account emails.
 func (h *Handler) AdminUpdateUserStatus(w http.ResponseWriter,r *http.Request) {
  actor,ok:=h.requireAccessAdmin(w,r);if !ok{return}
  target,err:=uuid.Parse(chi.URLParam(r,"userID"));if err!=nil{writeJSONError(w,400,"invalid user ID");return}
@@ -23,20 +26,39 @@ func (h *Handler) AdminUpdateUserStatus(w http.ResponseWriter,r *http.Request) {
  case "suspend":status="suspended";event="ADMIN_USER_SUSPENDED"
  case "restore":status="active";event="ADMIN_USER_RESTORED"
  case "delete":status="deleted";event="ADMIN_USER_DELETED"
+ case "release_email":status="deleted"
  default:writeJSONError(w,400,"invalid action");return
  }
  tx,err:=h.service.repository.db.Begin(r.Context());if err!=nil{slog.Error("admin user status database failure","error",err,"target_user_id",target,"action",body.Action);writeJSONError(w,500,"database error");return}
  defer tx.Rollback(r.Context())
- var previous string
- err=tx.QueryRow(r.Context(),"SELECT account_status FROM users WHERE id=$1 FOR UPDATE",target).Scan(&previous)
+ var previous, email string
+ err=tx.QueryRow(r.Context(),"SELECT account_status,email FROM users WHERE id=$1 FOR UPDATE",target).Scan(&previous,&email)
  if err==pgx.ErrNoRows{writeJSONError(w,404,"user not found");return}
  if err!=nil{slog.Error("admin user status database failure","error",err,"target_user_id",target,"action",body.Action);writeJSONError(w,500,"database error");return}
- if previous=="deleted"{writeJSONError(w,409,"deleted account cannot be modified");return}
+ if body.Action=="release_email"&&previous!="deleted"{writeJSONError(w,409,"only deleted account emails can be released");return}
+ if previous=="deleted"&&body.Action!="release_email"{writeJSONError(w,409,"deleted account cannot be modified");return}
  if body.Action=="restore"&&previous!="suspended"{writeJSONError(w,409,"only suspended accounts can be restored");return}
  // Protect every access administrator, including the last one, from accidental removal.
  var admin bool
  if err=tx.QueryRow(r.Context(),"SELECT EXISTS(SELECT 1 FROM access_admins WHERE user_id=$1)",target).Scan(&admin);err!=nil{slog.Error("admin user status database failure","error",err,"target_user_id",target,"action",body.Action);writeJSONError(w,500,"database error");return}
  if admin{writeJSONError(w,403,"access administrator accounts cannot be modified here");return}
+ if body.Action == "release_email" {
+  placeholder := releasedEmailPrefix + target.String()
+  if email != placeholder {
+   if err := releaseDeletedAccountEmail(r.Context(), tx, actor, target, placeholder); err != nil {
+    slog.Error("admin email release failed", "error", err, "target_user_id", target)
+    writeJSONError(w, 500, "could not release email")
+    return
+   }
+  }
+  if err := tx.Commit(r.Context()); err != nil {
+   slog.Error("admin email release commit failed", "error", err, "target_user_id", target)
+   writeJSONError(w, 500, "could not release email")
+   return
+  }
+  writeJSON(w, 200, map[string]any{"userId": target, "status": status, "emailReleased": true})
+  return
+ }
  if body.Action=="delete" {
   // Clear foreign keys that would block deletion of the user or its cascaded records.
   // Preserve other users’ tickets and wallet receipts by clearing nullable references.
